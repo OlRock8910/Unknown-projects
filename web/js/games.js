@@ -67,7 +67,7 @@ function floatField(S, field, opts = {}) {
 
 // Shrinks the label of a round game object so long words fit on one line.
 function fitWord(el, text, base = 15) {
-  if (text.length > 8) el.style.fontSize = Math.max(11, base - (text.length - 8) * 0.9) + 'px';
+  if (text.length > 7) el.style.fontSize = Math.max(10, base - (text.length - 7) * 1.15) + 'px';
   return el;
 }
 
@@ -155,7 +155,7 @@ function roundsGame(S, cfg) {
   function answer(opt, btn, ok) {
     if (answered) return;
     answered = true;
-    if (ok) S.hit(q.word, (cfg.base || 10) + Math.ceil(qt), centerOf(btn));
+    if (ok) S.hit(q.word, (cfg.base || 10) + Math.ceil(qt), centerOf(btn), { form: q.form, say: !q.sayAfter });
     else S.miss(q.word, centerOf(btn));
     if (q.sayAfter) Voice.say(q.sayAfter);
     hear = hearAgain();
@@ -209,7 +209,7 @@ const QUESTION_TYPES = {
     const s = makeSentence(w);
     const en = (d) => `${s.subj.en} is${s.int.en ? ' ' + s.int.en : ''} ${d.short}.`;
     return {
-      word: w, say: s.es, cols: 1,
+      word: w, say: s.es, cols: 1, form: s.adj,
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Translate'), h('div', { class: 'q-sentence' }, s.es)),
       options: [{ label: s.en, ok: true }, ...distractors(w, 3).map((d) => ({ label: en(d), ok: false }))],
     };
@@ -221,7 +221,7 @@ const QUESTION_TYPES = {
     if (!w.inv) opts.push({ label: form(w, s.subj.g === 'f' ? 'm' : 'f'), ok: false });
     distractors(w, 4 - opts.length).forEach((d) => opts.push({ label: form(d, s.subj.g), ok: false }));
     return {
-      word: w, sayAfter: s.es,
+      word: w, sayAfter: s.es, form: s.adj,
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Fill the gap'), h('div', { class: 'q-sentence' }, before, ' ', h('span', { class: 'gap' }, '____'), '.'),
         h('div', { class: 'q-sub' }, s.en)),
       options: opts,
@@ -335,7 +335,7 @@ addGame({
         Sfx.pop();
         burst(at[0], at[1], `hsl(${it.el.style.getPropertyValue('--hue')} 90% 65%)`, 16, S.stage);
         ff.remove(it, 'popped');
-        S.hit(target, 10, at);
+        S.hit(target, 10, at, { form: form(target, subj.g) });
         Voice.say(`${subj.es} ${verbFor(target)} ${form(target, subj.g)}`);
         newTarget();
       } else {
@@ -597,7 +597,7 @@ addGame({
             matched++;
             S.after(250, () => {
               a.el.classList.add('matched'); b.el.classList.add('matched');
-              S.hit(a.w, 20, centerOf(b.el));
+              S.hit(a.w, 20, centerOf(b.el), { say: true });
               S.setProgress(matched / words.length);
               if (matched === words.length) {
                 const bonus = Math.max(0, 150 - secs * 2 - Math.max(0, moves - words.length) * 5);
@@ -653,7 +653,7 @@ addGame({
       const ok = saidTrue === cur.truth;
       const at = centerOf(cur.card);
       cur.card.classList.add(saidTrue ? 'fly-right' : 'fly-left', ok ? 'ok' : 'no');
-      if (ok) S.hit(cur.w, 10, at);
+      if (ok) S.hit(cur.w, 10, at, { say: true });
       else { S.miss(cur.w, at, 5); toast(`${cur.w.m} = ${cur.w.short}`, 1300); }
       S.after(220, next);
     };
@@ -751,7 +751,7 @@ addGame({
             sel.b.classList.remove('sel');
             sel.b.classList.add('done');
             b.classList.add('done');
-            S.hit(w, 10, centerOf(b));
+            S.hit(w, 10, centerOf(b), { say: true });
             sel = null;
             if (--left2 === 0) { round++; if (round >= ROUNDS) finish(); else S.after(500, play); }
           } else {
@@ -864,7 +864,7 @@ addGame({
         const name = pickOne(NAMES[g]);
         const said = `${name} es ${form(w, g)}`;
         return {
-          word: w, sayAfter: said,
+          word: w, sayAfter: said, form: form(w, g),
           top: h('div', { class: 'q-card person' },
             h('div', { class: 'avatar' }, pickOne(AVATARS[g])),
             h('div', { class: 'p-name' }, name),
@@ -917,7 +917,7 @@ addGame({
         if (guess === answer) {
           solved = true;
           slots.classList.add('solved');
-          S.hit(w, Math.max(5, 20 - hints * 6), centerOf(slots));
+          S.hit(w, Math.max(5, 20 - hints * 6), centerOf(slots), { form: answer });
           Voice.say(`${subj.es} ${verbFor(w)} ${answer}`);
           S.after(1100, () => { i++; next(); });
         } else {
@@ -1081,7 +1081,7 @@ addGame({
         if (done) return;
         done = true;
         const ok = chosen.map((c) => c.t).join(' ') === tokens.join(' ');
-        if (ok) { line.classList.add('solved'); S.hit(w, 20, centerOf(line)); }
+        if (ok) { line.classList.add('solved'); S.hit(w, 20, centerOf(line), { form: s.adj }); }
         else { line.classList.add('wrong'); S.miss(w, centerOf(line)); }
         Voice.say(s.es);
         fb.className = 'feedback show ' + (ok ? 'ok' : 'no');
@@ -1134,7 +1134,7 @@ addGame({
       if (!cur || cur.done) return;
       cur.done = true;
       const at = centerOf(b);
-      if (v === cur.ans) S.hit(cur.w, 10, at);
+      if (v === cur.ans) S.hit(cur.w, 10, at, { form: cur.shown, say: true });
       else S.miss(cur.w, at, 5);
       fb.textContent = (v === cur.ans ? '✓ ' : '✗ ') + why(cur);
       fb.className = 'g-explain ' + (v === cur.ans ? 'ok' : 'no');
@@ -1170,7 +1170,7 @@ addGame({
           ? `<b>${w.m}</b> + ${it.verb} = <b>${meaning}</b>. ${it.verb === 'ser' ? 'Es' : 'Está'} changes the meaning!`
           : w.v === 'estar' ? '🌡️ A feeling or state that can change → <b>estar (está)</b>' : '🪪 Personality or looks → <b>ser (es)</b>';
         return {
-          word: w, sayAfter: `${subj.es} ${verb} ${adj}`,
+          word: w, sayAfter: `${subj.es} ${verb} ${adj}`, form: adj,
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Es or está?'),
             h('div', { class: 'q-sentence' }, `${subj.es} `, h('span', { class: 'gap' }, '____'), ` ${adj}.`),
             h('div', { class: 'q-sub' }, `${subj.en} is ${meaning}.`)),

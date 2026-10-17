@@ -490,3 +490,21 @@ input { font: inherit; }
 .replay-btn.stage-corner { position: absolute; top: 4px; right: 14px; }
 .fb-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
 .fb-row .fb-next { margin-top: 0; margin-left: auto; }
+
+/* ------------------------------------------------------------ big word on a right answer */
+.word-flash { position: absolute; left: 50%; top: 42%; z-index: 30; pointer-events: none; display: flex; flex-direction: column; align-items: center; text-align: center;
+  width: max-content; max-width: 94vw; padding: 18px 26px 16px; border-radius: 28px;
+  background: rgba(11, 11, 30, 0.72); border: 2px solid rgba(250, 204, 21, 0.55); box-shadow: 0 0 60px rgba(250, 204, 21, 0.35), 0 20px 50px rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: wordFlash 1.3s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
+.wf-emoji { font-size: 44px; line-height: 1; }
+.wf-es { font-size: 48px; font-weight: 900; letter-spacing: 1px; line-height: 1.05; margin-top: 4px; white-space: nowrap;
+  background: linear-gradient(90deg, #fde047, #fb923c, #f472b6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wf-en { font-size: clamp(20px, 6vw, 28px); font-weight: 900; letter-spacing: 3px; color: #fff; margin-top: 4px; }
+@keyframes wordFlash {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(-6deg); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1.08) rotate(1deg); }
+  28% { transform: translate(-50%, -50%) scale(1); }
+  78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -60%) scale(0.92); }
+}

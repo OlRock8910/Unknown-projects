@@ -366,6 +366,12 @@ function centerOf(el) {
 }
 
 // ------------------------------------------------------------------ session
+// Font size that keeps a word on one line inside the big flash.
+function flashSize(text) {
+  const room = Math.min(window.innerWidth || 400, 520) * 0.8;
+  return Math.max(24, Math.min(58, Math.floor(room / (text.length * 0.72))));
+}
+
 // One playthrough of one mini game. Owns the HUD, timers, animation loop,
 // scoring and the hand-off to the results screen.
 class Session {
@@ -480,18 +486,35 @@ class Session {
   mult() { return 1 + Math.min(4, Math.floor(this.combo / 3)); }
 
   // ---- results of a single answer
-  hit(word, pts = 10, at = null) {
+  // opts.form: the Spanish form to show (e.g. feminine); opts.say: also speak it.
+  hit(word, pts = 10, at = null, opts = {}) {
     this.right++;
     this.combo++;
     this.bestCombo = Math.max(this.bestCombo, this.combo);
     const gained = pts * this.mult();
     this.score += gained;
-    if (word) { Store.bump(word.id, 1); this.learned.add(word.id); }
+    if (word) {
+      Store.bump(word.id, 1);
+      this.learned.add(word.id);
+      this.flashWord(word, opts.form || word.m);
+      if (opts.say) Voice.say(opts.form || word.m);
+    }
     Sfx.good(this.combo);
     Haptics.buzz(15);
     if (at) floatText(at[0], at[1], '+' + gained, 'good', this.stage);
     this.updateScore();
     return gained;
+  }
+  // The word you just got right, big in the middle of the screen: AMABLE = KIND.
+  flashWord(word, shown) {
+    if (this.flashEl) this.flashEl.remove();
+    const el = h('div', { class: 'word-flash' },
+      h('div', { class: 'wf-emoji' }, word.e),
+      h('div', { class: 'wf-es', style: { fontSize: flashSize(shown) + 'px' } }, shown.toUpperCase()),
+      h('div', { class: 'wf-en' }, word.short.toUpperCase()));
+    this.flashEl = el;
+    this.root.append(el);
+    setTimeout(() => { el.remove(); if (this.flashEl === el) this.flashEl = null; }, 1300);
   }
   miss(word, at = null, penalty = 0) {
     this.wrong++;

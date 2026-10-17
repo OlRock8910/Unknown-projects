@@ -98,6 +98,18 @@ for (const id of ids) {
   console.log('  ok', id);
 }
 
+// A right answer shows the word big: Spanish (in the form used) and English.
+const flash = await page.evaluate(() => {
+  App.startGame(GAMES.find((g) => g.id === 'quiz'));
+  const w = WORD_BY_ID['amable'];
+  App.session.hit(w, 10, null, { form: 'amable' });
+  const el = document.querySelector('.word-flash');
+  const out = el && [el.querySelector('.wf-es').textContent, el.querySelector('.wf-en').textContent];
+  App.session.quit();
+  return out;
+});
+if (!flash || flash[0] !== 'AMABLE' || flash[1] !== 'KIND') errors.push('right answer did not flash the word: ' + JSON.stringify(flash));
+
 // Back button behaviour the Android wrapper relies on.
 const back = await page.evaluate(() => {
   App.show('words');

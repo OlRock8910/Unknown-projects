@@ -66,6 +66,9 @@ where there is one, ser/estar, and tips for false friends (*sensible* means
 | 👫 | ¿Él o Ella? | Is the form for him, her, or both? |
 | ⚖️ | ¿Ser o Estar? | *es* or *está*, including words that change meaning |
 
+Every right answer flashes the word big in the middle of the screen,
+Spanish over English (**AMABLE · KIND**), and says it out loud.
+
 Also: flashcards, eight short grammar lessons, a searchable word list with
 pronunciation, XP and levels, a daily goal and streak, combo multipliers,
 stars and best scores. Words you get wrong come up more often.
