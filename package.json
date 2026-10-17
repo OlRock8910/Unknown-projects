@@ -1,0 +1,12 @@
+{
+  "name": "adjetivos",
+  "private": true,
+  "description": "Learn Spanish adjectives through mini games",
+  "scripts": {
+    "test": "node tests/smoke.mjs",
+    "build:apk": "./build-apk.sh"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

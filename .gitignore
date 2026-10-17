@@ -1,0 +1,7 @@
+build/
+screenshots/
+node_modules/
+icon-512.png
+# The ready-to-install APK is committed on purpose so it can be downloaded
+# straight from GitHub on a phone.
+!apk/Adjetivos.apk
