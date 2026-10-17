@@ -4,3 +4,6 @@ local.properties
 *.iml
 .idea/
 build-local/
+
+# The ready-to-install APK is committed on purpose (the repository ignores *.apk).
+!apk/StrobeGlyph.apk
