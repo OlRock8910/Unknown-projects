@@ -1,0 +1,60 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.strobeglyph.app'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.strobeglyph.app'
+        minSdk 26
+        // Targeting Android 16 (API 36) is deliberate: Nothing lifted its Glyph
+        // API-key requirement for apps that target it, so the lights work on
+        // Nothing OS 4+ without a debug switch.
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        // A fixed, deliberately public key so every build shares one signature.
+        // A throwaway per-machine debug key would make each APK refuse to
+        // install over the previous one ("App not installed"). Sideload builds
+        // only; a store release would need a private key kept out of the repo.
+        sideload {
+            storeFile file('strobe-sideload.jks')
+            storePassword 'strobeglyph'
+            keyAlias 'strobeglyph'
+            keyPassword 'strobeglyph'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.sideload
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.sideload
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        // The APK is the product; do not let a lint-vital opinion block it.
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Nothing's Glyph SDK (ships both the LED-strip and the Glyph Matrix API).
+    implementation files('libs/glyph-matrix-sdk-2.0.aar')
+
+    testImplementation 'junit:junit:4.13.2'
+}

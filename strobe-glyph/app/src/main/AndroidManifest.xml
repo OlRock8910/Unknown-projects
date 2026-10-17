@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Nothing's Glyph SDK is built for Android 13+, but the torch and screen strobe work much
+      further back, so let the app install on older phones and only use Glyph where it exists.
+    -->
+    <uses-sdk tools:overrideLibrary="com.nothing.thirdparty" />
+
+    <!-- Only asked for if a phone insists on it before letting an app use the flash. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Only asked for when the user picks the Beat pattern. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Lets the app talk to the Glyph lights on Nothing phones. -->
+    <uses-permission android:name="com.nothing.ketchum.permission.ENABLE" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <queries>
+        <package android:name="com.nothing.thirdparty" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="Strobe Glyph"
+        android:theme="@style/Theme.Strobe">
+
+        <!-- Nothing accepts "test" for development builds, and no key at all from Android 16. -->
+        <meta-data android:name="NothingKey" android:value="test" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|density"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
