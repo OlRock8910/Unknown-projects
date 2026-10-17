@@ -75,12 +75,8 @@ function promptPill(label, value, extra, replay) {
   return h('div', { class: 'prompt pop-in' }, replay || null, h('small', {}, label), h('b', {}, value), extra || null);
 }
 
-// The task for an arcade target: the full instruction the first time, then
-// just the word. 🔊 always repeats the full instruction.
-function arcadeTask(S, instruction, word, lang = 'en') {
-  const full = [{ text: instruction, lang: 'en' }, { text: word, lang }];
-  S.task(S.taskCount ? [{ text: word, lang }] : full, { replay: full });
-}
+// Says the Spanish word for an arcade target (slowly, see Voice.play).
+const sayTask = (S, word) => S.task([{ text: word, lang: 'es' }]);
 
 function setPrompt(holder, node) {
   holder.replaceChildren(node);
@@ -108,14 +104,15 @@ function roundsGame(S, cfg) {
     q = cfg.make(i);
     fb.className = 'feedback';
     fb.replaceChildren();
-    top.replaceChildren(q.top, S.replayButton('corner'));
+    const spoken = q.task || (q.say ? [{ text: q.say, lang: 'es' }] : null);
+    top.replaceChildren(q.top, spoken ? S.replayButton('corner') : null);
     top.classList.remove('pop-in');
     void top.offsetWidth;
     top.classList.add('pop-in');
     const grid = choiceGrid(shuffle(q.options), (o) => o.ok, answer, (o) => o.label);
     if (q.cols === 1) grid.classList.add('one-col');
     choicesHost.replaceChildren(grid);
-    S.task(q.task || (q.say ? [{ text: q.say, lang: 'es' }] : []));
+    if (spoken) S.task(spoken);
     qTotal = typeof cfg.time === 'function' ? cfg.time(i) : cfg.time ?? 12;
     qt = qTotal;
     answered = false;
@@ -194,7 +191,6 @@ const QUESTION_TYPES = {
   es2en(w) {
     return {
       word: w, say: w.m,
-      task: [{ text: 'What does this mean?', lang: 'en' }, { text: w.m, lang: 'es' }],
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'What does this mean?'), h('div', { class: 'q-big' }, w.m),
         !w.inv ? h('div', { class: 'q-sub' }, 'feminine: ' + w.f) : h('div', { class: 'q-sub' }, 'same for él and ella')),
       options: [{ label: w.short, ok: true }, ...distractors(w, 3).map((d) => ({ label: d.short, ok: false }))],
@@ -204,7 +200,6 @@ const QUESTION_TYPES = {
   en2es(w) {
     return {
       word: w, sayAfter: w.m,
-      task: [{ text: `How do you say ${w.short}?`, lang: 'en' }],
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'How do you say…'), h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'q-big' }, w.short)),
       options: [{ label: w.m, ok: true }, ...distractors(w, 3).map((d) => ({ label: d.m, ok: false }))],
       reveal: w.tip ? '💡 ' + w.tip : null,
@@ -215,7 +210,6 @@ const QUESTION_TYPES = {
     const en = (d) => `${s.subj.en} is${s.int.en ? ' ' + s.int.en : ''} ${d.short}.`;
     return {
       word: w, say: s.es, cols: 1,
-      task: [{ text: 'Translate.', lang: 'en' }, { text: s.es, lang: 'es' }],
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Translate'), h('div', { class: 'q-sentence' }, s.es)),
       options: [{ label: s.en, ok: true }, ...distractors(w, 3).map((d) => ({ label: en(d), ok: false }))],
     };
@@ -228,7 +222,6 @@ const QUESTION_TYPES = {
     distractors(w, 4 - opts.length).forEach((d) => opts.push({ label: form(d, s.subj.g), ok: false }));
     return {
       word: w, sayAfter: s.es,
-      task: [{ text: `Fill the gap. ${s.en}`, lang: 'en' }],
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Fill the gap'), h('div', { class: 'q-sentence' }, before, ' ', h('span', { class: 'gap' }, '____'), '.'),
         h('div', { class: 'q-sub' }, s.en)),
       options: opts,
@@ -267,7 +260,7 @@ addGame({
     const newTarget = () => {
       target = pickWords(1)[0];
       setPrompt(prompt, promptPill('Pop the Spanish for', target.short, h('span', { class: 'pe' }, target.e), S.replayButton()));
-      arcadeTask(S, 'Pop the Spanish for', target.short);
+      sayTask(S, target.m);
       ff.clearClashes(target);
     };
     const spawn = (startY) => {
@@ -319,7 +312,7 @@ addGame({
       subj = pickOne(SUBJECTS);
       const icon = subj.g === 'f' ? '👩' : '👨';
       setPrompt(prompt, promptPill(`${icon} ${subj.es} ${verbFor(target)}…`, `${subj.en} is ${target.short}`, null, S.replayButton()));
-      arcadeTask(S, 'Pop the balloon with the right ending.', `${subj.en} is ${target.short}.`);
+      sayTask(S, form(target, subj.g));
       ff.clearClashes(target);
     };
     const spawn = (startY) => {
@@ -381,7 +374,7 @@ addGame({
     const newTarget = () => {
       target = pickWords(1)[0];
       setPrompt(prompt, promptPill('Catch the meaning of', target.m, null, S.replayButton()));
-      arcadeTask(S, 'Catch the meaning of', target.m, 'es');
+      sayTask(S, target.m);
       ff.clearClashes(target);
     };
     const lanes = 3;
@@ -441,7 +434,7 @@ addGame({
     const newTarget = () => {
       target = pickWords(1)[0];
       setPrompt(prompt, promptPill('Slice the Spanish for', target.short, h('span', { class: 'pe' }, target.e), S.replayButton()));
-      arcadeTask(S, 'Slice the Spanish for', target.short);
+      sayTask(S, target.m);
       ff.clearClashes(target);
     };
     const launch = () => {
@@ -525,7 +518,7 @@ addGame({
     const newTarget = () => {
       target = pickWords(1)[0];
       setPrompt(prompt, promptPill('Whack the Spanish for', target.short, h('span', { class: 'pe' }, target.e), S.replayButton()));
-      arcadeTask(S, 'Whack the Spanish for', target.short);
+      sayTask(S, target.m);
       holes.forEach((st) => { if (st.up && st.word && st.word.id !== target.id && clash(st.word, target)) down(st); });
     };
     const popUp = () => {
@@ -580,7 +573,6 @@ addGame({
     ]));
     const grid = h('div', { class: 'memory-grid' });
     S.stage.append(h('div', { class: 'hint-line' }, 'Match each Spanish word to its English meaning'), grid);
-    S.task([{ text: 'Find the pairs. Match each Spanish word to its meaning.', lang: 'en' }]);
     let open = [], moves = 0, matched = 0, secs = 0, busy = false;
     S.every(1000, () => { secs++; S.setExtra(`⏱${secs} · 🔁${moves}`); });
     S.setExtra('⏱0 · 🔁0');
@@ -735,7 +727,6 @@ addGame({
     S.setExtra('⏱ 0s');
     const wrap = h('div', { class: 'match-wrap' });
     S.stage.append(h('div', { class: 'hint-line' }, 'Tap a word, then its meaning'), wrap);
-    S.task([{ text: 'Tap a Spanish word, then its meaning.', lang: 'en' }]);
     const play = () => {
       S.setProgress(round / ROUNDS);
       const words = [];
@@ -801,7 +792,6 @@ addGame({
         const wrong = distractors(o, 3, (d) => d.id !== w.id && !clash(d, w));
         return {
           word: w, say: w.m,
-          task: [{ text: 'What is the opposite of', lang: 'en' }, { text: w.m, lang: 'es' }],
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'What is the opposite of…'), h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'q-big' }, w.m), h('div', { class: 'q-sub' }, w.short)),
           options: [{ label: o.m, ok: true }, ...wrong.map((d) => ({ label: d.m, ok: false }))],
           sayAfter: `${w.m}, ${o.m}`,
@@ -824,7 +814,6 @@ addGame({
         const w = words[i];
         return {
           word: w, sayAfter: w.m,
-          task: [{ text: 'Which word fits this emoji?', lang: 'en' }],
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Which word fits?'), h('div', { class: 'q-emoji huge' }, w.e)),
           options: [{ label: w.m, ok: true }, ...distractors(w, 3).map((d) => ({ label: d.m, ok: false }))],
           reveal: `${w.e} <b>${w.m}</b> = ${w.en}`,
@@ -849,7 +838,7 @@ addGame({
         const play = () => Voice.say(s.es, true);
         return {
           word: w,
-          task: [{ text: 'Listen. What is the person like?', lang: 'en' }, { text: s.es, lang: 'es', force: true }],
+          task: [{ text: s.es, lang: 'es', force: true }],
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Listen — what is the person like?'),
             h('button', { class: 'speak-big', onclick: play }, '🔊'),
             canSpeak ? h('div', { class: 'q-sub' }, 'Tap to hear it again') : h('div', { class: 'q-sentence' }, s.es)),
@@ -876,7 +865,6 @@ addGame({
         const said = `${name} es ${form(w, g)}`;
         return {
           word: w, sayAfter: said,
-          task: [{ text: `${name}. ${w.clue}`, lang: 'en' }],
           top: h('div', { class: 'q-card person' },
             h('div', { class: 'avatar' }, pickOne(AVATARS[g])),
             h('div', { class: 'p-name' }, name),
@@ -981,7 +969,7 @@ addGame({
         render();
         S.after(1300, () => { i++; next(); });
       });
-      S.task([{ text: `Spell the Spanish for ${w.short}.`, lang: 'en' }]);
+      sayTask(S, answer);
       box.replaceChildren(
         h('div', { class: 'q-card pop-in' }, S.replayButton('corner'), h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'q-big small' }, w.short),
           h('div', { class: 'q-sub' }, `${g === 'f' ? '👩' : '👨'} ${subj.es} ${verbFor(w)}…`)),
@@ -1039,7 +1027,7 @@ addGame({
         });
         keys.append(k);
       });
-      S.task([{ text: `Guess the Spanish word for ${w.short}.`, lang: 'en' }]);
+      sayTask(S, answer);
       box.replaceChildren(
         h('div', { class: 'q-card pop-in' }, S.replayButton('corner'), balloons, h('div', { class: 'q-sub' }, `${w.e} ${w.en}`)),
         wordEl, keys);
@@ -1102,9 +1090,8 @@ addGame({
           w.inv ? null : h('div', { class: 'fb-reveal' }, `${s.subj.es} → ${s.adj} (${s.subj.g === 'f' ? 'feminine' : 'masculine'})`));
         S.after(ok ? 1400 : 2600, () => { i++; next(); });
       });
-      S.task([{ text: `Say it in Spanish. ${s.en}`, lang: 'en' }]);
       box.replaceChildren(
-        h('div', { class: 'q-card pop-in' }, S.replayButton('corner'), h('div', { class: 'q-label' }, 'Say it in Spanish'), h('div', { class: 'q-sentence' }, `${w.e} ${s.en}`)),
+        h('div', { class: 'q-card pop-in' }, h('div', { class: 'q-label' }, 'Say it in Spanish'), h('div', { class: 'q-sentence' }, `${w.e} ${s.en}`)),
         line, bank, h('div', { class: 'row-btns' }, check), fb);
       render();
     };
@@ -1184,7 +1171,6 @@ addGame({
           : w.v === 'estar' ? '🌡️ A feeling or state that can change → <b>estar (está)</b>' : '🪪 Personality or looks → <b>ser (es)</b>';
         return {
           word: w, sayAfter: `${subj.es} ${verb} ${adj}`,
-          task: [{ text: `Es or está? ${subj.en} is ${meaning}.`, lang: 'en' }],
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Es or está?'),
             h('div', { class: 'q-sentence' }, `${subj.es} `, h('span', { class: 'gap' }, '____'), ` ${adj}.`),
             h('div', { class: 'q-sub' }, `${subj.en} is ${meaning}.`)),

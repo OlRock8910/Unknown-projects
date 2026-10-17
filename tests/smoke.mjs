@@ -118,7 +118,7 @@ for (const state of ['missing', 'ok']) {
     window.__said = [];
     window.Native = {
       speak: (t) => window.__spoken.push(t),
-      speakIn: (t, rate, lang, queue) => { window.__said.push({ text: t, lang, queue }); if (lang === 'es') window.__spoken.push(t); },
+      speakIn: (t, rate, lang, queue) => { window.__said.push({ text: t, rate, lang, queue }); if (lang === 'es') window.__spoken.push(t); },
       stop: () => {},
       vibrate: () => {},
       ttsState: () => st,
@@ -159,20 +159,23 @@ for (const state of ['missing', 'ok']) {
     await p.waitForTimeout(500);
     await p.evaluate(() => document.querySelector('.bubble') && Voice.say('molesto'));
     if (!(await p.evaluate(() => window.__spoken.includes('molesto')))) errors.push('speech did not reach the Android bridge');
-    // The task is read aloud in English first, and 🔊 says it again.
+    // Each target is said as one Spanish word, slowly, and 🔊 says it again.
     const said = await p.evaluate(() => window.__said);
-    const target = await p.evaluate(() => document.querySelector('.prompt b').textContent);
-    if (!said.some((x) => x.lang === 'en' && x.text.startsWith('Pop the Spanish for'))) errors.push('bubble task was not read aloud: ' + JSON.stringify(said));
+    if (said.some((x) => x.lang !== 'es')) errors.push('something was spoken in English: ' + JSON.stringify(said));
+    const first = said[0];
+    if (!first || /\s/.test(first.text)) errors.push('bubble task was not a single Spanish word: ' + JSON.stringify(said));
+    else if (!(first.rate < 0.9)) errors.push('single words are not spoken slowly: rate ' + first.rate);
     const before = said.length;
     await p.click('.prompt .replay-btn');
     const after = await p.evaluate(() => window.__said);
-    if (after.length <= before || !after.slice(before).some((x) => x.text === target)) errors.push('🔊 did not repeat the task');
+    const last = said[said.length - 1];
+    if (after.length <= before || after[after.length - 1].text !== last.text) errors.push('🔊 did not repeat the word');
     await p.evaluate(() => App.session.quit());
     // A quiz question is read out, and "hear it again" stops the auto-advance.
     await p.evaluate(() => App.startGame(GAMES.find((g) => g.id === 'quiz')));
     await p.waitForTimeout(300);
     const qSaid = await p.evaluate(() => window.__said.slice(-2).map((x) => x.lang));
-    if (!qSaid.includes('en')) errors.push('quiz question was not read aloud');
+    if (!qSaid.includes('es')) errors.push('quiz word was not read aloud');
     await p.click('.choice');
     await p.waitForTimeout(200);
     const hear = await p.$('.feedback button');

@@ -29,11 +29,11 @@ Spain-Spanish voice.
 - No Google engine at all? The same button opens "Speech Services by Google"
   on the Play Store.
 
-Every task is **read aloud first**: the instruction in English ("Pop the
-Spanish for annoying", "Fill the gap. My sister is very generous.") and any
-Spanish in Spanish. Tap **🔊** on a task to hear it again, or **Hear it again**
-after answering to replay the Spanish. You can switch the English reading
-off in **Me › Read each task aloud first**.
+Each task **says the Spanish word slowly** as it appears (in Bubble Pop,
+for example, it says *torpe* while showing "clumsy"). Tap **🔊** to hear it
+again, or **Hear it again** after answering. Questions where you have to
+pick the Spanish word yourself stay silent until you answer, so the voice
+doesn't give the answer away.
 
 ## What's inside
 

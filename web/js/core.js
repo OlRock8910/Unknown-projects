@@ -47,7 +47,7 @@ const Store = {
     return {
       xp: 0, played: 0, best: {}, stars: {}, mastery: {},
       daily: { date: today(), xp: 0 }, streak: { last: null, n: 0 },
-      settings: { sound: true, vibrate: true, voice: true, readTasks: true, rate: 0.9, pack: 'all', voiceName: '' },
+      settings: { sound: true, vibrate: true, voice: true, rate: 0.9, pack: 'all', voiceName: '' },
     };
   },
   load() {
@@ -198,9 +198,14 @@ const Voice = {
   install() {
     try { if (this.native() && window.Native.installVoice) window.Native.installVoice(); } catch (e) { /* ignore */ }
   },
+  // A single word is said more slowly than a sentence, so every sound is clear.
+  rateFor(text) {
+    const rate = Store.s.rate || 0.9;
+    return /\s/.test(text.trim()) ? rate : Math.max(0.4, rate * 0.75);
+  },
   say(text, force = false) {
     if (!Store.s.voice && !force) return;
-    const rate = Store.s.rate || 0.9;
+    const rate = this.rateFor(text);
     try {
       if (this.native()) {
         const state = window.Native.ttsState();
@@ -221,21 +226,19 @@ const Voice = {
       }
     } catch (e) { /* speech is a bonus, never fatal */ }
   },
-  // Speaks a mix of English and Spanish in order: [{ text, lang: 'en'|'es', force }].
-  // English parts follow the "read tasks aloud" setting, Spanish ones the voice
-  // setting; force (or opts.force) ignores both. opts.queue waits for current speech.
+  // Speaks parts in order: [{ text, lang: 'es'|'en', force }]. Follows the
+  // voice setting unless force (or opts.force); opts.queue waits for current speech.
   play(parts, opts = {}) {
-    const rate = Store.s.rate || 0.9;
-    const keep = parts.filter((p) => p && p.text && (opts.force || p.force || (p.lang === 'en' ? Store.s.readTasks : Store.s.voice)));
+    const keep = parts.filter((p) => p && p.text && (opts.force || p.force || Store.s.voice));
     if (!keep.length) return;
     try {
       if (this.native() && window.Native.speakIn) {
-        keep.forEach((p, i) => window.Native.speakIn(p.text, p.lang === 'en' ? Math.max(rate, 1) : rate, p.lang, !!opts.queue || i > 0));
+        keep.forEach((p, i) => window.Native.speakIn(p.text, this.rateFor(p.text), p.lang, !!opts.queue || i > 0));
         return;
       }
       if (this.native()) { // older bridge: Spanish only
         const es = keep.filter((p) => p.lang !== 'en').map((p) => p.text).join('. ');
-        if (es) window.Native.speak(es, rate);
+        if (es) window.Native.speak(es, this.rateFor(es));
         return;
       }
       if (window.speechSynthesis) {
@@ -245,7 +248,7 @@ const Voice = {
         keep.forEach((p) => {
           const u = new SpeechSynthesisUtterance(p.text);
           u.lang = p.lang === 'en' ? 'en-GB' : 'es-ES';
-          u.rate = p.lang === 'en' ? Math.max(rate, 1) : rate;
+          u.rate = this.rateFor(p.text);
           const v = p.lang === 'en' ? en : this.esVoice;
           if (v) u.voice = v;
           speechSynthesis.speak(u);
