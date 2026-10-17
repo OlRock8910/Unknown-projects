@@ -10,6 +10,7 @@ import fs from 'node:fs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const url = pathToFileURL(path.join(here, '..', 'web', 'index.html')).href;
 const shots = process.argv.includes('--shots');
+const PLAY_URL_FOR_TEST = 'https://olrock8910.github.io/anonymous-designs/';
 const shotDir = path.join(here, '..', 'screenshots');
 if (shots) fs.mkdirSync(shotDir, { recursive: true });
 
@@ -83,6 +84,8 @@ for (const id of ids) {
       el.click();
     });
     await page.waitForTimeout(140);
+    const stray = await page.evaluate(() => /\b(null|undefined|NaN)\b/.test(document.querySelector('.stage')?.innerText || ''));
+    if (stray) errors.push(`${id}: "null"/"undefined" shown on screen`);
     if (shots && !shot && Date.now() - t0 > 1500) {
       await page.screenshot({ path: path.join(shotDir, `game-${id}.png`) });
       shot = true;
@@ -137,6 +140,7 @@ for (const state of ['missing', 'ok']) {
       setVoice: (n) => { if (st === 'ok') current = n; },
       installVoice: () => { window.__installs++; },
       openTtsSettings: () => {},
+      share: (t) => { window.__shared = t; },
       voiceInfo: () => JSON.stringify({
         google: true, current,
         voices: st === 'ok' ? [
@@ -197,6 +201,16 @@ for (const state of ['missing', 'ok']) {
       if (!(await p.$('.feedback.show'))) errors.push('hearing the answer again did not pause the quiz');
     }
     await p.evaluate(() => App.session.quit());
+    // "Challenge a friend" hands the score and the play link to Android's share sheet.
+    const shared = await p.evaluate(() => {
+      App.startGame(GAMES.find((g) => g.id === 'tf'));
+      App.session.hit(WORDS[0], 10);
+      App.session.finish();
+      document.querySelector('.btn.share').click();
+      return window.__shared;
+    });
+    if (!shared || !shared.includes(PLAY_URL_FOR_TEST) || !/scored/.test(shared)) errors.push('sharing a score failed: ' + shared);
+    await p.evaluate(() => App.closeOverlay());
   }
   if (shots && state === 'missing') await p.screenshot({ path: path.join(shotDir, 'voice-banner.png') });
   await p.close();

@@ -264,6 +264,37 @@ const Voice = {
   },
 };
 
+// ------------------------------------------------------------------ sharing
+const PLAY_URL = 'https://olrock8910.github.io/anonymous-designs/';
+const APK_URL = 'https://github.com/OlRock8910/anonymous-designs/raw/main/apk/Adjetivos.apk';
+const Share = {
+  // Android share sheet in the APK, the browser's share sheet on phones,
+  // otherwise copy to the clipboard.
+  async send(text) {
+    const full = `${text}\n${PLAY_URL}`;
+    try {
+      if (window.Native && window.Native.share) { window.Native.share(full); return; }
+      if (navigator.share) { await navigator.share({ title: 'Adjetivos', text, url: PLAY_URL }); return; }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // closed the share sheet
+    }
+    this.copy(full);
+  },
+  copy(text) {
+    const done = () => toast('📋 Copied — paste it to your friends!');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, () => this.copyOld(text, done));
+    } else this.copyOld(text, done);
+  },
+  copyOld(text, done) {
+    const t = h('textarea', { style: { position: 'fixed', opacity: '0' } }, text);
+    document.body.append(t);
+    t.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast(text, 5000); }
+    t.remove();
+  },
+};
+
 const Haptics = {
   buzz(ms) {
     if (!Store.s.vibrate) return;

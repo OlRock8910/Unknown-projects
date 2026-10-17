@@ -14,8 +14,10 @@ OUT=${OUT:-$HERE/build}
 ANDROID_JAR=${ANDROID_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}
 DX=${DX:-$(command -v dalvik-exchange || command -v dx)}
 VERSION_NAME=${VERSION_NAME:-1.0}
-# Every commit gets a higher version code, so a new build always installs over an old one.
-VERSION_CODE=${VERSION_CODE:-$(git -C "$HERE" rev-list --count HEAD 2>/dev/null || echo 1)}
+# The version code is minutes since 2020 at the last commit, so every newer
+# build installs over an older one, whichever repository it was built in.
+COMMIT_TIME=$(git -C "$HERE" log -1 --format=%ct 2>/dev/null || date +%s)
+VERSION_CODE=${VERSION_CODE:-$(( (COMMIT_TIME - 1577836800) / 60 ))}
 
 KEYSTORE="$HERE/android/adjetivos-sideload.jks"
 KS_PASS=adjetivos
@@ -29,6 +31,9 @@ done
 
 rm -rf "$OUT"
 mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex"
+# The app's files, minus the link-preview picture that only the website needs.
+cp -r "$HERE/web" "$OUT/assets"
+rm -f "$OUT/assets/og-image.png"
 
 echo "› resources"
 aapt2 compile --dir "$HERE/android/res" -o "$OUT/res.zip"
@@ -36,7 +41,7 @@ aapt2 link \
   -o "$OUT/base.apk" \
   -I "$ANDROID_JAR" \
   --manifest "$HERE/android/AndroidManifest.xml" \
-  -A "$HERE/web" \
+  -A "$OUT/assets" \
   --min-sdk-version 21 \
   --target-sdk-version 34 \
   --version-code "$VERSION_CODE" \

@@ -105,7 +105,7 @@ function roundsGame(S, cfg) {
     fb.className = 'feedback';
     fb.replaceChildren();
     const spoken = q.task || (q.say ? [{ text: q.say, lang: 'es' }] : null);
-    top.replaceChildren(q.top, spoken ? S.replayButton('corner') : null);
+    top.replaceChildren(...[q.top, spoken && S.replayButton('corner')].filter(Boolean));
     top.classList.remove('pop-in');
     void top.offsetWidth;
     top.classList.add('pop-in');
@@ -121,12 +121,12 @@ function roundsGame(S, cfg) {
   const showFeedback = (ok, headline) => {
     fb.className = 'feedback show ' + (ok ? 'ok' : 'no');
     const right = q.options.find((o) => o.ok);
-    fb.replaceChildren(
+    fb.replaceChildren(...[
       h('div', { class: 'fb-head' }, headline || (ok ? pickOne(['¡Muy bien!', '¡Genial!', '¡Perfecto!', '¡Eso es!', '¡Bravo!']) : 'Not quite')),
-      !ok ? h('div', { class: 'fb-answer' }, 'Answer: ', h('b', {}, right.label)) : null,
-      q.reveal ? h('div', { class: 'fb-reveal', html: q.reveal }) : null,
+      !ok && h('div', { class: 'fb-answer' }, 'Answer: ', h('b', {}, right.label)),
+      q.reveal && h('div', { class: 'fb-reveal', html: q.reveal }),
       h('div', { class: 'fb-row' }, hear, h('div', { class: 'fb-next' }, 'Tap to continue ›')),
-    );
+    ].filter(Boolean));
   };
 
   // Hearing the answer again pauses the automatic move to the next question.
@@ -1085,9 +1085,9 @@ addGame({
         else { line.classList.add('wrong'); S.miss(w, centerOf(line)); }
         Voice.say(s.es);
         fb.className = 'feedback show ' + (ok ? 'ok' : 'no');
-        fb.replaceChildren(h('div', { class: 'fb-head' }, ok ? '¡Perfecto!' : 'Not quite'),
+        fb.replaceChildren(...[h('div', { class: 'fb-head' }, ok ? '¡Perfecto!' : 'Not quite'),
           h('div', { class: 'fb-answer' }, h('b', {}, s.es)),
-          w.inv ? null : h('div', { class: 'fb-reveal' }, `${s.subj.es} → ${s.adj} (${s.subj.g === 'f' ? 'feminine' : 'masculine'})`));
+          !w.inv && h('div', { class: 'fb-reveal' }, `${s.subj.es} → ${s.adj} (${s.subj.g === 'f' ? 'feminine' : 'masculine'})`)].filter(Boolean));
         S.after(ok ? 1400 : 2600, () => { i++; next(); });
       });
       box.replaceChildren(

@@ -275,6 +275,20 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             });
         }
 
+        /** Opens Android's share sheet (WhatsApp, Snapchat, TikTok…) with the given text. */
+        @JavascriptInterface
+        public void share(final String text) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Intent send = new Intent(Intent.ACTION_SEND);
+                    send.setType("text/plain");
+                    send.putExtra(Intent.EXTRA_TEXT, text);
+                    open(Intent.createChooser(send, "Share Adjetivos"), null);
+                }
+            });
+        }
+
         @JavascriptInterface
         public void vibrate(int ms) {
             Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);

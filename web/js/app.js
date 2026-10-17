@@ -97,6 +97,7 @@ const App = {
         h('div', { class: 'chip' }, h('b', {}, total ? Math.round(r.acc * 100) + '%' : '—'), ' accuracy'),
         h('div', { class: 'chip' }, h('b', {}, '×' + r.bestCombo), ' best streak')),
       missed,
+      h('button', { class: 'btn share wide-ish', onclick: () => Share.send(shareText(r)) }, '📤 Challenge a friend'),
       h('div', { class: 'res-btns' },
         h('button', { class: 'btn ghost', onclick: () => this.closeOverlay() }, 'Menu'),
         h('button', { class: 'btn primary', onclick: () => this.startGame(r.game) }, '↻ Play again')),
@@ -127,6 +128,17 @@ const App = {
     return false;
   },
 };
+
+// ------------------------------------------------------------------ sharing
+const SHARE_LINES = [
+  'Mi hermano es muy molesto 😤', 'Mi jefa es un poco mandona 👑', 'Mi primo es demasiado dormilón 🛌',
+  'Mi vecino es muy chismoso 🗣️', 'Mi amiga es súper graciosa 😂', 'Mi gato es bastante perezoso 🦥',
+];
+function shareText(r) {
+  const stars = r.stars ? '⭐'.repeat(r.stars) + ' ' : '';
+  return `${stars}I scored ${r.score} in ${r.game.emoji} ${r.game.name} on Adjetivos — the game that teaches you Spanish describing words.\n“${pickOne(SHARE_LINES)}”\nBet you can't beat me 👀🇪🇸`;
+}
+const INVITE_TEXT = '🇪🇸 Learning Spanish adjectives with 19 mini games — bubble popping, word ninja, whack-a-word… Free, no ads. Try it:';
 
 // ------------------------------------------------------------------ Play tab
 function starsRow(n) {
@@ -232,6 +244,14 @@ function renderPlay() {
     packs,
     h('button', { class: 'btn primary wide shuffle', onclick: () => App.startGame(pickOne(GAMES)) }, '🎲 Surprise me — random game'),
     ...groups,
+    h('button', { class: 'card invite', onclick: () => Share.send(INVITE_TEXT) },
+      h('span', { class: 'inv-emoji' }, '📤'),
+      h('div', {}, h('b', {}, 'Share with friends'), h('span', {}, 'Send Adjetivos to someone learning Spanish')),
+      h('span', { class: 'chev' }, '›')),
+    Voice.native() ? null : h('a', { class: 'card invite get-app', href: APK_URL },
+      h('span', { class: 'inv-emoji' }, '📱'),
+      h('div', {}, h('b', {}, 'Get the Android app'), h('span', {}, 'Works offline, with the Google voice')),
+      h('span', { class: 'chev' }, '›')),
     h('div', { class: 'foot-note' }, `${GAMES.length} mini games · ${WORDS.length} adjectives`),
   );
 }

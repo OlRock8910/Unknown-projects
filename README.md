@@ -1,13 +1,35 @@
+<p align="center">
+  <img src="web/og-image.png" alt="Adjetivos: learn Spanish describing words with 19 mini games" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://olrock8910.github.io/anonymous-designs/"><img alt="Play in your browser" src="https://img.shields.io/badge/▶_Play_now-in_your_browser-8b5cf6?style=for-the-badge"></a>
+  <a href="../../raw/main/apk/Adjetivos.apk"><img alt="Download the Android app" src="https://img.shields.io/badge/Download-Adjetivos.apk-3ddc84?style=for-the-badge&logo=android&logoColor=white"></a>
+  <img alt="Free, no ads" src="https://img.shields.io/badge/free-no_ads-facc15?style=for-the-badge">
+</p>
+
 # Adjetivos 🇪🇸
 
-An Android app for learning Spanish **describing words**: *molesto*
-(annoying), *simpática* (nice), *perezoso* (lazy) and 93 more, through 19
-mini games.
+**Learn Spanish describing words by popping bubbles, slicing words and
+whacking moles.** *Mi hermano es muy molesto* 😤 — 96 adjectives, 19 mini
+games, a real Spanish voice, and no ads, accounts or internet needed.
 
-## Install it on your phone
+| **Home** | **Bubble Pop** — right answers flash up big | **Whack-a-Word** | **Gender Pop** |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/home.jpg" width="200"> | <img src="docs/screenshots/bubble-pop.jpg" width="200"> | <img src="docs/screenshots/whack.jpg" width="200"> | <img src="docs/screenshots/balloon.jpg" width="200"> |
+| **Word Ninja** | **Describe Them** | **Sentence Builder** | **Beat your best** |
+| <img src="docs/screenshots/ninja.jpg" width="200"> | <img src="docs/screenshots/describe.jpg" width="200"> | <img src="docs/screenshots/builder.jpg" width="200"> | <img src="docs/screenshots/results.jpg" width="200"> |
 
-1. On the phone, open [`apk/Adjetivos.apk`](apk/Adjetivos.apk) on GitHub and
-   tap **Download** (or "View raw").
+### ▶ Play it right now
+
+Open **https://olrock8910.github.io/anonymous-designs/** on any phone or
+computer. Nothing to install. On a phone, use your browser's
+**Add to Home screen** to keep it like an app.
+
+## Install the Android app
+
+1. On the phone, tap the green **Download Adjetivos.apk** button at the top of
+   this page (or open [`apk/Adjetivos.apk`](apk/Adjetivos.apk) and tap **Download**).
 2. Open the downloaded file. If Android asks, allow your browser or file
    manager to **install unknown apps**.
 3. Tap **Install**, then open **Adjetivos**.
@@ -69,6 +91,9 @@ where there is one, ser/estar, and tips for false friends (*sensible* means
 Every right answer flashes the word big in the middle of the screen,
 Spanish over English (**AMABLE · KIND**), and says it out loud.
 
+After every game, **📤 Challenge a friend** sends your score (with a link
+to play) through WhatsApp, Snapchat, TikTok or anything else on your phone.
+
 Also: flashcards, eight short grammar lessons, a searchable word list with
 pronunciation, XP and levels, a daily goal and streak, combo multipliers,
 stars and best scores. Words you get wrong come up more often.
@@ -96,9 +121,14 @@ sudo apt-get install aapt dalvik-exchange zipalign apksigner android-sdk-platfor
 cp build/Adjetivos.apk apk/    # update the downloadable copy
 ```
 
-CI (`.github/workflows/spanish-adjectives.yml`) runs the smoke test and
-builds the APK whenever anything under `spanish-adjectives/` changes. The
-APK is uploaded as the `adjetivos-apk` artifact.
+Two GitHub Actions workflows run on every push:
+`build-apk.yml` plays every game in a browser and builds the APK (uploaded
+as the `adjetivos-apk` artifact), and `pages.yml` publishes `web/` as the
+play-in-your-browser website.
+
+`promo/screenshots.mjs` retakes the screenshots above from the real app,
+and `promo/og-image.py` rebuilds the banner, which is also the picture shown
+when the link is posted on social media.
 
 ### Signing
 
@@ -107,3 +137,7 @@ committed on purpose and whose password (`adjetivos`) is public. Every build
 then has the same signature, so new versions install over old ones and keep
 your progress. It is only for sideloading — publishing to the Play Store
 would need a private key.
+
+## License
+
+MIT — do what you like with it.

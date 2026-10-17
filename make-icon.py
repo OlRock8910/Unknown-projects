@@ -86,7 +86,10 @@ def main():
         out = HERE / 'android' / 'res' / f'mipmap-{name}'
         out.mkdir(parents=True, exist_ok=True)
         art.resize((px, px), Image.LANCZOS).save(out / 'ic_launcher.png', optimize=True)
-    art.resize((512, 512), Image.LANCZOS).save(HERE / 'icon-512.png', optimize=True)
+    icons = HERE / 'web' / 'icons'
+    icons.mkdir(parents=True, exist_ok=True)
+    for px in (192, 512):
+        art.resize((px, px), Image.LANCZOS).save(icons / f'icon-{px}.png', optimize=True)
     print('icons written')
 
 
