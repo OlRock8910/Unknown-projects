@@ -13,8 +13,8 @@ android {
         applicationId = "com.ironlog.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
     }
 
     // A fixed key committed with the project, so every build can be installed over the

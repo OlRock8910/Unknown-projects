@@ -68,13 +68,13 @@ fun Page(
     content: LazyListScope.() -> Unit,
 ) {
     val top = statusBarHeight()
-    // The keyboard shrinks the list itself (not just its padding), so a focused field near
-    // the bottom is scrolled into the part of the screen that is still visible.
-    val ime = imeHeight()
+    // Room for the keyboard is added as padding at the end of the list. (Shrinking the list
+    // itself when the keyboard opened made some phones close the keyboard straight away.)
+    val bottom = maxOf(navigationBarHeight(), imeHeight())
     LazyColumn(
-        modifier.fillMaxSize().padding(bottom = ime),
+        modifier.fillMaxSize(),
         state = state,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 10.dp, bottom = bottomInset + if (ime > 0.dp) 0.dp else navigationBarHeight()),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 10.dp, bottom = bottomInset + bottom),
         content = content,
     )
 }
