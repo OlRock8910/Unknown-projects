@@ -1,12 +1,15 @@
 package com.olrock.adjetivos;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
-import android.os.Build;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Vibrator;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.Voice;
 import android.view.View;
 import android.view.Window;
 import android.webkit.JavascriptInterface;
@@ -15,20 +18,36 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Hosts the game (plain HTML/JS in assets/) in a full-screen WebView and
  * lends it the two things a WebView lacks: Spanish text-to-speech and
  * vibration. Everything runs offline.
+ *
+ * Speech goes through Google's engine when the phone has it — the same
+ * voices as Google Translate — and falls back to the phone's default engine.
  */
 public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
     private static final int BG = Color.rgb(11, 11, 30);
+    private static final String GOOGLE_TTS = "com.google.android.tts";
 
     private WebView web;
     private TextToSpeech tts;
     // "init" until the engine answers, then "ok", "missing" (no Spanish voice) or "error".
     private volatile String ttsState = "init";
+    // Spanish voices that work offline, best first.
+    private volatile List<Voice> voices = new ArrayList<Voice>();
+    private volatile String wantedVoice = "";
+    private volatile String currentVoice = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,7 +81,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         web.loadUrl("file:///android_asset/index.html");
         setContentView(web);
 
-        tts = new TextToSpeech(this, this);
+        // Asking for Google's engine falls back to the default one if it isn't installed.
+        tts = new TextToSpeech(this, this, GOOGLE_TTS);
     }
 
     @Override
@@ -71,9 +91,66 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             ttsState = "error";
             return;
         }
+        applyVoice();
+    }
+
+    /** Re-reads the installed Spanish voices and switches to the wanted (or best) one. */
+    private synchronized void applyVoice() {
+        if (tts == null) return;
+        List<Voice> found = new ArrayList<Voice>();
+        try {
+            Set<Voice> all = tts.getVoices();
+            if (all != null) {
+                for (Voice v : all) {
+                    if (!"es".equals(v.getLocale().getLanguage())) continue;
+                    if (v.isNetworkConnectionRequired()) continue; // the app has no internet permission
+                    if (v.getFeatures() != null && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                    found.add(v);
+                }
+            }
+        } catch (Exception e) {
+            // Some engines throw here; fall through to setLanguage.
+        }
+        Collections.sort(found, new Comparator<Voice>() {
+            @Override
+            public int compare(Voice a, Voice b) {
+                int spainA = "ES".equals(a.getLocale().getCountry()) ? 0 : 1;
+                int spainB = "ES".equals(b.getLocale().getCountry()) ? 0 : 1;
+                if (spainA != spainB) return spainA - spainB;
+                if (a.getQuality() != b.getQuality()) return b.getQuality() - a.getQuality();
+                return a.getName().compareTo(b.getName());
+            }
+        });
+        voices = found;
+
+        Voice pick = null;
+        for (Voice v : found) if (v.getName().equals(wantedVoice)) pick = v;
+        if (pick == null && !found.isEmpty()) pick = found.get(0);
+        if (pick != null && tts.setVoice(pick) == TextToSpeech.SUCCESS) {
+            currentVoice = pick.getName();
+            ttsState = "ok";
+            return;
+        }
         int r = tts.setLanguage(new Locale("es", "ES"));
         if (r < 0) r = tts.setLanguage(new Locale("es"));
+        currentVoice = "";
         ttsState = r < 0 ? "missing" : "ok";
+    }
+
+    private boolean hasGoogleTts() {
+        if (tts == null) return false;
+        for (TextToSpeech.EngineInfo e : tts.getEngines()) if (GOOGLE_TTS.equals(e.name)) return true;
+        return false;
+    }
+
+    private void open(Intent i, Intent fallback) {
+        try {
+            startActivity(i);
+        } catch (ActivityNotFoundException e) {
+            if (fallback != null) {
+                try { startActivity(fallback); } catch (ActivityNotFoundException ignored) { }
+            }
+        }
     }
 
     /** Exposed to JavaScript as window.Native. */
@@ -93,6 +170,61 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         @JavascriptInterface
         public String ttsState() {
             return ttsState;
+        }
+
+        /** {google, current, voices: [{name, locale, quality}]} */
+        @JavascriptInterface
+        public String voiceInfo() {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("google", hasGoogleTts());
+                o.put("current", currentVoice);
+                JSONArray arr = new JSONArray();
+                for (Voice v : voices) {
+                    JSONObject j = new JSONObject();
+                    j.put("name", v.getName());
+                    j.put("locale", v.getLocale().toLanguageTag());
+                    j.put("quality", v.getQuality());
+                    arr.put(j);
+                }
+                o.put("voices", arr);
+                return o.toString();
+            } catch (Exception e) {
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface
+        public void setVoice(String name) {
+            wantedVoice = name == null ? "" : name;
+            if (!"init".equals(ttsState)) applyVoice();
+        }
+
+        /** Opens the screen that downloads voice data (Google's when available). */
+        @JavascriptInterface
+        public void installVoice() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Intent settings = new Intent("com.android.settings.TTS_SETTINGS");
+                    if (hasGoogleTts()) {
+                        open(new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).setPackage(GOOGLE_TTS), settings);
+                    } else {
+                        // No Google engine at all: send them to "Speech Services by Google" on the Play Store.
+                        open(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + GOOGLE_TTS)), settings);
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void openTtsSettings() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    open(new Intent("com.android.settings.TTS_SETTINGS"), new Intent(android.provider.Settings.ACTION_SETTINGS));
+                }
+            });
         }
 
         @JavascriptInterface
@@ -124,6 +256,11 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     protected void onResume() {
         super.onResume();
         web.onResume();
+        // Coming back from the voice download screen: pick up any new voices.
+        if (!"init".equals(ttsState) && !"error".equals(ttsState)) {
+            applyVoice();
+            web.evaluateJavascript("window.onVoicesChanged && window.onVoicesChanged()", null);
+        }
     }
 
     @Override

@@ -12,9 +12,22 @@ mini games.
    manager to **install unknown apps**.
 3. Tap **Install**, then open **Adjetivos**.
 
-It works fully offline. Spanish pronunciation uses the phone's own
-text-to-speech engine. If words aren't spoken, go to **Settings › Text-to-speech**
-and install a Spanish voice (Google's engine has one).
+It works fully offline.
+
+### The voice
+
+Words and sentences are spoken by **Google's text-to-speech voices**, the same
+ones Google Translate uses, built into most Android phones as "Speech
+Services by Google". The app always asks for Google's engine, even if the
+phone defaults to another one (Samsung's, for example), and picks its best
+Spain-Spanish voice.
+
+- If the Spanish voice pack isn't downloaded yet, the home screen shows
+  **Get the Google voice**. Tap it, download Spanish, and come back.
+- **Me › Spanish voice** lists every Spanish voice on the phone (Spain,
+  Mexico, US…). Tap one to hear it and switch to it.
+- No Google engine at all? The same button opens "Speech Services by Google"
+  on the Play Store.
 
 ## What's inside
 

@@ -47,7 +47,7 @@ const Store = {
     return {
       xp: 0, played: 0, best: {}, stars: {}, mastery: {},
       daily: { date: today(), xp: 0 }, streak: { last: null, n: 0 },
-      settings: { sound: true, vibrate: true, voice: true, rate: 0.9, pack: 'all' },
+      settings: { sound: true, vibrate: true, voice: true, rate: 0.9, pack: 'all', voiceName: '' },
     };
   },
   load() {
@@ -138,32 +138,75 @@ const Sfx = {
 };
 
 // ------------------------------------------------------------------ speech
-// In the APK the native Android text-to-speech engine is exposed as
-// window.Native; in a browser fall back to the Web Speech API.
+// In the APK the phone's text-to-speech engine (Google's when installed, the
+// same voices as Google Translate) is exposed as window.Native; in a browser
+// fall back to the Web Speech API.
+const REGION_NAMES = { ES: '🇪🇸 Spain', MX: '🇲🇽 Mexico', US: '🇺🇸 US Spanish', AR: '🇦🇷 Argentina', CO: '🇨🇴 Colombia', 419: '🌎 Latin America' };
 const Voice = {
   esVoice: null,
+  native: () => !!(window.Native && window.Native.speak),
   init() {
-    if (window.speechSynthesis) {
+    if (this.native()) {
+      if (Store.s.voiceName && window.Native.setVoice) window.Native.setVoice(Store.s.voiceName);
+    } else if (window.speechSynthesis) {
       const pick = () => {
-        const vs = speechSynthesis.getVoices();
-        this.esVoice = vs.find((v) => /^es[-_]ES/i.test(v.lang)) || vs.find((v) => /^es/i.test(v.lang)) || null;
+        const vs = speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang));
+        this.esVoice = vs.find((v) => v.name === Store.s.voiceName) || vs.find((v) => /^es[-_]ES/i.test(v.lang)) || vs[0] || null;
       };
       pick();
       speechSynthesis.onvoiceschanged = pick;
     }
   },
   available() {
-    return !!(window.Native && window.Native.speak) || !!window.speechSynthesis;
+    return this.native() || !!window.speechSynthesis;
+  },
+  // 'init' | 'ok' | 'missing' | 'error' | 'none'
+  state() {
+    try {
+      if (this.native()) return window.Native.ttsState();
+      if (!window.speechSynthesis) return 'none';
+      return this.esVoice ? 'ok' : 'missing';
+    } catch (e) { return 'error'; }
+  },
+  // { google, current, voices: [{ name, locale, label }] } with friendly labels.
+  info() {
+    let raw = { google: false, current: '', voices: [] };
+    try {
+      if (this.native() && window.Native.voiceInfo) raw = { ...raw, ...JSON.parse(window.Native.voiceInfo()) };
+      else if (window.speechSynthesis) {
+        raw.voices = speechSynthesis.getVoices().filter((v) => /^es/i.test(v.lang)).map((v) => ({ name: v.name, locale: v.lang }));
+        raw.current = this.esVoice ? this.esVoice.name : '';
+      }
+    } catch (e) { /* keep defaults */ }
+    const counts = {};
+    raw.voices = (raw.voices || []).map((v) => {
+      const region = (v.locale || '').split(/[-_]/)[1] || '';
+      const place = REGION_NAMES[region.toUpperCase()] || '🌎 ' + (v.locale || 'Spanish');
+      counts[place] = (counts[place] || 0) + 1;
+      return { ...v, label: `${place} · voice ${counts[place]}` };
+    });
+    return raw;
+  },
+  select(name) {
+    Store.s.voiceName = name;
+    Store.save();
+    try {
+      if (this.native()) window.Native.setVoice(name);
+      else if (window.speechSynthesis) this.esVoice = speechSynthesis.getVoices().find((v) => v.name === name) || this.esVoice;
+    } catch (e) { /* ignore */ }
+  },
+  install() {
+    try { if (this.native() && window.Native.installVoice) window.Native.installVoice(); } catch (e) { /* ignore */ }
   },
   say(text, force = false) {
     if (!Store.s.voice && !force) return;
     const rate = Store.s.rate || 0.9;
     try {
-      if (window.Native && window.Native.speak) {
+      if (this.native()) {
         const state = window.Native.ttsState();
         if ((state === 'missing' || state === 'error') && !this.warned) {
           this.warned = true;
-          toast('No Spanish voice found — add one in Android Settings › Text-to-speech', 4000);
+          toast('No Spanish voice yet — tap “Get the Google voice” on the home screen', 4000);
         }
         window.Native.speak(text, rate);
         return;

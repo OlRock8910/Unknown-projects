@@ -13,7 +13,19 @@ const App = {
     // Browsers only allow audio after a user gesture.
     document.addEventListener('pointerdown', () => Sfx.ensure(), { once: true });
     window.appBack = () => this.back();
+    // The Android side calls this after the player comes back from installing a voice.
+    window.onVoicesChanged = () => { if (!this.overlayKind) this.refresh(); };
     this.show('play');
+    // The speech engine starts up asynchronously; redraw once it has answered.
+    if (Voice.state() === 'init') {
+      let tries = 0;
+      const wait = setInterval(() => {
+        if (Voice.state() !== 'init' || ++tries > 20) {
+          clearInterval(wait);
+          if (!this.overlayKind && (this.tab === 'play' || this.tab === 'me')) this.refresh();
+        }
+      }, 500);
+    }
   },
 
   show(tab) {
@@ -128,6 +140,47 @@ function wordOfTheDay() {
   return WORDS[seed % WORDS.length];
 }
 
+// Shown on the home screen when the phone can't speak Spanish yet.
+function voiceBanner() {
+  const st = Voice.state();
+  if (!Voice.native() || (st !== 'missing' && st !== 'error')) return null;
+  const google = Voice.info().google;
+  return h('button', { class: 'card voice-banner', onclick: () => Voice.install() },
+    h('span', { class: 'vb-emoji' }, '🔇'),
+    h('div', {},
+      h('b', {}, 'Get the Google voice'),
+      h('span', {}, google
+        ? 'Your phone needs the Spanish voice pack — the same voice as Google Translate. Tap to download it (free).'
+        : 'Install “Speech Services by Google” to hear every word spoken — the same voice as Google Translate.')),
+    h('span', { class: 'chev' }, '›'));
+}
+
+const SAMPLE_PHRASE = '¡Hola! Mi hermano es muy molesto.';
+
+function voicePicker() {
+  const info = Voice.info();
+  const st = Voice.state();
+  const status = st === 'ok'
+    ? (Voice.native() ? (info.google ? '🟢 Google voice ready' : '🟢 Phone voice ready') : '🟢 Browser voice ready')
+    : st === 'init' ? '⏳ Starting the voice…' : '🔇 No Spanish voice installed yet';
+  const list = h('div', { class: 'voice-list' }, ...info.voices.map((v) => {
+    const on = v.name === info.current || (!info.current && v.name === Store.s.voiceName);
+    const b = h('button', { class: 'voice-opt' + (on ? ' on' : '') }, h('span', {}, v.label), h('span', { class: 'vo-play' }, on ? '✓' : '▶'));
+    b.addEventListener('click', () => {
+      Voice.select(v.name);
+      setTimeout(() => { Voice.say(SAMPLE_PHRASE, true); App.refresh(); }, 150);
+    });
+    return b;
+  }));
+  return h('div', { class: 'card settings' },
+    h('div', { class: 'voice-status' }, status),
+    info.voices.length > 1 ? h('small', { class: 'muted' }, 'Tap a voice to hear it and use it:') : null,
+    info.voices.length ? list : null,
+    Voice.native() ? h('div', { class: 'row-btns wrap' },
+      h('button', { class: 'btn ghost small', onclick: () => Voice.install() }, info.google ? '⬇️ Get more Google voices' : '⬇️ Get the Google voice'),
+      h('button', { class: 'btn ghost small', onclick: () => window.Native.openTtsSettings() }, '⚙️ Speech settings')) : null);
+}
+
 function renderPlay() {
   const d = Store.data;
   const lv = Store.level();
@@ -162,6 +215,7 @@ function renderPlay() {
       h('div', { class: 'top-pills' },
         h('div', { class: 'pill fire' + (streak ? ' lit' : '') }, '🔥 ' + streak),
         h('div', { class: 'pill' }, '⭐ Lv ' + lv.lvl))),
+    voiceBanner(),
     h('div', { class: 'card goal-card' }, ring,
       h('div', { class: 'goal-text' }, h('b', {}, 'Daily goal'), h('span', {}, `${Math.min(d.daily.xp, DAILY_GOAL)} / ${DAILY_GOAL} XP today`),
         h('div', { class: 'xp-bar' }, h('i', { style: { width: (lv.into / lv.need) * 100 + '%' } })),
@@ -327,7 +381,7 @@ function renderMe() {
     return h('label', { class: 'setting' }, h('span', {}, `${emoji} ${label}`), h('span', { class: 'switch' }, input, h('i')));
   };
   const rate = h('input', { type: 'range', min: '0.5', max: '1.3', step: '0.1', value: String(Store.s.rate) });
-  rate.addEventListener('change', () => { Store.s.rate = parseFloat(rate.value); Store.save(); Voice.say('¡Hola! Mi hermano es muy molesto.', true); });
+  rate.addEventListener('change', () => { Store.s.rate = parseFloat(rate.value); Store.save(); Voice.say(SAMPLE_PHRASE, true); });
   const stat = (v, l) => h('div', { class: 'stat' }, h('b', {}, v), h('small', {}, l));
   return h('div', { class: 'page' },
     h('header', { class: 'top' }, h('div', {}, h('div', { class: 'hello' }, 'Tu perfil'), h('div', { class: 'brand' }, 'Me'))),
@@ -346,7 +400,9 @@ function renderMe() {
       toggle('vibrate', 'Vibration', '📳'),
       toggle('voice', 'Speak Spanish aloud', '🗣️'),
       h('label', { class: 'setting col' }, h('span', {}, '🐢 Speech speed 🐇'), rate),
-      h('button', { class: 'btn ghost small', onclick: () => Voice.say('¡Hola! Mi hermano es muy molesto.', true) }, '🔊 Test voice')),
+      h('button', { class: 'btn ghost small', onclick: () => Voice.say(SAMPLE_PHRASE, true) }, '🔊 Test voice')),
+    h('div', { class: 'section-title' }, 'Spanish voice'),
+    voicePicker(),
     h('button', {
       class: 'btn danger wide',
       onclick: () => {

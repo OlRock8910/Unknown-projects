@@ -107,6 +107,62 @@ const back = await page.evaluate(() => {
 });
 if (back[0] !== true || back[1] !== false || back[2] !== 'play') errors.push('appBack misbehaves: ' + JSON.stringify(back));
 
+// The Android voice bridge, faked: first with no Spanish voice, then with Google's.
+for (const state of ['missing', 'ok']) {
+  const p = await browser.newPage({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2 });
+  p.on('pageerror', (e) => errors.push(`[native ${state}] ${e.message}`));
+  await p.addInitScript((st) => {
+    window.__spoken = [];
+    window.__installs = 0;
+    let current = st === 'ok' ? 'es-es-x-eea-local' : '';
+    window.Native = {
+      speak: (t) => window.__spoken.push(t),
+      stop: () => {},
+      vibrate: () => {},
+      ttsState: () => st,
+      setVoice: (n) => { if (st === 'ok') current = n; },
+      installVoice: () => { window.__installs++; },
+      openTtsSettings: () => {},
+      voiceInfo: () => JSON.stringify({
+        google: true, current,
+        voices: st === 'ok' ? [
+          { name: 'es-es-x-eea-local', locale: 'es-ES', quality: 400 },
+          { name: 'es-es-x-eed-local', locale: 'es-ES', quality: 400 },
+          { name: 'es-us-x-esc-local', locale: 'es-US', quality: 400 },
+        ] : [],
+      }),
+    };
+  }, state);
+  await p.goto(url);
+  await p.waitForSelector('.game-card');
+  const banner = await p.$('.voice-banner');
+  if (state === 'missing') {
+    if (!banner) errors.push('no "get the Google voice" banner when the voice is missing');
+    else {
+      await banner.click();
+      if (await p.evaluate(() => window.__installs) !== 1) errors.push('banner did not ask Android to install the voice');
+    }
+  } else {
+    if (banner) errors.push('voice banner shown although a voice is installed');
+    await p.click('#tabs button[data-tab=me]');
+    const opts = await p.$$('.voice-opt');
+    if (opts.length !== 3) errors.push(`expected 3 voice options, got ${opts.length}`);
+    await opts[1].click();
+    await p.waitForTimeout(300);
+    const res = await p.evaluate(() => [Store.s.voiceName, window.__spoken.slice(-1)[0], document.querySelector('.voice-opt.on')?.textContent]);
+    if (res[0] !== 'es-es-x-eed-local' || !res[1] || !/voice 2/.test(res[2] || '')) errors.push('voice picker misbehaves: ' + JSON.stringify(res));
+    if (shots) await p.screenshot({ path: path.join(shotDir, 'voice-picker.png'), fullPage: true });
+    await p.click('#tabs button[data-tab=play]');
+    await p.evaluate(() => App.startGame(GAMES.find((g) => g.id === 'bubble')));
+    await p.waitForTimeout(500);
+    await p.evaluate(() => document.querySelector('.bubble') && Voice.say('molesto'));
+    if (!(await p.evaluate(() => window.__spoken.includes('molesto')))) errors.push('speech did not reach the Android bridge');
+  }
+  if (shots && state === 'missing') await p.screenshot({ path: path.join(shotDir, 'voice-banner.png') });
+  await p.close();
+  console.log('  ok native voice:', state);
+}
+
 await browser.close();
 if (errors.length) {
   console.error('Errors:\n  ' + [...new Set(errors)].join('\n  '));
