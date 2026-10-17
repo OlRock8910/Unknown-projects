@@ -1,0 +1,41 @@
+# Publishes Adjetivos so anyone can play in their browser, no install:
+# https://olrock8910.github.io/Unknown-projects/adjetivos/
+name: Publish Adjetivos website
+
+on:
+  push:
+    branches: [main]
+    paths: ['adjetivos/web/**', '.github/workflows/adjetivos-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}adjetivos/
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r adjetivos/web _site/adjetivos
+          # The bare site address goes straight to the game.
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=adjetivos/"><a href="adjetivos/">Adjetivos</a>\n' > _site/index.html
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

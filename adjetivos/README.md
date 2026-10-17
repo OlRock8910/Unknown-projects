@@ -141,4 +141,4 @@ would need a private key.
 
 ## License
 
-MIT — do what you like with it.
+MIT, like the rest of this repository — see [LICENSE](../LICENSE).

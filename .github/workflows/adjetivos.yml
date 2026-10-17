@@ -1,0 +1,46 @@
+# Tests and builds Adjetivos (the Spanish adjectives game in adjetivos/).
+# ReelBox has its own workflow in build.yml.
+name: Build Adjetivos APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['adjetivos/**', '.github/workflows/adjetivos.yml']
+  pull_request:
+    paths: ['adjetivos/**', '.github/workflows/adjetivos.yml']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    name: Test and build APK
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: adjetivos
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq aapt dalvik-exchange zipalign apksigner android-sdk-platform-23 zip
+
+      - name: Browser smoke test (every game)
+        run: |
+          npm install --no-package-lock
+          npx playwright install --with-deps chromium
+          node tests/smoke.mjs
+
+      - name: Build APK
+        run: ./build-apk.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: adjetivos-apk
+          path: adjetivos/build/Adjetivos.apk
+          if-no-files-found: error
