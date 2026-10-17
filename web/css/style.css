@@ -479,3 +479,14 @@ input { font: inherit; }
 .vo-play { color: var(--muted); font-weight: 900; }
 .voice-opt.on .vo-play { color: #c4b5fd; }
 .row-btns.wrap { flex-wrap: wrap; margin-top: 6px; }
+
+/* ------------------------------------------------------------ hear it again */
+.replay-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.22); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 4; flex-shrink: 0; }
+.replay-btn:active { transform: scale(0.9); }
+.prompt .replay-btn { position: absolute; left: -16px; top: -14px; width: 36px; height: 36px; font-size: 16px; }
+.q-top { position: relative; }
+.q-card { position: relative; }
+.replay-btn.corner { position: absolute; top: 10px; right: 10px; }
+.replay-btn.stage-corner { position: absolute; top: 4px; right: 14px; }
+.fb-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.fb-row .fb-next { margin-top: 0; margin-left: auto; }

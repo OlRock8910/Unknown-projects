@@ -48,6 +48,11 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private volatile List<Voice> voices = new ArrayList<Voice>();
     private volatile String wantedVoice = "";
     private volatile String currentVoice = "";
+    // Voices for each language, so English instructions and Spanish words can share one queue.
+    private volatile Voice esVoice;
+    private volatile Voice enVoice;
+    private volatile boolean enReady;
+    private int utterance;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,18 +128,57 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         });
         voices = found;
 
+        enVoice = pickEnglish();
+        enReady = enVoice != null || tts.isLanguageAvailable(Locale.US) >= 0;
+
         Voice pick = null;
         for (Voice v : found) if (v.getName().equals(wantedVoice)) pick = v;
         if (pick == null && !found.isEmpty()) pick = found.get(0);
         if (pick != null && tts.setVoice(pick) == TextToSpeech.SUCCESS) {
+            esVoice = pick;
             currentVoice = pick.getName();
             ttsState = "ok";
             return;
         }
+        esVoice = null;
         int r = tts.setLanguage(new Locale("es", "ES"));
         if (r < 0) r = tts.setLanguage(new Locale("es"));
         currentVoice = "";
         ttsState = r < 0 ? "missing" : "ok";
+    }
+
+    /** Best offline English voice, preferring the phone's own English accent. */
+    private Voice pickEnglish() {
+        String country = "en".equals(Locale.getDefault().getLanguage()) ? Locale.getDefault().getCountry() : "US";
+        Voice best = null;
+        int bestScore = -1;
+        try {
+            Set<Voice> all = tts.getVoices();
+            if (all == null) return null;
+            for (Voice v : all) {
+                if (!"en".equals(v.getLocale().getLanguage()) || v.isNetworkConnectionRequired()) continue;
+                if (v.getFeatures() != null && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                int score = (country.equals(v.getLocale().getCountry()) ? 1000 : 0) + v.getQuality();
+                if (score > bestScore) { best = v; bestScore = score; }
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return best;
+    }
+
+    /** Switches language and speaks; queue=true waits for whatever is already being said. */
+    private synchronized void say(String text, float rate, String lang, boolean queue) {
+        if (tts == null || "init".equals(ttsState) || "error".equals(ttsState)) return;
+        if ("en".equals(lang)) {
+            if (!enReady) return;
+            if (enVoice != null) tts.setVoice(enVoice); else tts.setLanguage(Locale.US);
+        } else {
+            if (!"ok".equals(ttsState)) return;
+            if (esVoice != null) tts.setVoice(esVoice); else tts.setLanguage(new Locale("es", "ES"));
+        }
+        tts.setSpeechRate(Math.max(0.3f, Math.min(2f, rate)));
+        tts.speak(text, queue ? TextToSpeech.QUEUE_ADD : TextToSpeech.QUEUE_FLUSH, null, "adj" + (utterance++));
     }
 
     private boolean hasGoogleTts() {
@@ -157,9 +201,13 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private class Bridge {
         @JavascriptInterface
         public void speak(String text, float rate) {
-            if (tts == null || !"ok".equals(ttsState)) return;
-            tts.setSpeechRate(Math.max(0.3f, Math.min(2f, rate)));
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "adj");
+            say(text, rate, "es", false);
+        }
+
+        /** lang is "es" or "en". */
+        @JavascriptInterface
+        public void speakIn(String text, float rate, String lang, boolean queue) {
+            say(text, rate, lang, queue);
         }
 
         @JavascriptInterface

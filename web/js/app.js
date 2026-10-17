@@ -399,6 +399,7 @@ function renderMe() {
       toggle('sound', 'Sound effects', '🔔'),
       toggle('vibrate', 'Vibration', '📳'),
       toggle('voice', 'Speak Spanish aloud', '🗣️'),
+      toggle('readTasks', 'Read each task aloud first', '📢'),
       h('label', { class: 'setting col' }, h('span', {}, '🐢 Speech speed 🐇'), rate),
       h('button', { class: 'btn ghost small', onclick: () => Voice.say(SAMPLE_PHRASE, true) }, '🔊 Test voice')),
     h('div', { class: 'section-title' }, 'Spanish voice'),

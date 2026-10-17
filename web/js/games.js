@@ -71,8 +71,15 @@ function fitWord(el, text, base = 15) {
   return el;
 }
 
-function promptPill(label, value, extra) {
-  return h('div', { class: 'prompt pop-in' }, h('small', {}, label), h('b', {}, value), extra || null);
+function promptPill(label, value, extra, replay) {
+  return h('div', { class: 'prompt pop-in' }, replay || null, h('small', {}, label), h('b', {}, value), extra || null);
+}
+
+// The task for an arcade target: the full instruction the first time, then
+// just the word. 🔊 always repeats the full instruction.
+function arcadeTask(S, instruction, word, lang = 'en') {
+  const full = [{ text: instruction, lang: 'en' }, { text: word, lang }];
+  S.task(S.taskCount ? [{ text: word, lang }] : full, { replay: full });
 }
 
 function setPrompt(holder, node) {
@@ -90,7 +97,7 @@ function roundsGame(S, cfg) {
   S.stage.append(h('div', { class: 'rounds' }, qBar, top, choicesHost, fb));
   if (cfg.lives) S.setLives(cfg.lives);
 
-  let i = 0, q, qt = 0, qTotal = 0, answered = true, waitId = null;
+  let i = 0, q, qt = 0, qTotal = 0, answered = true, waitId = null, pendingGo = null;
 
   const next = () => {
     if (i >= rounds) return S.finish();
@@ -101,14 +108,14 @@ function roundsGame(S, cfg) {
     q = cfg.make(i);
     fb.className = 'feedback';
     fb.replaceChildren();
-    top.replaceChildren(q.top);
+    top.replaceChildren(q.top, S.replayButton('corner'));
     top.classList.remove('pop-in');
     void top.offsetWidth;
     top.classList.add('pop-in');
     const grid = choiceGrid(shuffle(q.options), (o) => o.ok, answer, (o) => o.label);
     if (q.cols === 1) grid.classList.add('one-col');
     choicesHost.replaceChildren(grid);
-    if (q.say) Voice.say(q.say);
+    S.task(q.task || (q.say ? [{ text: q.say, lang: 'es' }] : []));
     qTotal = typeof cfg.time === 'function' ? cfg.time(i) : cfg.time ?? 12;
     qt = qTotal;
     answered = false;
@@ -121,19 +128,31 @@ function roundsGame(S, cfg) {
       h('div', { class: 'fb-head' }, headline || (ok ? pickOne(['¡Muy bien!', '¡Genial!', '¡Perfecto!', '¡Eso es!', '¡Bravo!']) : 'Not quite')),
       !ok ? h('div', { class: 'fb-answer' }, 'Answer: ', h('b', {}, right.label)) : null,
       q.reveal ? h('div', { class: 'fb-reveal', html: q.reveal }) : null,
-      h('div', { class: 'fb-next' }, 'Tap to continue ›'),
+      h('div', { class: 'fb-row' }, hear, h('div', { class: 'fb-next' }, 'Tap to continue ›')),
     );
   };
 
+  // Hearing the answer again pauses the automatic move to the next question.
+  const hearAgain = () => {
+    const text = q.sayAfter || q.say;
+    if (!text) return null;
+    const b = h('button', { class: 'btn ghost small' }, '🔊 Hear it again');
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cancelWait();
+      Voice.say(text, true);
+    });
+    return b;
+  };
+  let hear = null;
+
+  const cancelWait = () => {
+    if (waitId != null) { clearTimeout(waitId); S.timers.delete(waitId); waitId = null; }
+  };
   const advance = (ms) => {
-    const go = () => { waitId = null; i++; next(); };
-    waitId = S.after(ms, go);
-    fb.onclick = () => {
-      if (waitId == null) return;
-      clearTimeout(waitId);
-      S.timers.delete(waitId);
-      go();
-    };
+    pendingGo = () => { pendingGo = null; cancelWait(); i++; next(); };
+    waitId = S.after(ms, () => pendingGo && pendingGo());
+    fb.onclick = () => { if (pendingGo) pendingGo(); };
   };
 
   function answer(opt, btn, ok) {
@@ -142,6 +161,7 @@ function roundsGame(S, cfg) {
     if (ok) S.hit(q.word, (cfg.base || 10) + Math.ceil(qt), centerOf(btn));
     else S.miss(q.word, centerOf(btn));
     if (q.sayAfter) Voice.say(q.sayAfter);
+    hear = hearAgain();
     showFeedback(ok);
     if (!ok && S.lives != null && S.loseLife()) return;
     advance(ok ? 1100 : 2400);
@@ -159,6 +179,7 @@ function roundsGame(S, cfg) {
       });
       S.miss(q.word);
       if (q.sayAfter) Voice.say(q.sayAfter);
+      hear = hearAgain();
       showFeedback(false, '⏰ Out of time');
       if (S.lives != null && S.loseLife()) return;
       advance(2400);
@@ -173,6 +194,7 @@ const QUESTION_TYPES = {
   es2en(w) {
     return {
       word: w, say: w.m,
+      task: [{ text: 'What does this mean?', lang: 'en' }, { text: w.m, lang: 'es' }],
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'What does this mean?'), h('div', { class: 'q-big' }, w.m),
         !w.inv ? h('div', { class: 'q-sub' }, 'feminine: ' + w.f) : h('div', { class: 'q-sub' }, 'same for él and ella')),
       options: [{ label: w.short, ok: true }, ...distractors(w, 3).map((d) => ({ label: d.short, ok: false }))],
@@ -182,6 +204,7 @@ const QUESTION_TYPES = {
   en2es(w) {
     return {
       word: w, sayAfter: w.m,
+      task: [{ text: `How do you say ${w.short}?`, lang: 'en' }],
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'How do you say…'), h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'q-big' }, w.short)),
       options: [{ label: w.m, ok: true }, ...distractors(w, 3).map((d) => ({ label: d.m, ok: false }))],
       reveal: w.tip ? '💡 ' + w.tip : null,
@@ -192,6 +215,7 @@ const QUESTION_TYPES = {
     const en = (d) => `${s.subj.en} is${s.int.en ? ' ' + s.int.en : ''} ${d.short}.`;
     return {
       word: w, say: s.es, cols: 1,
+      task: [{ text: 'Translate.', lang: 'en' }, { text: s.es, lang: 'es' }],
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Translate'), h('div', { class: 'q-sentence' }, s.es)),
       options: [{ label: s.en, ok: true }, ...distractors(w, 3).map((d) => ({ label: en(d), ok: false }))],
     };
@@ -204,6 +228,7 @@ const QUESTION_TYPES = {
     distractors(w, 4 - opts.length).forEach((d) => opts.push({ label: form(d, s.subj.g), ok: false }));
     return {
       word: w, sayAfter: s.es,
+      task: [{ text: `Fill the gap. ${s.en}`, lang: 'en' }],
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Fill the gap'), h('div', { class: 'q-sentence' }, before, ' ', h('span', { class: 'gap' }, '____'), '.'),
         h('div', { class: 'q-sub' }, s.en)),
       options: opts,
@@ -241,7 +266,8 @@ addGame({
 
     const newTarget = () => {
       target = pickWords(1)[0];
-      setPrompt(prompt, promptPill('Pop the Spanish for', target.short, h('span', { class: 'pe' }, target.e)));
+      setPrompt(prompt, promptPill('Pop the Spanish for', target.short, h('span', { class: 'pe' }, target.e), S.replayButton()));
+      arcadeTask(S, 'Pop the Spanish for', target.short);
       ff.clearClashes(target);
     };
     const spawn = (startY) => {
@@ -292,7 +318,8 @@ addGame({
       target = pickWords(1, (w) => !w.inv)[0];
       subj = pickOne(SUBJECTS);
       const icon = subj.g === 'f' ? '👩' : '👨';
-      setPrompt(prompt, promptPill(`${icon} ${subj.es} ${verbFor(target)}…`, `${subj.en} is ${target.short}`));
+      setPrompt(prompt, promptPill(`${icon} ${subj.es} ${verbFor(target)}…`, `${subj.en} is ${target.short}`, null, S.replayButton()));
+      arcadeTask(S, 'Pop the balloon with the right ending.', `${subj.en} is ${target.short}.`);
       ff.clearClashes(target);
     };
     const spawn = (startY) => {
@@ -353,7 +380,8 @@ addGame({
     });
     const newTarget = () => {
       target = pickWords(1)[0];
-      setPrompt(prompt, promptPill('Catch the meaning of', target.m));
+      setPrompt(prompt, promptPill('Catch the meaning of', target.m, null, S.replayButton()));
+      arcadeTask(S, 'Catch the meaning of', target.m, 'es');
       ff.clearClashes(target);
     };
     const lanes = 3;
@@ -412,7 +440,8 @@ addGame({
     let target;
     const newTarget = () => {
       target = pickWords(1)[0];
-      setPrompt(prompt, promptPill('Slice the Spanish for', target.short, h('span', { class: 'pe' }, target.e)));
+      setPrompt(prompt, promptPill('Slice the Spanish for', target.short, h('span', { class: 'pe' }, target.e), S.replayButton()));
+      arcadeTask(S, 'Slice the Spanish for', target.short);
       ff.clearClashes(target);
     };
     const launch = () => {
@@ -495,7 +524,8 @@ addGame({
     const down = (st) => { st.up = false; st.mole.classList.remove('up'); st.word = null; };
     const newTarget = () => {
       target = pickWords(1)[0];
-      setPrompt(prompt, promptPill('Whack the Spanish for', target.short, h('span', { class: 'pe' }, target.e)));
+      setPrompt(prompt, promptPill('Whack the Spanish for', target.short, h('span', { class: 'pe' }, target.e), S.replayButton()));
+      arcadeTask(S, 'Whack the Spanish for', target.short);
       holes.forEach((st) => { if (st.up && st.word && st.word.id !== target.id && clash(st.word, target)) down(st); });
     };
     const popUp = () => {
@@ -550,6 +580,7 @@ addGame({
     ]));
     const grid = h('div', { class: 'memory-grid' });
     S.stage.append(h('div', { class: 'hint-line' }, 'Match each Spanish word to its English meaning'), grid);
+    S.task([{ text: 'Find the pairs. Match each Spanish word to its meaning.', lang: 'en' }]);
     let open = [], moves = 0, matched = 0, secs = 0, busy = false;
     S.every(1000, () => { secs++; S.setExtra(`⏱${secs} · 🔁${moves}`); });
     S.setExtra('⏱0 · 🔁0');
@@ -612,7 +643,7 @@ addGame({
     const cardHost = h('div', { class: 'tf-host' });
     const no = h('button', { class: 'tf-btn no' }, '✗');
     const yes = h('button', { class: 'tf-btn yes' }, '✓');
-    S.stage.append(h('div', { class: 'hint-line' }, 'Swipe right for true, left for false'), cardHost, h('div', { class: 'tf-btns' }, no, yes));
+    S.stage.append(h('div', { class: 'hint-line' }, 'Swipe right for true, left for false'), S.replayButton('stage-corner'), cardHost, h('div', { class: 'tf-btns' }, no, yes));
     let cur = null;
     const next = () => {
       const w = pickWords(1)[0];
@@ -621,6 +652,7 @@ addGame({
       const card = h('div', { class: 'tf-card pop-in' }, h('div', { class: 'tf-es' }, w.m), h('div', { class: 'tf-eq' }, '='), h('div', { class: 'tf-en' }, shown.short));
       cur = { w, truth, card, done: false };
       cardHost.replaceChildren(card);
+      S.task([{ text: w.m, lang: 'es' }], { queue: false });
       swipeable(card, (dir) => answer(dir > 0));
     };
     const answer = (saidTrue) => {
@@ -703,6 +735,7 @@ addGame({
     S.setExtra('⏱ 0s');
     const wrap = h('div', { class: 'match-wrap' });
     S.stage.append(h('div', { class: 'hint-line' }, 'Tap a word, then its meaning'), wrap);
+    S.task([{ text: 'Tap a Spanish word, then its meaning.', lang: 'en' }]);
     const play = () => {
       S.setProgress(round / ROUNDS);
       const words = [];
@@ -768,6 +801,7 @@ addGame({
         const wrong = distractors(o, 3, (d) => d.id !== w.id && !clash(d, w));
         return {
           word: w, say: w.m,
+          task: [{ text: 'What is the opposite of', lang: 'en' }, { text: w.m, lang: 'es' }],
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'What is the opposite of…'), h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'q-big' }, w.m), h('div', { class: 'q-sub' }, w.short)),
           options: [{ label: o.m, ok: true }, ...wrong.map((d) => ({ label: d.m, ok: false }))],
           sayAfter: `${w.m}, ${o.m}`,
@@ -790,6 +824,7 @@ addGame({
         const w = words[i];
         return {
           word: w, sayAfter: w.m,
+          task: [{ text: 'Which word fits this emoji?', lang: 'en' }],
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Which word fits?'), h('div', { class: 'q-emoji huge' }, w.e)),
           options: [{ label: w.m, ok: true }, ...distractors(w, 3).map((d) => ({ label: d.m, ok: false }))],
           reveal: `${w.e} <b>${w.m}</b> = ${w.en}`,
@@ -812,9 +847,9 @@ addGame({
         const w = words[i];
         const s = makeSentence(w);
         const play = () => Voice.say(s.es, true);
-        S.after(250, play);
         return {
           word: w,
+          task: [{ text: 'Listen. What is the person like?', lang: 'en' }, { text: s.es, lang: 'es', force: true }],
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Listen — what is the person like?'),
             h('button', { class: 'speak-big', onclick: play }, '🔊'),
             canSpeak ? h('div', { class: 'q-sub' }, 'Tap to hear it again') : h('div', { class: 'q-sentence' }, s.es)),
@@ -841,6 +876,7 @@ addGame({
         const said = `${name} es ${form(w, g)}`;
         return {
           word: w, sayAfter: said,
+          task: [{ text: `${name}. ${w.clue}`, lang: 'en' }],
           top: h('div', { class: 'q-card person' },
             h('div', { class: 'avatar' }, pickOne(AVATARS[g])),
             h('div', { class: 'p-name' }, name),
@@ -945,8 +981,9 @@ addGame({
         render();
         S.after(1300, () => { i++; next(); });
       });
+      S.task([{ text: `Spell the Spanish for ${w.short}.`, lang: 'en' }]);
       box.replaceChildren(
-        h('div', { class: 'q-card pop-in' }, h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'q-big small' }, w.short),
+        h('div', { class: 'q-card pop-in' }, S.replayButton('corner'), h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'q-big small' }, w.short),
           h('div', { class: 'q-sub' }, `${g === 'f' ? '👩' : '👨'} ${subj.es} ${verbFor(w)}…`)),
         slots, tiles, h('div', { class: 'row-btns' }, hintBtn, skipBtn));
       render();
@@ -1002,8 +1039,9 @@ addGame({
         });
         keys.append(k);
       });
+      S.task([{ text: `Guess the Spanish word for ${w.short}.`, lang: 'en' }]);
       box.replaceChildren(
-        h('div', { class: 'q-card pop-in' }, balloons, h('div', { class: 'q-sub' }, `${w.e} ${w.en}`)),
+        h('div', { class: 'q-card pop-in' }, S.replayButton('corner'), balloons, h('div', { class: 'q-sub' }, `${w.e} ${w.en}`)),
         wordEl, keys);
       renderWord();
     };
@@ -1064,8 +1102,9 @@ addGame({
           w.inv ? null : h('div', { class: 'fb-reveal' }, `${s.subj.es} → ${s.adj} (${s.subj.g === 'f' ? 'feminine' : 'masculine'})`));
         S.after(ok ? 1400 : 2600, () => { i++; next(); });
       });
+      S.task([{ text: `Say it in Spanish. ${s.en}`, lang: 'en' }]);
       box.replaceChildren(
-        h('div', { class: 'q-card pop-in' }, h('div', { class: 'q-label' }, 'Say it in Spanish'), h('div', { class: 'q-sentence' }, `${w.e} ${s.en}`)),
+        h('div', { class: 'q-card pop-in' }, S.replayButton('corner'), h('div', { class: 'q-label' }, 'Say it in Spanish'), h('div', { class: 'q-sentence' }, `${w.e} ${s.en}`)),
         line, bank, h('div', { class: 'row-btns' }, check), fb);
       render();
     };
@@ -1086,7 +1125,7 @@ addGame({
       b.addEventListener('click', () => answer(v, b));
       return b;
     };
-    S.stage.append(h('div', { class: 'hint-line' }, 'Who could this word describe?'), card, fb,
+    S.stage.append(h('div', { class: 'hint-line' }, 'Who could this word describe?'), S.replayButton('stage-corner'), card, fb,
       h('div', { class: 'g-btns' }, btn('👨 Él', 'm'), btn('👫 Both', 'both'), btn('👩 Ella', 'f')));
     let cur, last;
     const next = () => {
@@ -1097,6 +1136,7 @@ addGame({
       const g = pickOne(['m', 'f']);
       cur = { w, shown: useInv ? w.m : form(w, g), ans: useInv ? 'both' : g, done: false };
       card.replaceChildren(h('div', { class: 'g-word pop-in' }, cur.shown), h('div', { class: 'q-sub' }, w.short));
+      S.task([{ text: cur.shown, lang: 'es' }], { queue: false });
     };
     const why = (c) => {
       const w = c.w;
@@ -1144,6 +1184,7 @@ addGame({
           : w.v === 'estar' ? '🌡️ A feeling or state that can change → <b>estar (está)</b>' : '🪪 Personality or looks → <b>ser (es)</b>';
         return {
           word: w, sayAfter: `${subj.es} ${verb} ${adj}`,
+          task: [{ text: `Es or está? ${subj.en} is ${meaning}.`, lang: 'en' }],
           top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Es or está?'),
             h('div', { class: 'q-sentence' }, `${subj.es} `, h('span', { class: 'gap' }, '____'), ` ${adj}.`),
             h('div', { class: 'q-sub' }, `${subj.en} is ${meaning}.`)),

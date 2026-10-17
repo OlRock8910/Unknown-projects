@@ -115,8 +115,10 @@ for (const state of ['missing', 'ok']) {
     window.__spoken = [];
     window.__installs = 0;
     let current = st === 'ok' ? 'es-es-x-eea-local' : '';
+    window.__said = [];
     window.Native = {
       speak: (t) => window.__spoken.push(t),
+      speakIn: (t, rate, lang, queue) => { window.__said.push({ text: t, lang, queue }); if (lang === 'es') window.__spoken.push(t); },
       stop: () => {},
       vibrate: () => {},
       ttsState: () => st,
@@ -157,6 +159,29 @@ for (const state of ['missing', 'ok']) {
     await p.waitForTimeout(500);
     await p.evaluate(() => document.querySelector('.bubble') && Voice.say('molesto'));
     if (!(await p.evaluate(() => window.__spoken.includes('molesto')))) errors.push('speech did not reach the Android bridge');
+    // The task is read aloud in English first, and 🔊 says it again.
+    const said = await p.evaluate(() => window.__said);
+    const target = await p.evaluate(() => document.querySelector('.prompt b').textContent);
+    if (!said.some((x) => x.lang === 'en' && x.text.startsWith('Pop the Spanish for'))) errors.push('bubble task was not read aloud: ' + JSON.stringify(said));
+    const before = said.length;
+    await p.click('.prompt .replay-btn');
+    const after = await p.evaluate(() => window.__said);
+    if (after.length <= before || !after.slice(before).some((x) => x.text === target)) errors.push('🔊 did not repeat the task');
+    await p.evaluate(() => App.session.quit());
+    // A quiz question is read out, and "hear it again" stops the auto-advance.
+    await p.evaluate(() => App.startGame(GAMES.find((g) => g.id === 'quiz')));
+    await p.waitForTimeout(300);
+    const qSaid = await p.evaluate(() => window.__said.slice(-2).map((x) => x.lang));
+    if (!qSaid.includes('en')) errors.push('quiz question was not read aloud');
+    await p.click('.choice');
+    await p.waitForTimeout(200);
+    const hear = await p.$('.feedback button');
+    if (hear) {
+      await hear.click();
+      await p.waitForTimeout(2800);
+      if (!(await p.$('.feedback.show'))) errors.push('hearing the answer again did not pause the quiz');
+    }
+    await p.evaluate(() => App.session.quit());
   }
   if (shots && state === 'missing') await p.screenshot({ path: path.join(shotDir, 'voice-banner.png') });
   await p.close();

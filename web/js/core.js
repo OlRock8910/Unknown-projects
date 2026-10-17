@@ -47,7 +47,7 @@ const Store = {
     return {
       xp: 0, played: 0, best: {}, stars: {}, mastery: {},
       daily: { date: today(), xp: 0 }, streak: { last: null, n: 0 },
-      settings: { sound: true, vibrate: true, voice: true, rate: 0.9, pack: 'all', voiceName: '' },
+      settings: { sound: true, vibrate: true, voice: true, readTasks: true, rate: 0.9, pack: 'all', voiceName: '' },
     };
   },
   load() {
@@ -218,6 +218,38 @@ const Voice = {
         u.rate = rate;
         if (this.esVoice) u.voice = this.esVoice;
         speechSynthesis.speak(u);
+      }
+    } catch (e) { /* speech is a bonus, never fatal */ }
+  },
+  // Speaks a mix of English and Spanish in order: [{ text, lang: 'en'|'es', force }].
+  // English parts follow the "read tasks aloud" setting, Spanish ones the voice
+  // setting; force (or opts.force) ignores both. opts.queue waits for current speech.
+  play(parts, opts = {}) {
+    const rate = Store.s.rate || 0.9;
+    const keep = parts.filter((p) => p && p.text && (opts.force || p.force || (p.lang === 'en' ? Store.s.readTasks : Store.s.voice)));
+    if (!keep.length) return;
+    try {
+      if (this.native() && window.Native.speakIn) {
+        keep.forEach((p, i) => window.Native.speakIn(p.text, p.lang === 'en' ? Math.max(rate, 1) : rate, p.lang, !!opts.queue || i > 0));
+        return;
+      }
+      if (this.native()) { // older bridge: Spanish only
+        const es = keep.filter((p) => p.lang !== 'en').map((p) => p.text).join('. ');
+        if (es) window.Native.speak(es, rate);
+        return;
+      }
+      if (window.speechSynthesis) {
+        if (!opts.queue) speechSynthesis.cancel();
+        const all = speechSynthesis.getVoices();
+        const en = all.find((v) => /^en[-_]GB/i.test(v.lang)) || all.find((v) => /^en/i.test(v.lang));
+        keep.forEach((p) => {
+          const u = new SpeechSynthesisUtterance(p.text);
+          u.lang = p.lang === 'en' ? 'en-GB' : 'es-ES';
+          u.rate = p.lang === 'en' ? Math.max(rate, 1) : rate;
+          const v = p.lang === 'en' ? en : this.esVoice;
+          if (v) u.voice = v;
+          speechSynthesis.speak(u);
+        });
       }
     } catch (e) { /* speech is a bonus, never fatal */ }
   },
@@ -405,6 +437,26 @@ class Session {
   }
   addTime(sec) { if (this.timeLeft != null) this.timeLeft = Math.min(this.timeTotal, this.timeLeft + sec); }
   onCleanup(fn) { this.cleanups.push(fn); }
+
+  // ---- reading tasks aloud
+  // Says a new task (see Voice.play for parts) and remembers it for the 🔊
+  // button. Later tasks wait for whatever is still being said, e.g. the
+  // Spanish answer to the previous one. opts.replay: what 🔊 says, if different.
+  task(parts, opts = {}) {
+    this.lastTask = opts.replay || parts;
+    const queue = opts.queue ?? this.taskCount > 0;
+    this.taskCount = (this.taskCount || 0) + 1;
+    Voice.play(parts, { queue });
+  }
+  replay() {
+    if (this.lastTask) Voice.play(this.lastTask, { force: true });
+  }
+  replayButton(cls = '') {
+    const b = h('button', { class: 'replay-btn ' + cls, 'aria-label': 'Hear it again' }, '🔊');
+    b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    b.addEventListener('click', (e) => { e.stopPropagation(); this.replay(); });
+    return b;
+  }
 
   // ---- HUD
   setProgress(f) { this.barEl.firstChild.style.width = Math.max(0, Math.min(1, f)) * 100 + '%'; }
