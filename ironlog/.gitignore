@@ -1,0 +1,18 @@
+# Gradle / Android build output
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.kotlin/
+.DS_Store
+
+# The verification project's renders and scratch data
+tools/verify/build/
+tools/verify/.gradle/
+tools/verify/.kotlin/
+
+*.apk
+*.aab
+!downloads/*.apk

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IronLog</string>
+    <string name="widget_motivation_name">IronLog motivation</string>
+    <string name="widget_motivation_desc">A fresh motivation quote, today\'s workout and your week</string>
+    <string name="widget_today_name">IronLog today</string>
+    <string name="widget_today_desc">What to train today, at a glance</string>
+</resources>
