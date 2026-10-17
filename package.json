@@ -1,0 +1,25 @@
+{
+  "name": "reelbox",
+  "version": "1.6.4",
+  "private": true,
+  "description": "ReelBox: watch the videos in your phone's gallery in a streaming-app style library.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4174",
+    "typecheck": "tsc --noEmit",
+    "android:sync": "npm run build && npx cap sync android",
+    "test:web": "node tests/smoke.mjs"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/cli": "^6.2.0",
+    "playwright": "^1.49.1",
+    "typescript": "5.7.2",
+    "vite": "6.0.7"
+  }
+}

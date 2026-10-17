@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ReelBox</string>
+    <string name="title_activity_main">ReelBox</string>
+    <string name="package_name">com.reelbox.app</string>
+    <string name="custom_url_scheme">com.reelbox.app</string>
+    <string name="playback_channel">Playback controls</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="like">Like</string>
+    <string name="unlike">Remove from Liked Songs</string>
+    <string name="share_save">Save to ReelBox</string>
+    <string name="share_download">Download with ReelBox</string>
+</resources>

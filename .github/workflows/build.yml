@@ -1,0 +1,125 @@
+name: Build ReelBox APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', '**.md']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Typecheck and browser test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Typecheck and build
+        run: npm run build
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Smoke test
+        run: node tests/smoke.mjs --shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reelbox-screenshots
+          path: test-results/
+          if-no-files-found: ignore
+
+  apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # android-actions/setup-android@v3 fails on its legacy 'tools' package
+      # with the current sdkmanager. The Ubuntu runner already ships the SDK
+      # with its licences accepted, so use that.
+      - name: Locate the preinstalled Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK/platforms" ]; then
+            echo "::error::No Android SDK on this runner (looked in $SDK)"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          ls "$SDK/platforms" "$SDK/build-tools"
+
+      - run: npm ci
+
+      - name: Build web bundle and sync Capacitor
+        run: npm run android:sync
+
+      - name: Build APKs
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
+
+      - name: Collect APKs
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk out/ReelBox.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk out/ReelBox-debug.apk
+          ls -lh out
+
+      # An APK signed by a key that changes between builds cannot be installed
+      # over an earlier one ("App not installed"), so check the signature here.
+      - name: Verify APK signatures
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          EXPECTED=$(keytool -list -keystore android/app/reelbox-sideload.jks \
+            -storepass reelbox -alias reelbox -v \
+            | grep -oiE 'SHA256: [0-9A-F:]+' | head -1 | tr -d ' ' | cut -d: -f2- | tr -d ':' | tr 'A-Z' 'a-z')
+          for apk in out/*.apk; do
+            echo "--- $apk"
+            "$APKSIGNER" verify "$apk"
+            GOT=$("$APKSIGNER" verify --print-certs "$apk" \
+              | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}' | tr 'A-Z' 'a-z')
+            if [ "$GOT" != "$EXPECTED" ]; then
+              echo "::error::$apk is signed by $GOT, expected the sideload key $EXPECTED"
+              exit 1
+            fi
+          done
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: reelbox-apk
+          path: out/*.apk
+          if-no-files-found: error
+
+      # Each version (from package.json) is a release; the newest is what the
+      # README's download button points at (releases/latest/download/...).
+      - name: Publish to Releases
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" out/ReelBox.apk --clobber
+          else
+            gh release create "v$VERSION" out/ReelBox.apk --target "$GITHUB_SHA" --title "ReelBox $VERSION" --notes "On your Android phone, tap **ReelBox.apk** below to download it, open it, and allow installing if asked. Installs over earlier versions."
+          fi
