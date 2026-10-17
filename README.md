@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://olrock8910.github.io/anonymous-designs/"><img alt="Play in your browser" src="https://img.shields.io/badge/▶_Play_now-in_your_browser-8b5cf6?style=for-the-badge"></a>
-  <a href="../../raw/main/apk/Adjetivos.apk"><img alt="Download the Android app" src="https://img.shields.io/badge/Download-Adjetivos.apk-3ddc84?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="https://olrock8910.github.io/Unknown-projects/adjetivos/"><img alt="Play in your browser" src="https://img.shields.io/badge/▶_Play_now-in_your_browser-8b5cf6?style=for-the-badge"></a>
+  <a href="https://github.com/OlRock8910/Unknown-projects/raw/main/adjetivos/apk/Adjetivos.apk"><img alt="Download the Android app" src="https://img.shields.io/badge/Download-Adjetivos.apk-3ddc84?style=for-the-badge&logo=android&logoColor=white"></a>
   <img alt="Free, no ads" src="https://img.shields.io/badge/free-no_ads-facc15?style=for-the-badge">
 </p>
 
@@ -22,7 +22,7 @@ games, a real Spanish voice, and no ads, accounts or internet needed.
 
 ### ▶ Play it right now
 
-Open **https://olrock8910.github.io/anonymous-designs/** on any phone or
+Open **https://olrock8910.github.io/Unknown-projects/adjetivos/** on any phone or
 computer. Nothing to install. On a phone, use your browser's
 **Add to Home screen** to keep it like an app.
 
@@ -121,10 +121,11 @@ sudo apt-get install aapt dalvik-exchange zipalign apksigner android-sdk-platfor
 cp build/Adjetivos.apk apk/    # update the downloadable copy
 ```
 
-Two GitHub Actions workflows run on every push:
-`build-apk.yml` plays every game in a browser and builds the APK (uploaded
-as the `adjetivos-apk` artifact), and `pages.yml` publishes `web/` as the
-play-in-your-browser website.
+Two GitHub Actions workflows at the root of the repository look after this
+folder: `adjetivos.yml` plays every game in a browser and builds the APK
+(uploaded as the `adjetivos-apk` artifact) whenever `adjetivos/` changes,
+and `adjetivos-pages.yml` publishes `web/` as the play-in-your-browser
+website.
 
 `promo/screenshots.mjs` retakes the screenshots above from the real app,
 and `promo/og-image.py` rebuilds the banner, which is also the picture shown

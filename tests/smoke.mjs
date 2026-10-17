@@ -10,7 +10,7 @@ import fs from 'node:fs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const url = pathToFileURL(path.join(here, '..', 'web', 'index.html')).href;
 const shots = process.argv.includes('--shots');
-const PLAY_URL_FOR_TEST = 'https://olrock8910.github.io/anonymous-designs/';
+const PLAY_URL_FOR_TEST = 'https://olrock8910.github.io/Unknown-projects/adjetivos/';
 const shotDir = path.join(here, '..', 'screenshots');
 if (shots) fs.mkdirSync(shotDir, { recursive: true });
 

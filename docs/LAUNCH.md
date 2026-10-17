@@ -1,11 +1,10 @@
 # Launch kit
 
-Everything you need to get people playing. The links work once the repo is
-live:
+Everything you need to get people playing:
 
-- **Play in the browser:** https://olrock8910.github.io/anonymous-designs/
-- **Android app:** https://github.com/OlRock8910/anonymous-designs/raw/main/apk/Adjetivos.apk
-- **Repo:** https://github.com/OlRock8910/anonymous-designs
+- **Play in the browser:** https://olrock8910.github.io/Unknown-projects/adjetivos/
+- **Android app:** https://github.com/OlRock8910/Unknown-projects/raw/main/adjetivos/apk/Adjetivos.apk
+- **Repo:** https://github.com/OlRock8910/Unknown-projects/tree/main/adjetivos
 
 When you paste the browser link into WhatsApp, Discord, X or iMessage it
 shows the banner picture automatically.
@@ -31,13 +30,13 @@ Put the browser link in your bio — it plays instantly, no install.
 ## Ready-to-paste posts
 
 **WhatsApp / Snapchat / group chats**
-> Made a game that teaches Spanish adjectives 🇪🇸 bubble popping, word ninja, whack-a-mole… try beat my score 👀 https://olrock8910.github.io/anonymous-designs/
+> Made a game that teaches Spanish adjectives 🇪🇸 bubble popping, word ninja, whack-a-mole… try beat my score 👀 https://olrock8910.github.io/Unknown-projects/adjetivos/
 
 **X / Threads / Bluesky**
 > I made a free game for learning Spanish describing words 🇪🇸
 > Pop bubbles, slice words, whack moles — 19 mini games, real Spanish voice, no ads.
 > "Mi hermano es muy molesto" 😤
-> Play in your browser: https://olrock8910.github.io/anonymous-designs/
+> Play in your browser: https://olrock8910.github.io/Unknown-projects/adjetivos/
 
 **Reddit** (r/learnspanish, r/Spanish, r/languagelearning — read each
 subreddit's self-promotion rules first; most allow it if you say you made it
@@ -46,20 +45,22 @@ and it's free)
 >
 > I kept forgetting describing words, so I made a set of mini games for them: bubble pop, whack-a-word, sentence builder, ser vs estar, él/ella agreement and more. 96 adjectives, with a Spanish voice for every word. It runs in the browser or as an Android app.
 >
-> https://olrock8910.github.io/anonymous-designs/
+> https://olrock8910.github.io/Unknown-projects/adjetivos/
 >
 > Feedback welcome — especially on words I should add.
 
 **Teachers / classmates**
-> Free Spanish adjective practice for the class: 19 short games (gender agreement, ser/estar, vocab). Works on school Chromebooks and phones, no accounts: https://olrock8910.github.io/anonymous-designs/
+> Free Spanish adjective practice for the class: 19 short games (gender agreement, ser/estar, vocab). Works on school Chromebooks and phones, no accounts: https://olrock8910.github.io/Unknown-projects/adjetivos/
 
 ## On GitHub
 
-- Repo › ⚙️ **Settings › General › Social preview**: upload `web/og-image.png`.
-- Repo home page › ⚙️ next to **About**: add the website link and topics
-  `spanish`, `language-learning`, `education`, `game`, `android`, `pwa`.
-- **Releases › Draft a new release**: attach `apk/Adjetivos.apk` so people
-  get a proper download button.
+- Repo › ⚙️ **Settings › General › Social preview**: upload
+  `adjetivos/web/og-image.png` (only if you want Adjetivos to be the picture
+  for the whole Unknown-projects repo).
+- If the browser version isn't live a few minutes after the first push:
+  **Settings › Pages › Source: GitHub Actions**.
+- Don't put Adjetivos in GitHub Releases: ReelBox's download button points at
+  the latest release. The Adjetivos APK lives in `adjetivos/apk/`.
 
 ## Keep it going
 

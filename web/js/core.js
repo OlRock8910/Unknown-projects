@@ -265,8 +265,8 @@ const Voice = {
 };
 
 // ------------------------------------------------------------------ sharing
-const PLAY_URL = 'https://olrock8910.github.io/anonymous-designs/';
-const APK_URL = 'https://github.com/OlRock8910/anonymous-designs/raw/main/apk/Adjetivos.apk';
+const PLAY_URL = 'https://olrock8910.github.io/Unknown-projects/adjetivos/';
+const APK_URL = 'https://github.com/OlRock8910/Unknown-projects/raw/main/adjetivos/apk/Adjetivos.apk';
 const Share = {
   // Android share sheet in the APK, the browser's share sheet on phones,
   // otherwise copy to the clipboard.
