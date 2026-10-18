@@ -55,38 +55,43 @@ const Cloud = {
   },
   email() { return (this.session && this.session.user.email) || null; },
 
-  // ---- email accounts
+  // ---- email accounts: no passwords, a 6-digit code is emailed instead.
   // Why an email sign-in failed, as a key for t().
   authError(e) {
     if (e.offline) return 'auth.offline';
-    const m = `${e.code} ${e.message}`;
-    if (/invalid_credentials|invalid login/i.test(m)) return 'auth.wrong';
-    if (/not_confirmed|not confirmed/i.test(m)) return 'auth.confirm';
-    if (/already|exists|registered/i.test(m)) return 'auth.taken';
-    if (/weak_password|password/i.test(m)) return 'auth.shortPw';
+    const m = `${e.status} ${e.code} ${e.message}`;
+    if (/429|rate|too many|security purposes/i.test(m)) return 'auth.tooMany';
+    if (/otp|token|expired|invalid/i.test(m)) return 'auth.badCode';
     if (/email/i.test(m)) return 'auth.badEmail';
     return 'auth.offline';
   },
-  // Makes a new email account and moves this phone's progress onto it.
-  // Returns 'ok' or 'confirm' (the email has to be confirmed first).
-  async signUp(email, password) {
+  // Emails a code (making the account if the email is new).
+  async sendCode(email) {
+    await this.call('/auth/v1/otp', { body: { email, create_user: true, data: { app: 'lingopeak' } } });
+  },
+  // Checks the code; on success this phone is signed in to that email.
+  async verifyCode(email, code) {
+    const a = await this.call('/auth/v1/verify', { body: { type: 'email', email, token: code } });
+    if (!a || !a.access_token) throw Object.assign(new Error('invalid token'), { code: 'otp_expired' });
     const old = this.session;
-    const a = await this.call('/auth/v1/signup', { body: { email, password, data: { app: 'lingopeak' } } });
-    if (!a || !a.access_token) return 'confirm';
     this.keep(this.fromAuth(a));
+    return old;
+  },
+  // After a code from "Save your progress": this phone's progress moves onto
+  // the email account (merged with anything already saved there).
+  async saveTo(email, code) {
+    const old = await this.verifyCode(email, code);
     // The anonymous account this phone had before goes, so its username is free.
-    if (old && !old.user.email) {
+    if (old && !old.user.email && old.user.id !== this.session.user.id) {
       try { await this.call('/rest/v1/rpc/lp_delete_me', { token: old.access_token, body: {} }); } catch (e) { /* not set up yet */ }
     }
     this.state = 'off';
     await this.sync();
-    return 'ok';
   },
-  // Logs in and loads that account's progress onto this phone. Returns
-  // true if the account already has a profile (false: finish setting up).
-  async logIn(email, password) {
-    const a = await this.call('/auth/v1/token?grant_type=password', { body: { email, password } });
-    this.keep(this.fromAuth(a));
+  // After a code from "Log in": loads that account's progress onto this
+  // phone. Returns true if it already has a profile (false: finish setting up).
+  async logIn(email, code) {
+    await this.verifyCode(email, code);
     const token = this.session.access_token, uid = this.session.user.id;
     let saved = null, prof = null;
     try {
@@ -307,28 +312,79 @@ function friendsCard() {
     err);
 }
 
-// Email and password fields, checked before sending. onSubmit(email, password, setErr).
-function authForm(buttonLabel, onSubmit, extra = null) {
-  const email = h('input', { class: 'field', type: 'email', placeholder: t('auth.email'), autocomplete: 'email', autocapitalize: 'off', spellcheck: 'false' });
-  const pw = h('input', { class: 'field', type: 'password', placeholder: t('auth.password'), autocomplete: 'current-password' });
-  const show = h('button', { class: 'pw-eye', type: 'button', 'aria-label': t('auth.show') }, t('auth.show'));
-  show.addEventListener('click', () => { pw.type = pw.type === 'password' ? 'text' : 'password'; show.textContent = pw.type === 'password' ? t('auth.show') : t('auth.hide'); });
-  const err = h('div', { class: 'err' });
-  const go = h('button', { class: 'btn primary wide' }, buttonLabel);
-  const setErr = (k) => { err.textContent = k ? t(k) : ''; if (k) Sfx.bad(); };
-  const submit = async () => {
-    const e = email.value.trim(), p = pw.value;
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return setErr('auth.badEmail');
-    if (p.length < 6) return setErr('auth.shortPw');
-    setErr(null);
-    go.disabled = true;
-    go.classList.add('busy');
-    try { await onSubmit(e, p, setErr); } finally { go.disabled = false; go.classList.remove('busy'); }
+// Email first; Continue emails a 6-digit code, then the code is typed in.
+// onCode(email, code, setErr) finishes (log in, or save progress).
+function emailCodeForm(onCode, extra = null) {
+  const wrap = h('div', { class: 'auth-form' });
+  let email = '';
+  let wait = null;
+
+  const emailStage = () => {
+    const input = h('input', { class: 'field', type: 'email', placeholder: t('auth.email'), value: email, autocomplete: 'email', autocapitalize: 'off', spellcheck: 'false', inputmode: 'email' });
+    const err = h('div', { class: 'err' });
+    const go = h('button', { class: 'btn primary wide' }, t('auth.continue'));
+    const send = async () => {
+      const e = input.value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { err.textContent = t('auth.badEmail'); Sfx.bad(); return; }
+      err.textContent = '';
+      go.disabled = true; go.classList.add('busy');
+      try {
+        await Cloud.sendCode(e);
+        email = e;
+        codeStage();
+      } catch (x) { err.textContent = t(Cloud.authError(x)); Sfx.bad(); } finally { go.disabled = false; go.classList.remove('busy'); }
+    };
+    go.addEventListener('click', send);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    input.addEventListener('input', () => { err.textContent = ''; });
+    wrap.replaceChildren(input, err, go, extra || '');
+    wrap.classList.remove('code-stage');
   };
-  go.addEventListener('click', submit);
-  pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  email.addEventListener('input', () => setErr(null));
-  return h('div', { class: 'auth-form' }, email, h('div', { class: 'pw-wrap' }, pw, show), err, go, extra);
+
+  const codeStage = () => {
+    const input = h('input', { class: 'field code-field', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', placeholder: '······', 'aria-label': t('auth.code') });
+    const err = h('div', { class: 'err' });
+    const verify = h('button', { class: 'btn primary wide' }, t('auth.verify'));
+    const resend = h('button', { class: 'link-btn' });
+    let left = 0;
+    clearInterval(wait);
+    const tick = () => {
+      if (!resend.isConnected && left < 60) { clearInterval(wait); return; }
+      resend.disabled = left > 0;
+      resend.textContent = left > 0 ? t('auth.resendIn', { n: left }) : t('auth.resend');
+      left--;
+    };
+    const startWait = () => { left = 60; tick(); clearInterval(wait); wait = setInterval(tick, 1000); };
+    const check = async () => {
+      const code = input.value.replace(/\D/g, '');
+      if (code.length !== 6) { err.textContent = t('auth.badCode'); Sfx.bad(); return; }
+      err.textContent = '';
+      verify.disabled = true; verify.classList.add('busy');
+      try { await onCode(email, code, (k) => { err.textContent = t(k); Sfx.bad(); }); clearInterval(wait); }
+      catch (x) { err.textContent = t(Cloud.authError(x)); Sfx.bad(); input.select(); }
+      finally { verify.disabled = false; verify.classList.remove('busy'); }
+    };
+    input.addEventListener('input', () => {
+      input.value = input.value.replace(/\D/g, '').slice(0, 6);
+      err.textContent = '';
+      if (input.value.length === 6) check();
+    });
+    verify.addEventListener('click', check);
+    resend.addEventListener('click', async () => {
+      if (left > 0) return;
+      try { await Cloud.sendCode(email); toast(t('auth.newCode')); startWait(); } catch (x) { err.textContent = t(Cloud.authError(x)); }
+    });
+    wrap.replaceChildren(
+      h('div', { class: 'code-sent' }, icon('check', 'big', 'check'), h('b', {}, t('auth.codeTitle')), h('span', {}, t('auth.codeSent', { email }))),
+      input, err, verify,
+      h('div', { class: 'code-links' }, resend, h('button', { class: 'link-btn', onclick: () => { clearInterval(wait); emailStage(); } }, t('auth.otherEmail'))));
+    wrap.classList.add('code-stage');
+    startWait();
+    setTimeout(() => input.focus(), 50);
+  };
+
+  emailStage();
+  return wrap;
 }
 
 // "Save your progress": add an email and password to this phone's account.
@@ -339,13 +395,10 @@ function openSaveAccount() {
     h('div', { class: 'auth-art' }, icon('cloud', 'big')),
     h('h1', {}, t('auth.saveTitle')),
     h('p', { class: 'muted' }, t('auth.saveSub')),
-    authForm(t('auth.create'), async (email, pw, setErr) => {
-      try {
-        const r = await Cloud.signUp(email, pw);
-        if (r === 'confirm') { toast(t('auth.confirm'), 5000); return; }
-        Sfx.win();
-        toast(t('auth.saved', { email }), 4000);
-        App.closeOverlay();
-      } catch (e) { setErr(Cloud.authError(e)); }
+    emailCodeForm(async (email, code) => {
+      await Cloud.saveTo(email, code);
+      Sfx.win();
+      toast(t('auth.saved', { email }), 4000);
+      App.closeOverlay();
     })));
 }

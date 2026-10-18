@@ -132,14 +132,11 @@ const Onboarding = {
 
   // Save your progress to an email (or skip for now).
   step5() {
-    const form = authForm(t('auth.create'), async (email, pw, setErr) => {
+    const form = emailCodeForm(async (email, code) => {
       this.save();
-      try {
-        const r = await Cloud.signUp(email, pw);
-        if (r === 'confirm') toast(t('auth.confirm'), 5000);
-        else toast(t('auth.saved', { email }), 4000);
-        this.finish();
-      } catch (e) { setErr(Cloud.authError(e)); }
+      await Cloud.saveTo(email, code);
+      toast(t('auth.saved', { email }), 4000);
+      this.finish();
     });
     return this.shell(t('auth.saveTitle'), t('auth.saveSub'), form,
       h('button', { class: 'btn ghost wide', onclick: () => this.finish() }, t('auth.skip')),
@@ -148,22 +145,20 @@ const Onboarding = {
 
   // Log in on a new phone: loads your progress and goes straight in.
   stepLogin() {
-    const form = authForm(t('auth.go'), async (email, pw, setErr) => {
-      try {
-        const ready = await Cloud.logIn(email, pw);
-        Sfx.win();
-        if (ready) {
-          this.active = false;
-          UI.lang = Store.data.native;
-          Theme.apply();
-          App.enter();
-          toast(t('auth.welcomeBack', { name: Store.data.profile.name }), 3000);
-        } else {
-          // An account with no profile yet: finish setting it up.
-          this.draft.name = (Store.data.profile && Store.data.profile.name) || '';
-          this.go(1);
-        }
-      } catch (e) { setErr(Cloud.authError(e)); }
+    const form = emailCodeForm(async (email, code) => {
+      const ready = await Cloud.logIn(email, code);
+      Sfx.win();
+      if (ready) {
+        this.active = false;
+        UI.lang = Store.data.native;
+        Theme.apply();
+        App.enter();
+        toast(t('auth.welcomeBack', { name: Store.data.profile.name }), 3000);
+      } else {
+        // A new email: set up the rest of the profile.
+        this.draft.name = (Store.data.profile && Store.data.profile.name) || '';
+        this.go(1);
+      }
     }, h('button', { class: 'link-btn', onclick: () => this.go(1) }, t('auth.noAccount')));
     return h('div', { class: 'onb' },
       h('div', { class: 'onb-top' }, h('button', { class: 'icon-btn', onclick: () => this.back() }, icon('left')), h('span')),

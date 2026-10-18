@@ -156,15 +156,46 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   if (!(await page.$('.welcome'))) fail('an old save was not cleared by the fresh start');
   if (!/email/i.test(await page.textContent('.welcome .btn.ghost'))) fail('no log in with email on the welcome screen');
   await page.click('.welcome .btn.ghost');
+  if (await page.$('input[type=password]')) fail('log in still asks for a password');
   await page.fill('.auth-form input[type=email]', 'nope');
-  await page.fill('.auth-form input[type=password]', 'secret1');
   await page.click('.auth-form .btn.primary');
   if (!/email/i.test(await page.textContent('.auth-form .err'))) fail('log in accepted a bad email');
-  await page.fill('.auth-form input[type=email]', 'mia@example.com');
-  await page.fill('.auth-form input[type=password]', '123');
-  await page.click('.auth-form .btn.primary');
-  if (!/6/.test(await page.textContent('.auth-form .err'))) fail('log in accepted a 3-letter password');
   if (!(await page.evaluate(() => appBack())) || !(await page.$('.welcome'))) fail('back from log in does not go to the welcome screen');
+  await page.close();
+}
+{
+  // Logging in with a 6-digit emailed code, against a pretend server.
+  const page = await browser.newPage({ viewport: { width: 400, height: 860 } });
+  page.on('pageerror', (e) => fail(e.message));
+  await page.addInitScript(() => {
+    window.CLOUD_OVERRIDE = { url: 'https://cloud.test', anonKey: 'k' };
+    window.__calls = [];
+    const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+    window.fetch = async (u, o = {}) => {
+      const path = String(u).replace('https://cloud.test', '');
+      const body = o.body ? JSON.parse(o.body) : null;
+      window.__calls.push(path.split('?')[0]);
+      if (path === '/auth/v1/otp') return json({});
+      if (path === '/auth/v1/verify') return body.token === '123456' ? json({ access_token: 'at', refresh_token: 'rt', expires_in: 3600, user: { id: 'u1', email: body.email } }) : json({ error_code: 'otp_expired', msg: 'Token has expired or is invalid' }, 403);
+      if (path.startsWith('/rest/v1/lp_progress')) return json([{ data: { epoch: 2, profile: { name: 'Mia', look: {} }, native: 'en', target: 'fr', xp: 321, courses: {} } }]);
+      if (path.startsWith('/rest/v1/lp_profiles')) return json([{ name: 'Mia', code: 'ABC123' }]);
+      return json([]);
+    };
+  });
+  await page.goto(url);
+  await page.click('.welcome .btn.ghost');
+  await page.fill('.auth-form input[type=email]', 'mia@example.com');
+  await page.click('.auth-form .btn.primary');
+  await page.waitForSelector('.code-field');
+  if (!/mia@example\.com/.test(await page.textContent('.code-sent'))) fail('code screen does not say where the code went');
+  await page.fill('.code-field', '111111');
+  await page.waitForFunction(() => /wrong|expired/i.test(document.querySelector('.auth-form .err').textContent));
+  await page.fill('.code-field', '123456');
+  await page.waitForSelector('#tabs:not([hidden])');
+  const st = await page.evaluate(() => [Store.data.xp, Store.data.target, Cloud.email(), window.__calls.includes('/auth/v1/otp')]);
+  if (st.join() !== '321,fr,mia@example.com,true') fail('logging in with a code: ' + st);
+  await page.evaluate(() => App.show('settings'));
+  if (!/mia@example\.com/.test(await page.textContent('#view')) || !/Log out/.test(await page.textContent('#view'))) fail('settings does not show the email account');
   await page.close();
 }
 {

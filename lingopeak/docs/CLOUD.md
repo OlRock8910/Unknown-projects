@@ -10,9 +10,26 @@ as before.
 Supabase → **Authentication** → **Sign In / Providers** (or **Settings**) →
 turn on **Allow anonymous sign-ins** → **Save**.
 
-For **Log in with email** to work straight away, open **Email** on the same
-page, turn **off** **Confirm email** and **Save** (otherwise Supabase must
-send a confirmation email, which needs working email sending set up).
+**Log in with email** uses no passwords: the app emails a 6-digit code.
+Set it up once:
+
+1. **Authentication → Sign In / Providers → Email**: make sure **Email OTP
+   length** is **6**.
+2. **Authentication → Emails → Templates**: in both **Magic Link** and
+   **Confirm signup**, set the subject to `Your Lingo Peak code` and the body to:
+
+   ```html
+   <h2>Your Lingo Peak code</h2>
+   <p>Type this code into the app:</p>
+   <p style="font-size:32px;font-weight:bold;letter-spacing:6px">{{ .Token }}</p>
+   <p>It works for 1 hour. If you didn't ask for it, you can ignore this email.</p>
+   ```
+3. **Authentication → Emails → SMTP Settings**: Supabase's own email only
+   reaches the project's team members, a few times an hour. To email
+   everyone, turn on custom SMTP. With Gmail: host `smtp.gmail.com`, port
+   `465`, username and sender = your Gmail address, password = a Google
+   **app password** (myaccount.google.com/apppasswords, needs 2-Step
+   Verification on), sender name `Lingo Peak`.
 
 ## 2. Make the tables
 
