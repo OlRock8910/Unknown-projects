@@ -1,0 +1,13 @@
+{
+  "name": "lingopeak",
+  "private": true,
+  "description": "Lingo Peak: learn English, Spanish, French, German or Portuguese by climbing ten mountains",
+  "scripts": {
+    "test": "node tests/smoke.mjs",
+    "build:apk": "./build-apk.sh",
+    "art": "python3 tools/list-art.py"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}
