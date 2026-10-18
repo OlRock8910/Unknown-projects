@@ -50,6 +50,16 @@
 3. Open ReelBox and tap **Allow access** so it can see your videos and music.
 
 New versions install over old ones; your lists and playlists stay.
+To see which version you have, open Settings (⚙) and scroll to the bottom.
+
+## What's new
+
+**1.6.5**
+- 🎵 **Fixed: music pausing right after you press play.** In 1.6.4, a song would start and then stop by itself after a moment. Music now keeps playing.
+- 📞 After a call, voice note or directions interrupt it, the music now carries on more reliably with the app in the background.
+
+**1.6.4**
+- 🤝 Pauses when another app plays sound, and when headphones are unplugged or Bluetooth disconnects.
 
 > Not on Android? `npm install && npm run dev` runs the same app in a browser, where you add videos and music by picking files or folders.
 
