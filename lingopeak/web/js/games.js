@@ -96,6 +96,8 @@ class GameSession {
     // A real go (5 right answers or more) earns the usual 20 coins.
     const coins = this.right >= 5 ? ACTIVITY_COINS : 0;
     d.coins += coins;
+    d.gamesPlayed = (d.gamesPlayed || 0) + 1;
+    if (coins) markActive();
     Store.save();
     this.onExit({ score: this.score, xp, coins, acc, newBest, right: this.right });
   }

@@ -553,6 +553,7 @@ function openSession(queue, meta) {
     xp = Store.addXp(xp);
     const coins = ACTIVITY_COINS;
     d.coins += coins;
+    markActive();
     let mountain = null;
     if (meta.lesson) {
       const c = Store.course;

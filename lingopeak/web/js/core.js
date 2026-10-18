@@ -100,6 +100,8 @@ const Store = {
     this.rollWeek();
   },
   save(opts = {}) {
+    // New achievements are handed out as progress is saved.
+    if (!opts.quiet && typeof Achievements !== 'undefined') Achievements.check();
     try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); } catch (e) { /* storage full or blocked */ }
     if (!opts.quiet && typeof Cloud !== 'undefined') Cloud.queueSync();
     if (typeof Widget !== 'undefined') Widget.update();
@@ -140,7 +142,11 @@ const Store = {
     st.n = st.last === prevWeekId(d.week.id) ? st.n + 1 : 1;
     st.last = d.week.id;
     st.best = Math.max(st.best || 0, st.n);
-    d.coins += WEEK_COINS;
+    d.weeksHit = (d.weeksHit || 0) + 1;
+    // Streak rewards: extra coins at 2, 4, 8, 12, 26 and 52 weeks.
+    const extra = typeof streakReward === 'function' ? streakReward(st.n) : 0;
+    d.coins += WEEK_COINS + extra;
+    d.streakPrize = extra ? { n: st.n, coins: extra } : null;
     return true;
   },
   weekStreakNow() {

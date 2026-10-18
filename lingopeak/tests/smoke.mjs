@@ -140,7 +140,7 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
     await playSession(page, "openPractice('weak')", 'practice weak');
     const stats = await page.evaluate(() => courseStats());
     if (stats.words < 12 || stats.lessons !== 4) fail('course stats wrong: ' + JSON.stringify(stats));
-    const tabs = ['learn', 'practice', 'ranks', 'shop', 'me', 'settings'];
+    const tabs = ['learn', 'practice', 'ranks', 'shop', 'me', 'settings', 'awards'];
     for (const tab of tabs) {
       await page.evaluate((x) => App.show(x), tab);
       const s = await stray(page);
@@ -251,6 +251,38 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   console.log('  ok fresh start, log-in checks, settings, delete account');
 }
 
+// ---------------------------------------------------------------- daily chest, achievements, streak rewards
+{
+  const page = await newPage({ profile: { name: 'Chesty' }, native: 'en', target: 'fr', settings: { sound: false } });
+  await page.waitForSelector('#tabs:not([hidden])');
+  if (!(await page.$('.chest-btn.locked'))) fail('daily chest should be locked before learning anything today');
+  await playSession(page, 'openLesson(C.lessons[0])', 'first lesson for the chest');
+  const after = await page.evaluate(() => [Chest.state(), !!Store.data.achievements.lesson1, Store.data.coins]);
+  // 20 for the lesson + 20 for the "first lesson" achievement.
+  if (after.join() !== 'ready,true,40') fail('after a first lesson (chest, achievement, coins): ' + after);
+  await page.evaluate(() => { App.closeOverlay(); App.show('learn'); });
+  await page.click('.chest-btn.ready');
+  await page.click('.chest-page .btn.primary');
+  await page.waitForFunction(() => /\+\d+/.test(document.querySelector('.chest-prize')?.textContent || ''), null, { timeout: 5000 });
+  const chest = await page.evaluate(() => [Chest.state(), Store.data.coins - 40]);
+  if (chest[0] !== 'opened' || ![10, 15, 20, 30, 50].includes(chest[1])) fail('opening the chest: ' + chest);
+  // Streak rewards: hitting the goal for a 2nd week in a row pays 50 + 50 bonus.
+  const streak = await page.evaluate(() => {
+    const d = Store.data;
+    d.weekStreak = { n: 1, last: prevWeekId(weekId()), best: 1 };
+    d.week.secs = 0;
+    const before = d.coins;
+    Store.addTime(goalSecs());
+    return [d.weekStreak.n, d.coins - before, d.weeksHit];
+  });
+  if (streak.join() !== '2,100,1') fail('streak reward for 2 weeks: ' + streak);
+  await page.evaluate(() => App.show('awards'));
+  const txt = await page.textContent('#view');
+  if (!/Finish your first lesson/.test(txt) || !/Streak rewards/.test(txt)) fail('achievements page is missing things');
+  await page.close();
+  console.log('  ok daily chest, achievements, streak rewards');
+}
+
 // ---------------------------------------------------------------- games, shop, weekly goal, mountains
 {
   const page = await newPage({ profile: { name: 'Gamer', avatar: 'banana', banner: 'blue' }, native: 'en', target: 'de', settings: { sound: false } });
@@ -304,7 +336,8 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
     crown.click();
     return [Store.data.coins, myLook().hat, (Store.data.wardrobe || []).join()];
   });
-  if (hat.join('|') !== '150|crown|hat:crown') fail('wardrobe purchase wrong: ' + hat);
+  // 150 left after the 400-coin crown, +20 for the "first clothes" achievement.
+  if (hat.join('|') !== '170|crown|hat:crown') fail('wardrobe purchase wrong: ' + hat);
 
   // The weekly goal: 20 minutes completes it and starts a streak, with 5 gems.
   const week = await page.evaluate(() => {

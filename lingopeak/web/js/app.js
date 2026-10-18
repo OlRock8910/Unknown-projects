@@ -35,10 +35,10 @@ const App = {
   show(tab, keep = false) {
     if (!keep) Sfx.tap();
     this.tab = tab;
-    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === (tab === 'settings' ? 'me' : tab)));
+    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === (['settings', 'awards'].includes(tab) ? 'me' : tab)));
     const view = $('#view');
     const top = view.scrollTop;
-    view.replaceChildren({ learn: renderLearn, practice: renderPractice, ranks: renderRanks, shop: renderShop, me: renderMe, settings: renderSettings }[tab]());
+    view.replaceChildren({ learn: renderLearn, practice: renderPractice, ranks: renderRanks, shop: renderShop, me: renderMe, settings: renderSettings, awards: renderAwards }[tab]());
     view.firstChild.classList.toggle('still', keep);
     if (keep) { view.scrollTop = top; return; }
     view.scrollTop = 0;
@@ -71,7 +71,7 @@ const App = {
     if (Onboarding.active) return Onboarding.back();
     if (this.overlayKind === 'game' && Games.session) { Games.session.quit(); return true; }
     if (this.overlayKind) { this.closeOverlay(); return true; }
-    if (this.tab === 'settings') { this.show('me'); return true; }
+    if (this.tab === 'settings' || this.tab === 'awards') { this.show('me'); return true; }
     if (this.tab !== 'learn') { this.show('learn'); return true; }
     return false;
   },
@@ -79,6 +79,8 @@ const App = {
   celebrateWeek() {
     Sfx.win();
     toast(t('week.reached', { n: Store.weekStreakNow() }), 3500);
+    const sp = Store.data.streakPrize;
+    if (sp) { Store.data.streakPrize = null; setTimeout(() => { toast(t('streak.got', { n: sp.n, c: sp.coins }), 4000); Sfx.coin(); }, 3600); }
   },
 
   // A finished mountain: a drum roll, the clouds part and its name types in;
@@ -242,6 +244,8 @@ function renderLearn() {
       h('div', { class: 'ws-pct' }, h('b', {}, stats.pct + '%'), h('span', {}, t('lang.' + d.target)))));
 
   page.append(mountainView(m, lessons, next));
+  // The daily chest floats in the corner, so it's there wherever you've scrolled to.
+  page.append(Chest.button());
   const climbed = climbedRow();
   if (climbed) page.append(climbed);
   if (next) {
@@ -406,6 +410,7 @@ function openCards() {
       const coins = ACTIVITY_COINS;
       Store.data.coins += coins;
       Store.addXp(5);
+      markActive();
       Store.save();
       host.replaceChildren(h('div', { class: 'results' }, castArt('penguin', 'happy', 'res-cast'), h('h1', {}, t('cards.done')),
         h('div', { class: 'muted' }, t('cards.knew', { n: known, of: deck.length })),
@@ -442,9 +447,9 @@ const SHOP_ITEMS = [
 // payment account (Google Play Billing once the app is on the Play Store),
 // so a pack shows "coming soon" until then.
 const COIN_PACKS = [
-  { coins: 200, price: '£3.99', ic: 'coin' },
-  { coins: 1000, price: '£14.99', ic: 'chest', tag: 'popular' },
-  { coins: 5000, price: '£49.99', ic: 'crown', tag: 'bestValue' },
+  { id: 'coins_200', coins: 200, price: '£3.99', ic: 'coin' },
+  { id: 'coins_1000', coins: 1000, price: '£14.99', ic: 'chest', tag: 'popular' },
+  { id: 'coins_5000', coins: 5000, price: '£49.99', ic: 'crown', tag: 'bestValue' },
 ];
 function coinPacks() {
   return h('div', { class: 'pack-grid' }, ...COIN_PACKS.map((p) =>
@@ -530,6 +535,7 @@ function renderMe() {
       stat('calendar', Store.weekStreakNow(), t('me.weekStreak')),
       stat('bolt', fmtNum(d.xp), t('me.level', { n: lv.lvl })),
       stat('clock', t('res.mins', { n: mins }), t('me.time'))),
+    awardsCard(),
     unsaved ? h('button', { class: 'card save-card', onclick: () => openSaveAccount() },
       h('div', { class: 'pc-icon' }, icon('cloud', '', 'globe')),
       h('div', { class: 'pc-text' }, h('b', {}, t('auth.saveTitle')), h('span', {}, t('auth.saveShort'))),

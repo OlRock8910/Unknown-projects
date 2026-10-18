@@ -241,7 +241,9 @@ const Cloud = {
 function mergeProgress(local, cloud) {
   const max = (a, b) => Math.max(Number(a) || 0, Number(b) || 0);
   const out = { ...cloud, ...local };
-  for (const k of ['xp', 'coins', 'totalSecs', 'sessions', 'freezes', 'boostUntil']) out[k] = max(local[k], cloud[k]);
+  for (const k of ['xp', 'coins', 'totalSecs', 'sessions', 'freezes', 'boostUntil', 'weeksHit', 'gamesPlayed']) out[k] = max(local[k], cloud[k]);
+  out.achievements = { ...(cloud.achievements || {}), ...(local.achievements || {}) };
+  for (const k of ['chestDay', 'activeDay']) out[k] = [local[k], cloud[k]].filter(Boolean).sort().pop() || null;
   out.owned = [...new Set([...(cloud.owned || []), ...(local.owned || [])])];
   out.best = { ...(cloud.best || {}) };
   for (const [k, v] of Object.entries(local.best || {})) out.best[k] = max(out.best[k], v);
