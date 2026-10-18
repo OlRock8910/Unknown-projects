@@ -93,7 +93,8 @@ class GameSession {
     const total = this.right + this.wrong;
     const acc = total ? this.right / total : 0;
     const xp = Store.addXp(Math.min(30, Math.round(this.score / 20) + this.right));
-    const coins = Math.min(25, 2 + Math.round(this.score / 40));
+    // A real go (5 right answers or more) earns the usual 20 coins.
+    const coins = this.right >= 5 ? ACTIVITY_COINS : 0;
     d.coins += coins;
     Store.save();
     this.onExit({ score: this.score, xp, coins, acc, newBest, right: this.right });

@@ -551,19 +551,16 @@ function openSession(queue, meta) {
     let xp = meta.lesson ? (meta.lesson.kind === 'story' ? 15 : 10) : 8;
     if (perfect) xp += 5;
     xp = Store.addXp(xp);
-    const coins = 5 + Math.round(right / 2) + (perfect ? 5 : 0);
+    const coins = ACTIVITY_COINS;
     d.coins += coins;
-    let bonus = 0;
     let mountain = null;
     if (meta.lesson) {
       const c = Store.course;
       const was = c.lessons[meta.lesson.id];
       c.lessons[meta.lesson.id] = { n: (was ? was.n : 0) + 1, at: today(), perfect: perfect || !!(was && was.perfect) };
-      if (perfect && meta.lesson.kind === 'story' && !was) bonus += 10;
       const m = meta.lesson.unit.mountain;
       if (!c.mountains[m.id] && mountainDone(m)) { c.mountains[m.id] = today(); mountain = m; }
     }
-    d.coins += bonus;
     // A whole mountain: a big pile of coins and XP, handed out on the reveal screen.
     const prize = mountain ? { coins: MOUNTAIN_COINS, xp: Store.addXp(MOUNTAIN_XP) } : null;
     if (prize) d.coins += prize.coins;
@@ -579,7 +576,7 @@ function openSession(queue, meta) {
       h('div', { class: 'muted' }, meta.lesson ? `${meta.lesson.unit.title} · ${meta.lesson.kind === 'story' ? t('path.story') : t('path.lesson', { n: meta.lesson.n })}` : t('practice.' + meta.practice)),
       h('div', { class: 'res-stats' },
         stat('bolt', '+' + xp, t('res.xp'), Store.boosted() ? 'boost' : '', xp),
-        stat('coin', '+' + (coins + bonus), t('res.coins'), '', coins + bonus),
+        stat('coin', '+' + coins, t('res.coins'), '', coins),
         stat('target', Math.round(acc * 100) + '%', t('res.accuracy')),
         stat('clock', t('res.mins', { n: mins }), t('res.time'))),
       h('div', { class: 'week-mini' },

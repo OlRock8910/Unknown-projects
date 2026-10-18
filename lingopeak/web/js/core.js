@@ -66,7 +66,9 @@ const daysLeftInWeek = () => 8 - (new Date().getDay() || 7);
 const goalSecs = () => (Number(Store.data && Store.s.goal) || 20) * 60;
 // Bumped to start everyone afresh: older saves are cleared on the next launch.
 const DATA_EPOCH = 2;
-const WEEK_COINS = 50, MOUNTAIN_COINS = 300, MOUNTAIN_XP = 500;
+// Coins are slow to earn on purpose: a flat 20 for each lesson, practice,
+// game or flashcard deck, plus the weekly goal and each mountain.
+const ACTIVITY_COINS = 20, WEEK_COINS = 50, MOUNTAIN_COINS = 300, MOUNTAIN_XP = 500;
 const Store = {
   KEY: 'lingopeak.v1',
   data: null,

@@ -403,7 +403,7 @@ function openCards() {
   let i = 0, known = 0;
   const show = () => {
     if (i >= deck.length) {
-      const coins = 3 + known;
+      const coins = ACTIVITY_COINS;
       Store.data.coins += coins;
       Store.addXp(5);
       Store.save();
@@ -438,6 +438,24 @@ const SHOP_ITEMS = [
   { id: 'freeze', ic: 'snowflake', cost: 300, max: () => (Store.data.freezes || 0) >= 2, apply: () => { Store.data.freezes = (Store.data.freezes || 0) + 1; } },
 ];
 
+// Coin packs for real money. Buying isn't switched on yet: it needs a
+// payment account (Google Play Billing once the app is on the Play Store),
+// so a pack shows "coming soon" until then.
+const COIN_PACKS = [
+  { coins: 200, price: '£3.99', ic: 'coin' },
+  { coins: 1000, price: '£14.99', ic: 'chest', tag: 'popular' },
+  { coins: 5000, price: '£49.99', ic: 'crown', tag: 'bestValue' },
+];
+function coinPacks() {
+  return h('div', { class: 'pack-grid' }, ...COIN_PACKS.map((p) =>
+    h('button', { class: 'card pack' + (p.tag ? ' tagged' : ''), onclick: () => { Sfx.tap(); askSheet({ icon: 'coin', title: t('shop.soonTitle'), sub: t('shop.soonSub', { n: ACTIVITY_COINS }), yes: t('ex.continue'), noCancel: true, onYes: () => App.closeOverlay() }); } },
+      p.tag ? h('span', { class: 'pack-tag' }, t('shop.' + p.tag)) : null,
+      h('div', { class: 'pack-ic' }, icon(p.ic, '', 'coin')),
+      h('b', {}, fmtNum(p.coins)),
+      h('small', {}, t('shop.coins')),
+      h('span', { class: 'pack-price' }, p.price))));
+}
+
 function renderShop() {
   const d = Store.data;
   const wallet = h('div', { class: 'card wallet' },
@@ -455,6 +473,8 @@ function renderShop() {
     h('h1', { class: 'page-title' }, t('tab.shop')),
     h('p', { class: 'muted' }, t('shop.intro')),
     wallet,
+    h('h2', { class: 'section' }, t('shop.getCoins')),
+    coinPacks(),
     h('h2', { class: 'section' }, t('shop.powerups')),
     ...SHOP_ITEMS.map((it) => {
       const maxed = it.max && it.max();
@@ -523,7 +543,7 @@ function renderMe() {
     h('div', { class: 'foot-note' }, 'Lingo Peak'));
 }
 
-// A yes/no question in a sheet that slides up. opts: { title, sub, yes, danger, onYes }
+// A yes/no question in a sheet that slides up. opts: { title, sub, yes, danger, onYes, noCancel }
 function askSheet(opts) {
   const host = App.openOverlay('ask');
   const yes = h('button', { class: 'btn wide ' + (opts.danger ? 'danger solid' : 'primary') }, opts.yes);
@@ -534,7 +554,7 @@ function askSheet(opts) {
       h('h2', {}, opts.title),
       opts.sub ? h('p', { class: 'muted' }, opts.sub) : null,
       yes,
-      h('button', { class: 'btn ghost wide', onclick: () => App.closeOverlay() }, t('set.cancel')))));
+      opts.noCancel ? null : h('button', { class: 'btn ghost wide', onclick: () => App.closeOverlay() }, t('set.cancel')))));
 }
 
 // Deleting the account: first prove it's you, with a code emailed to the

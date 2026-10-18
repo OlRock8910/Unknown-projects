@@ -147,7 +147,7 @@ const STRINGS = {
     'cards.done': 'Deck done!',
     'cards.knew': 'You knew {n} of {of}',
 
-    'shop.intro': 'Earn coins from every lesson, your weekly goal and every mountain. Nothing here costs real money.',
+    'shop.intro': 'Earn 20 coins for every lesson, game and practice, plus bonuses for your weekly goal and every mountain.',
     'shop.coins': 'coins',
     'shop.gems': 'gems',
     'shop.powerups': 'Power-ups',
@@ -315,6 +315,11 @@ const STRINGS = {
     'widget.daysLeft': '{n} days left',
     'widget.lastDay': 'Last day this week',
     'mtn.badgeEarned': 'Badge earned!',
+    'shop.getCoins': 'Get more coins',
+    'shop.popular': 'Popular',
+    'shop.bestValue': 'Best value',
+    'shop.soonTitle': 'Coming soon',
+    'shop.soonSub': 'You can’t buy coins yet. Keep learning: every lesson gives you {n} coins.',
   },
 
   es: {
@@ -459,7 +464,7 @@ const STRINGS = {
     'cards.done': '¡Mazo terminado!',
     'cards.knew': 'Sabías {n} de {of}',
 
-    'shop.intro': 'Gana monedas con cada lección, tu objetivo semanal y cada montaña. Aquí nada cuesta dinero de verdad.',
+    'shop.intro': 'Gana 20 monedas por cada lección, juego y práctica, más premios por tu meta semanal y cada montaña.',
     'shop.coins': 'monedas',
     'shop.gems': 'gemas',
     'shop.powerups': 'Potenciadores',
@@ -627,6 +632,11 @@ const STRINGS = {
     'widget.daysLeft': 'Quedan {n} días',
     'widget.lastDay': 'Último día de la semana',
     'mtn.badgeEarned': '¡Insignia conseguida!',
+    'shop.getCoins': 'Consigue más monedas',
+    'shop.popular': 'Popular',
+    'shop.bestValue': 'Mejor precio',
+    'shop.soonTitle': 'Muy pronto',
+    'shop.soonSub': 'Todavía no se pueden comprar monedas. Sigue aprendiendo: cada lección te da {n} monedas.',
   },
 
   fr: {
@@ -771,7 +781,7 @@ const STRINGS = {
     'cards.done': 'Paquet terminé !',
     'cards.knew': 'Tu en connaissais {n} sur {of}',
 
-    'shop.intro': 'Gagne des pièces à chaque leçon, avec ton objectif de la semaine et à chaque montagne. Rien ici ne coûte de vrai argent.',
+    'shop.intro': 'Gagne 20 pièces pour chaque leçon, jeu et révision, plus des bonus pour ton objectif de la semaine et chaque montagne.',
     'shop.coins': 'pièces',
     'shop.gems': 'gemmes',
     'shop.powerups': 'Bonus',
@@ -939,6 +949,11 @@ const STRINGS = {
     'widget.daysLeft': 'Encore {n} jours',
     'widget.lastDay': 'Dernier jour de la semaine',
     'mtn.badgeEarned': 'Badge gagné !',
+    'shop.getCoins': 'Plus de pièces',
+    'shop.popular': 'Populaire',
+    'shop.bestValue': 'Meilleure offre',
+    'shop.soonTitle': 'Bientôt',
+    'shop.soonSub': 'On ne peut pas encore acheter de pièces. Continue d’apprendre : chaque leçon te donne {n} pièces.',
   },
 
   de: {
@@ -1083,7 +1098,7 @@ const STRINGS = {
     'cards.done': 'Stapel geschafft!',
     'cards.knew': 'Du wusstest {n} von {of}',
 
-    'shop.intro': 'Verdiene Münzen mit jeder Lektion, deinem Wochenziel und jedem Berg. Nichts hier kostet echtes Geld.',
+    'shop.intro': 'Verdiene 20 Münzen für jede Lektion, jedes Spiel und jede Übung, dazu Boni für dein Wochenziel und jeden Berg.',
     'shop.coins': 'Münzen',
     'shop.gems': 'Edelsteine',
     'shop.powerups': 'Power-ups',
@@ -1251,6 +1266,11 @@ const STRINGS = {
     'widget.daysLeft': 'Noch {n} Tage',
     'widget.lastDay': 'Letzter Tag der Woche',
     'mtn.badgeEarned': 'Abzeichen verdient!',
+    'shop.getCoins': 'Mehr Münzen',
+    'shop.popular': 'Beliebt',
+    'shop.bestValue': 'Bester Preis',
+    'shop.soonTitle': 'Bald verfügbar',
+    'shop.soonSub': 'Münzen kann man noch nicht kaufen. Lern weiter: Jede Lektion bringt dir {n} Münzen.',
   },
 
   pt: {
@@ -1395,7 +1415,7 @@ const STRINGS = {
     'cards.done': 'Baralho concluído!',
     'cards.knew': 'Você sabia {n} de {of}',
 
-    'shop.intro': 'Ganhe moedas em cada lição, na sua meta semanal e em cada montanha. Nada aqui custa dinheiro de verdade.',
+    'shop.intro': 'Ganhe 20 moedas por cada lição, jogo e prática, além de bônus pela meta semanal e por cada montanha.',
     'shop.coins': 'moedas',
     'shop.gems': 'gemas',
     'shop.powerups': 'Power-ups',
@@ -1563,6 +1583,11 @@ const STRINGS = {
     'widget.daysLeft': 'Faltam {n} dias',
     'widget.lastDay': 'Último dia da semana',
     'mtn.badgeEarned': 'Emblema conquistado!',
+    'shop.getCoins': 'Mais moedas',
+    'shop.popular': 'Popular',
+    'shop.bestValue': 'Melhor oferta',
+    'shop.soonTitle': 'Em breve',
+    'shop.soonSub': 'Ainda não dá para comprar moedas. Continue aprendendo: cada lição te dá {n} moedas.',
   },
 };
 
