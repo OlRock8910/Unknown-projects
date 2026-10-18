@@ -571,6 +571,134 @@ addGame({
   },
 });
 
+// Read a paragraph out loud: words light up green as you say them right, and
+// red when you skip past or get them wrong. A cheat sheet of tricky sounds
+// sits at the top (show or hide it).
+const DIGITS = {
+  es: 'cero uno dos tres cuatro cinco seis siete ocho nueve diez', fr: 'zéro un deux trois quatre cinq six sept huit neuf dix',
+  de: 'null eins zwei drei vier fünf sechs sieben acht neun zehn', pt: 'zero um dois três quatro cinco seis sete oito nove dez',
+  en: 'zero one two three four five six seven eight nine ten',
+};
+const flatWord = (x) => stripAccents(normText(x)).replace(/[^\p{L}\p{N}]/gu, '');
+// Which words of the paragraph were said: green (1), red (2) or not yet (0).
+function readAlong(keys, said, lang) {
+  const nums = (DIGITS[lang] || '').split(' ');
+  const heard = normText(said).split(/\s+/).map((x) => (/^\d+$/.test(x) && nums[+x] ? nums[+x] : x)).map(flatWord).filter(Boolean);
+  const marks = keys.map(() => 0);
+  const same = (a, b) => a === b || (b.length > 3 && editDistance(a, b) <= 1) || (b.length > 7 && editDistance(a, b) <= 2);
+  let p = 0;
+  for (const w of heard) {
+    for (let j = p; j < Math.min(keys.length, p + 4); j++) {
+      if (!same(w, keys[j])) continue;
+      for (let k = p; k < j; k++) marks[k] = 2;
+      marks[j] = 1;
+      p = j + 1;
+      break;
+    }
+  }
+  return { marks, next: p };
+}
+// Three or four sentences in a row from a unit you've started.
+function readParagraph() {
+  const started = C.units.filter((u) => u.lessons.some((l) => lessonDone(l.id)));
+  const unit = pickOne(started.length ? started : C.units.slice(0, 1));
+  const ss = unit.sentences;
+  let from = randInt(0, Math.max(0, ss.length - 3)), out = [];
+  for (let i = from; i < ss.length && out.length < 4; i++) {
+    out.push(ss[i]);
+    if (out.map((x) => x.t).join(' ').split(' ').length >= 18) break;
+  }
+  return { unit, t: out.map((x) => x.t).join(' '), n: out.map((x) => x.n).join(' ') };
+}
+function soundsCard() {
+  const tips = SOUNDS[Store.data.target] || [];
+  const open = Store.s.cheat !== false;
+  const body = h('div', { class: 'cheat-tips' + (open ? '' : ' hidden') }, ...tips.map((tip) =>
+    h('button', { class: 'cheat-tip', onclick: () => Voice.say(tip.ex, { force: true }) },
+      h('b', {}, tip.s),
+      h('span', { class: 'cheat-ex' }, icon('speaker'), tip.ex),
+      h('small', {}, tip.d[Store.data.native] || tip.d.en || Object.values(tip.d)[0]))));
+  const btn = h('button', { class: 'cheat-toggle' }, open ? t('read.hide') : t('read.show'));
+  btn.addEventListener('click', () => {
+    const now = body.classList.toggle('hidden');
+    Store.s.cheat = !now; Store.save({ quiet: true });
+    btn.textContent = now ? t('read.show') : t('read.hide');
+    Sfx.tap();
+  });
+  return h('div', { class: 'card cheat' }, h('div', { class: 'cheat-head' }, h('b', {}, t('read.sounds')), btn), body);
+}
+
+addGame({
+  id: 'read', art: 'speaker', icon: 'mic', needsMic: true,
+  play(S) {
+    const para = readParagraph();
+    const words = para.t.split(' ');
+    const keys = words.map(flatWord);
+    const spans = words.map((w) => h('span', { class: 'rw' }, w));
+    const lang = Store.data.target;
+    let marks = keys.map(() => 0), committed = '', active = false, ended = false;
+    const meaning = h('div', { class: 'read-mean hidden' }, para.n);
+    const mic = h('button', { class: 'mic-btn' }, icon('mic'));
+    const label = h('div', { class: 'mic-label' }, t('read.tap'));
+    const done = h('button', { class: 'btn ghost small read-done', style: { visibility: 'hidden' } }, t('read.done'));
+    S.stage.append(h('div', { class: 'read-game' },
+      soundsCard(),
+      h('div', { class: 'card read-card' },
+        h('div', { class: 'read-text' }, ...spans.flatMap((sp, i) => (i ? [' ', sp] : [sp]))),
+        h('button', { class: 'link-btn read-mean-btn', onclick: (e) => { meaning.classList.toggle('hidden'); e.currentTarget.textContent = meaning.classList.contains('hidden') ? t('read.meaning') : t('read.hideMeaning'); } }, t('read.meaning')),
+        meaning),
+      mic, label, done));
+    const paint = (said) => {
+      const r = readAlong(keys, said, lang);
+      r.marks.forEach((m, i) => {
+        if (m === marks[i]) return;
+        spans[i].className = 'rw ' + (m === 1 ? 'ok' : m === 2 ? 'no' : '');
+        if (m === 1) { S.right++; S.score += 10 * S.mult(); S.combo++; Sfx.select(); }
+        if (m === 2) { S.wrong++; S.combo = 0; Sfx.tap(); }
+      });
+      marks = r.marks;
+      spans.forEach((sp, i) => sp.classList.toggle('next', i === r.next && active));
+      S.bump();
+      S.setProgress(r.next / keys.length);
+      if (r.next >= keys.length) finish();
+    };
+    const finish = () => {
+      if (ended) return;
+      ended = true; active = false;
+      Mic.stop();
+      // Anything not read yet counts as missed.
+      marks.forEach((m, i) => { if (!m) { spans[i].className = 'rw no'; S.wrong++; } });
+      const good = marks.filter((m) => m === 1).length;
+      label.textContent = t('read.result', { n: good, of: keys.length });
+      if (good / keys.length >= 0.8) { Sfx.fanfare(); const [x, y] = centerOf(spans[spans.length - 1]); goldBurst(x, y, true); }
+      S.after(2200, () => S.finish());
+    };
+    const listen = async () => {
+      active = true;
+      mic.classList.add('on'); label.textContent = t('read.listening'); done.style.visibility = '';
+      let quiet = 0;
+      while (active && !ended) {
+        try {
+          const said = await Mic.listen(I18N_LOCALE[lang], (part) => paint(committed + ' ' + part));
+          committed += ' ' + (said[0] || '');
+          quiet = 0;
+          paint(committed);
+        } catch (e) {
+          if (e === 'stopped') break;
+          if (e === 'denied') { toast(t('ex.micDenied'), 3500); break; }
+          if (++quiet >= 3) break; // nothing heard three times in a row: pause
+        }
+      }
+      active = false;
+      mic.classList.remove('on');
+      if (!ended) label.textContent = t('read.again');
+    };
+    mic.addEventListener('click', () => { if (ended) return; if (active) { active = false; Mic.stop(); } else listen(); });
+    done.addEventListener('click', finish);
+    S.onCleanup(() => { active = false; Mic.stop(); });
+  },
+});
+
 addGame({
   id: 'duel', art: 'swords', icon: 'swords', duel: true,
   play() { openDuel(); },
@@ -674,7 +802,7 @@ function renderGamesList() {
   const best = Store.data.best || {};
   return h('div', { class: 'games-wrap' },
     h('h2', { class: 'section' }, t('game.title')),
-    h('div', { class: 'game-grid' }, ...GAMES.filter((g) => !g.needsVoice || speakable()).map((g) => {
+    h('div', { class: 'game-grid' }, ...GAMES.filter((g) => (!g.needsVoice || speakable()) && (!g.needsMic || (Mic.available() && Store.s.speak !== false))).map((g) => {
       const b = h('button', { class: 'game-card' }, h('div', { class: 'gc-icon' }, icon(g.art, '', g.icon)), h('b', {}, t('game.' + g.id)), h('small', {}, t('game.' + g.id + 'Sub')),
         best[Store.pair + ':' + g.id] ? h('span', { class: 'gc-best' }, icon('trophy'), fmtNum(best[Store.pair + ':' + g.id])) : null);
       b.addEventListener('click', () => {

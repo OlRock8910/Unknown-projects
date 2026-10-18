@@ -295,6 +295,26 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
     return [canSpeak(), !!document.querySelector('.opt')];
   });
   if (skipped.join() !== 'false,true') fail("can't speak now: " + skipped);
+  // Read Aloud: words go green as they're said, red when skipped or wrong.
+  const along = await page.evaluate(() => [
+    readAlong(['hola', 'soy', 'ana'], 'hola soy ana', 'es').marks.join(''),
+    readAlong(['hola', 'soy', 'ana'], 'hola ana', 'es').marks.join(''),
+    readAlong(['tengo', 'tres', 'perros'], 'tengo 3 perros', 'es').marks.join(''),
+    readAlong(['hola', 'soy', 'ana'], 'hola', 'es').marks.join(''),
+  ]);
+  if (along.join() !== '111,121,111,100') fail('read-along marking: ' + along);
+  await page.evaluate(() => { App.closeOverlay(); Store.data.speakPausedUntil = 0; Games.start(GAMES.find((g) => g.id === 'read')); });
+  await page.waitForSelector('.read-text');
+  if (!(await page.$('.cheat-tip'))) fail('read aloud: no sounds cheat sheet');
+  await page.click('.cheat-toggle');
+  if (await page.isVisible('.cheat-tip')) fail('read aloud: cheat sheet does not hide');
+  await page.evaluate(() => { const ws = [...document.querySelectorAll('.rw')].map((x) => x.textContent); ws[1] = 'zzzz'; window.__say = ws.join(' '); });
+  await page.click('.read-game .mic-btn');
+  await page.waitForFunction(() => document.querySelectorAll('.rw.ok').length > 0 && !document.querySelector('.rw:not(.ok):not(.no)'));
+  const readMarks = await page.evaluate(() => [document.querySelectorAll('.rw.no').length, document.querySelectorAll('.rw').length - document.querySelectorAll('.rw.ok').length]);
+  if (readMarks.join() !== '1,1') fail('read aloud marks (red, not green): ' + readMarks);
+  await page.waitForFunction(() => App.overlayKind === 'results', null, { timeout: 6000 });
+  await page.evaluate(() => { window.__say = null; App.closeOverlay(); });
   await page.close();
   console.log('  ok speaking and gap fill (' + w + ')');
 }

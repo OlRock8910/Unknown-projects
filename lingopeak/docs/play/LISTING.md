@@ -40,8 +40,9 @@ home-screen widget shows how close you are.
 **Play with friends**
 Weekly, all-time and friends leaderboards. Add friends with a code.
 
-**12 mini games**
-Bubble Pop, Whack-a-Word, Memory, Word Rain, Quick Quiz and more.
+**13 mini games**
+Read Aloud (read a paragraph, words light up green as you say them), Bubble
+Pop, Whack-a-Word, Memory, Word Rain, Quick Quiz and more.
 
 Free to learn. Light and dark themes.
 
