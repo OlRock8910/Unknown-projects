@@ -1,15 +1,15 @@
-# Tests and builds Infinink (the infinite sketch and notes canvas in infinink/).
-name: Build Infinink APK
+# Tests and builds Sketchnote (the sketch and notes app in sketchnote/).
+name: Build Sketchnote APK
 
 on:
   push:
     paths:
-      - 'infinink/**'
-      - '.github/workflows/infinink.yml'
+      - 'sketchnote/**'
+      - '.github/workflows/sketchnote.yml'
   pull_request:
     paths:
-      - 'infinink/**'
-      - '.github/workflows/infinink.yml'
+      - 'sketchnote/**'
+      - '.github/workflows/sketchnote.yml'
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: infinink
+        working-directory: sketchnote
     steps:
       - uses: actions/checkout@v4
 
@@ -40,7 +40,7 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk out/Infinink.apk
+          cp app/build/outputs/apk/release/app-release.apk out/Sketchnote.apk
           ls -lh out
 
       # An APK that is unsigned, or signed by a key that changes between runs, installs
@@ -50,11 +50,11 @@ jobs:
         run: |
           set -euo pipefail
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
-          EXPECTED=$(keytool -list -keystore app/infinink-sideload.jks \
+          EXPECTED=$(keytool -list -keystore app/sketchnote-sideload.jks \
             -storepass infinink -alias infinink -v \
             | grep -oiE 'SHA256: [0-9A-F:]+' | head -1 | tr -d ' ' | cut -d: -f2- | tr -d ':' | tr 'A-Z' 'a-z')
-          "$APKSIGNER" verify --verbose out/Infinink.apk
-          GOT=$("$APKSIGNER" verify --print-certs out/Infinink.apk \
+          "$APKSIGNER" verify --verbose out/Sketchnote.apk
+          GOT=$("$APKSIGNER" verify --print-certs out/Sketchnote.apk \
             | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}' | tr 'A-Z' 'a-z')
           if [ "$GOT" != "$EXPECTED" ]; then
             echo "::error::APK is signed by $GOT, expected the sideload key $EXPECTED"
@@ -65,6 +65,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Infinink-apk
-          path: infinink/out/Infinink.apk
+          name: Sketchnote-apk
+          path: sketchnote/out/Sketchnote.apk
           if-no-files-found: error

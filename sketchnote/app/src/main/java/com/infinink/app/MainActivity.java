@@ -92,7 +92,7 @@ public final class MainActivity extends Activity {
         content.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(content);
 
-        TextView logo = new GradientText(this, "Infinink");
+        TextView logo = new GradientText(this, "Sketchnote");
         content.addView(logo);
         TextView sub = Ui.text(this, "Endless paper for sketches, notes and ideas.", 15, Ui.TEXT_2, false);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-2, -2);

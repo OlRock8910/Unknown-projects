@@ -10,8 +10,8 @@ android {
         applicationId 'com.infinink.app'
         minSdk 26
         targetSdk 36
-        versionCode 2
-        versionName '1.0.1'
+        versionCode 3
+        versionName '1.0.2'
     }
 
     signingConfigs {
@@ -19,7 +19,9 @@ android {
         // installs over an older one. Sideload builds only; a store release would need a private
         // key kept out of the repo.
         sideload {
-            storeFile file('infinink-sideload.jks')
+            // The key is still named "infinink" from before the app was renamed; keep it, or
+            // new builds will not install over old ones.
+            storeFile file('sketchnote-sideload.jks')
             storePassword 'infinink'
             keyAlias 'infinink'
             keyPassword 'infinink'

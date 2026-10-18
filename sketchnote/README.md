@@ -1,6 +1,6 @@
-<img src="docs/icon.png" width="96" align="right" alt="Infinink icon">
+<img src="docs/icon.png" width="96" align="right" alt="Sketchnote icon">
 
-# Infinink
+# Sketchnote
 
 Endless paper for sketches, notes and ideas on Android phones and tablets. An infinite
 canvas you can zoom in and out of forever, with pressure-sensitive pens, sticky notes, text,
@@ -12,11 +12,11 @@ shapes and photos to mark up. Free, with no ads, no account, no internet, and no
 
 ## Install
 
-`apk/Infinink.apk` is ready to install. Copy it to the phone or tablet, open it, and allow
+`apk/Sketchnote.apk` is ready to install. Copy it to the phone or tablet, open it, and allow
 "install unknown apps" for your file manager or browser when asked. Every build is signed with
 the same key, so a newer APK installs over an older one and keeps your boards.
 
-CI also builds it on every push (Actions, artifact **Infinink-apk**).
+CI also builds it on every push (Actions, artifact **Sketchnote-apk**).
 
 ## What it does
 
@@ -61,26 +61,26 @@ Ctrl+Z / Ctrl+Shift+Z on keyboards. Works in portrait, landscape and split scree
 **Gestures.** Two-finger tap = undo, three-finger tap = redo.
 
 **Share.** Export a board as a high-resolution PNG or a vector PDF, or save the image to the
-gallery (Pictures/Infinink). Boards save themselves as you go, on the device only.
+gallery (Pictures/Sketchnote). Boards save themselves as you go, on the device only.
 
 ## Building
 
 Normal build (needs JDK 17+ and the Android SDK, which Android Studio installs):
 
 ```
-cd infinink
+cd sketchnote
 ./gradlew testDebugUnitTest assembleRelease
 # -> app/build/outputs/apk/release/app-release.apk
 ```
 
 No Android SDK, or can't reach Google's servers? `tools/build-apk-local.sh [--test]` builds the
 same sources with just `javac`, `aapt`, `dx` and `apksigner` from Debian/Ubuntu packages (see
-the script header). That is how `apk/Infinink.apk` was produced.
+the script header). That is how `apk/Sketchnote.apk` was produced.
 
 ### Layout
 
 ```
-app/src/main/java/com/infinink/app/
+app/src/main/java/com/sketchnote/app/
   ink/      stroke outlines, shape recognition, geometry: pure Java, unit-tested
   model/    boards, items, undo history and the file format: pure Java, unit-tested
   render/   drawing ink, notes, pictures and paper onto a Canvas (GPU display list on Android 10+)
@@ -88,6 +88,9 @@ app/src/main/java/com/infinink/app/
   MainActivity    the board list
   BoardActivity   the editor
 ```
+
+The app was first called Infinink. Its package (`com.infinink.app`) and signing key keep that
+name on purpose: changing either would stop updates installing over the first builds.
 
 Boards are stored in the app's private storage in a compact binary format (`model/BoardCodec`),
 written to a temporary file and renamed into place so a crash never leaves a broken board.

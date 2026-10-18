@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds a signed Infinink APK WITHOUT Gradle or the Android SDK.
+# Builds a signed Sketchnote APK WITHOUT Gradle or the Android SDK.
 #
 # This is the fallback for machines that cannot reach Google's Maven repository or
 # dl.google.com (so Android Gradle Plugin cannot run). The normal build is
@@ -11,7 +11,7 @@
 #                        android-sdk-platform-23 unzip zip curl
 #
 # Usage:  tools/build-apk-local.sh [--test]     (--test also runs the unit tests first)
-# Output: build-local/Infinink.apk
+# Output: build-local/Sketchnote.apk
 #
 # Limits, compared with Gradle: no D8 (so no lambdas or other Java 8 language features that
 # need desugaring; the script checks for them), and resources are linked against API 23 with the
@@ -22,7 +22,7 @@ HERE=$(cd "$(dirname "$0")/.." && pwd)
 APP=$HERE/app
 SRC=$APP/src/main
 OUT=${OUT:-$HERE/build-local}
-CACHE=${CACHE:-$HOME/.cache/infinink}
+CACHE=${CACHE:-$HOME/.cache/sketchnote}
 ANDROID_ALL=android-all-16-robolectric-13921718.jar
 MAVEN=https://repo1.maven.org/maven2
 PLATFORM_JAR=${PLATFORM_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}
@@ -109,11 +109,11 @@ cp "$OUT/dex/classes.dex" "$OUT/classes.dex"
 zipalign -f -p 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 
 echo "== signing"
-apksigner sign --ks "$APP/infinink-sideload.jks" --ks-pass "pass:$STORE_PASS" \
+apksigner sign --ks "$APP/sketchnote-sideload.jks" --ks-pass "pass:$STORE_PASS" \
   --ks-key-alias "$KEY_ALIAS" --key-pass "pass:$KEY_PASS" \
-  --min-sdk-version "$MIN_SDK" --out "$OUT/Infinink.apk" "$OUT/aligned.apk" 2>&1 | grep -v '^Picked up' || true
-apksigner verify --verbose --min-sdk-version "$MIN_SDK" "$OUT/Infinink.apk" 2>&1 | grep -v '^Picked up' | head -4
+  --min-sdk-version "$MIN_SDK" --out "$OUT/Sketchnote.apk" "$OUT/aligned.apk" 2>&1 | grep -v '^Picked up' || true
+apksigner verify --verbose --min-sdk-version "$MIN_SDK" "$OUT/Sketchnote.apk" 2>&1 | grep -v '^Picked up' | head -4
 
 echo "== result"
-aapt dump badging "$OUT/Infinink.apk" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label:)" || true
-ls -l "$OUT/Infinink.apk"
+aapt dump badging "$OUT/Sketchnote.apk" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label:)" || true
+ls -l "$OUT/Sketchnote.apk"

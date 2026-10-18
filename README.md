@@ -8,12 +8,12 @@
   <img alt="Free and open source" src="https://img.shields.io/badge/free-open%20source-555?style=for-the-badge">
 </p>
 
-| 🎬 [ReelBox](reelbox.md) | 🇪🇸 [Adjetivos](adjetivos/) | 🏋️ [IronLog](ironlog/) | 🔦 [Strobe Glyph](strobe-glyph/) | ✍️ [Infinink](infinink/) |
+| 🎬 [ReelBox](reelbox.md) | 🇪🇸 [Adjetivos](adjetivos/) | 🏋️ [IronLog](ironlog/) | 🔦 [Strobe Glyph](strobe-glyph/) | ✍️ [Sketchnote](sketchnote/) |
 |:---:|:---:|:---:|:---:|:---:|
-| <a href="reelbox.md"><img src="docs/1-home.jpg" width="230"></a> | <a href="adjetivos/"><img src="adjetivos/docs/screenshots/home.jpg" width="230"></a> | <a href="ironlog/"><img src="ironlog/docs/1-home.jpg" width="230"></a> | <a href="strobe-glyph/"><img src="strobe-glyph/docs/card.jpg" width="230"></a> | <a href="infinink/"><img src="infinink/docs/2-sketch.jpg" width="230"></a> |
+| <a href="reelbox.md"><img src="docs/1-home.jpg" width="230"></a> | <a href="adjetivos/"><img src="adjetivos/docs/screenshots/home.jpg" width="230"></a> | <a href="ironlog/"><img src="ironlog/docs/1-home.jpg" width="230"></a> | <a href="strobe-glyph/"><img src="strobe-glyph/docs/card.jpg" width="230"></a> | <a href="sketchnote/"><img src="sketchnote/docs/2-sketch.jpg" width="230"></a> |
 | Your phone's videos and music, streaming-app style. *Continue Watching*, playlists from your folders and lock-screen controls. | Learn Spanish describing words with 19 mini games: bubble pop, word ninja, whack-a-word and more. | A gym tracker with a tinted black-glass look. Last time's weights filled in, a graph for every lift and PR celebrations. | A fast, controllable flashlight strobe, with light shows for the Glyph lights on Nothing phones. ⚠️ Flashing lights. | Endless paper for sketches and notes: pressure-sensitive pens, sticky notes, shapes, photo markup and palm rejection. |
-| [⬇ ReelBox.apk](../../releases/latest/download/ReelBox.apk) | [▶ Play in browser](https://olrock8910.github.io/Unknown-projects/adjetivos/) · [⬇ Adjetivos.apk](https://github.com/OlRock8910/Unknown-projects/raw/main/adjetivos/apk/Adjetivos.apk) | [⬇ IronLog.apk](https://github.com/OlRock8910/Unknown-projects/releases/download/ironlog-latest/IronLog.apk) | [⬇ StrobeGlyph.apk](https://github.com/OlRock8910/Unknown-projects/raw/main/strobe-glyph/apk/StrobeGlyph.apk) | [⬇ Infinink.apk](https://github.com/OlRock8910/Unknown-projects/raw/main/infinink/apk/Infinink.apk) |
-| [More about ReelBox →](reelbox.md) | [More about Adjetivos →](adjetivos/) | [More about IronLog →](ironlog/) | [More about Strobe Glyph →](strobe-glyph/) | [More about Infinink →](infinink/) |
+| [⬇ ReelBox.apk](../../releases/latest/download/ReelBox.apk) | [▶ Play in browser](https://olrock8910.github.io/Unknown-projects/adjetivos/) · [⬇ Adjetivos.apk](https://github.com/OlRock8910/Unknown-projects/raw/main/adjetivos/apk/Adjetivos.apk) | [⬇ IronLog.apk](https://github.com/OlRock8910/Unknown-projects/releases/download/ironlog-latest/IronLog.apk) | [⬇ StrobeGlyph.apk](https://github.com/OlRock8910/Unknown-projects/raw/main/strobe-glyph/apk/StrobeGlyph.apk) | [⬇ Sketchnote.apk](https://github.com/OlRock8910/Unknown-projects/raw/main/sketchnote/apk/Sketchnote.apk) |
+| [More about ReelBox →](reelbox.md) | [More about Adjetivos →](adjetivos/) | [More about IronLog →](ironlog/) | [More about Strobe Glyph →](strobe-glyph/) | [More about Sketchnote →](sketchnote/) |
 
 ## Installing an app
 
@@ -29,7 +29,7 @@
 | `adjetivos/` | Adjetivos | Web games, also built as an Android app |
 | `ironlog/` | IronLog | Kotlin + Jetpack Compose |
 | `strobe-glyph/` | Strobe Glyph | Java, native Android |
-| `infinink/` | Infinink | Java, native Android |
+| `sketchnote/` | Sketchnote | Java, native Android |
 
 Each project has its own build workflow in `.github/workflows/`, and every change
 publishes a fresh APK.

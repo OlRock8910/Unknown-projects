@@ -8,9 +8,9 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="Infinink"
+        android:label="Sketchnote"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Infinink">
+        android:theme="@style/Theme.Sketchnote">
 
         <activity
             android:name=".MainActivity"

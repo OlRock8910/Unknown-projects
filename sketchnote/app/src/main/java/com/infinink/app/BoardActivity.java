@@ -1288,7 +1288,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                         if (toGallery) {
                             saveToGallery(bmp, base);
                             bmp.recycle();
-                            toast("Saved to Pictures/Infinink");
+                            toast("Saved to Pictures/Sketchnote");
                             return;
                         }
                         Exporter.writePng(bmp, out);
@@ -1311,7 +1311,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         ContentValues v = new ContentValues();
         v.put(MediaStore.Images.Media.DISPLAY_NAME, base + "-" + System.currentTimeMillis() + ".png");
         v.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
-        v.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Infinink");
+        v.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Sketchnote");
         Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
         if (uri == null) throw new IOException("no space in gallery");
         try (OutputStream os = getContentResolver().openOutputStream(uri)) {
