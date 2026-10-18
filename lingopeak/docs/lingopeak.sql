@@ -79,5 +79,15 @@ language sql security definer set search_path = public as $$
   where (user_id = auth.uid() and friend_id = friend) or (user_id = friend and friend_id = auth.uid());
 $$;
 
+-- Lets a player delete their own account (and, through "on delete cascade",
+-- their profile, progress and friends).
+create or replace function public.lp_delete_me() returns void
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  if auth.uid() is null then raise exception 'sign in first'; end if;
+  delete from auth.users where id = auth.uid();
+end $$;
+grant execute on function public.lp_delete_me() to authenticated;
+
 -- The end. (If your phone added a ) after this line, it doesn't matter.)
 --

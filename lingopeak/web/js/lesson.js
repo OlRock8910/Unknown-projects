@@ -3,6 +3,9 @@
 
 // ---------------------------------------------------------------- building blocks
 const speakable = () => Store.s.voice && Voice.available() && !['missing', 'none'].includes(Voice.state());
+// Listening and typing exercises can each be turned off in Settings.
+const canListen = () => speakable() && Store.s.listen !== false;
+const canType = () => Store.s.typing !== false;
 
 function sayBtn(text, opts = {}) {
   const b = h('button', { class: 'say-btn ' + (opts.cls || ''), 'aria-label': t('ex.hear') }, icon('speaker'));
@@ -382,7 +385,7 @@ function reviewExercise(w, L) {
   const box = wordState(w.id) ? wordState(w.id).box : 0;
   let kinds = box <= 1 ? ['meaning', 'recall', 'listen'] : box <= 3 ? ['recall', 'listen', 'spell', 'type'] : ['type', 'dictation', 'spell'];
   if (w.art && Store.data.target !== 'en' && box >= 1) kinds.push('article');
-  kinds = kinds.filter((k) => (k !== 'listen' && k !== 'dictation') || speakable()).filter((k) => k !== 'spell' || canSpell(w));
+  kinds = kinds.filter((k) => (k !== 'listen' && k !== 'dictation') || canListen()).filter((k) => k !== 'spell' || canSpell(w)).filter((k) => !['spell', 'type', 'dictation'].includes(k) || canType());
   const kind = pickOne(kinds.length ? kinds : ['meaning']);
   return kind === 'dictation' ? { kind, word: w, gen: () => EX.type(w, L, { dictation: true }) } : { kind, word: w, gen: () => EX[kind](w, L) };
 }
@@ -398,13 +401,13 @@ function buildLessonQueue(lesson) {
     ws.forEach((w, i) => {
       if (firstTime || !wordState(w.id)) q.push({ kind: 'intro', word: w, gen: () => EX.intro(w) });
       add('meaning', w);
-      if (i > 0) add(speakable() && i % 2 ? 'listen' : 'recall', ws[i - 1]);
+      if (i > 0) add(canListen() && i % 2 ? 'listen' : 'recall', ws[i - 1]);
     });
     const tail = [];
     const reviews = dueWords().filter((w) => !ws.includes(w)).slice(0, 3);
     tail.push({ kind: 'match', gen: () => EX.match([...ws, ...reviews].slice(0, 5)) });
     tail.push({ kind: 'recall', word: ws.at(-1), gen: () => EX.recall(ws.at(-1), L) });
-    shuffle(ws).slice(0, 2).forEach((w) => tail.push(canSpell(w) && Math.random() < 0.5 ? { kind: 'spell', word: w, gen: () => EX.spell(w) } : { kind: 'type', word: w, gen: () => EX.type(w, L) }));
+    shuffle(ws).slice(0, 2).forEach((w) => tail.push(!canType() ? reviewExercise(w, L) : canSpell(w) && Math.random() < 0.5 ? { kind: 'spell', word: w, gen: () => EX.spell(w) } : { kind: 'type', word: w, gen: () => EX.type(w, L) }));
     reviews.forEach((w) => tail.push(reviewExercise(w, L)));
     // A sentence from the unit that uses one of these words, if there is one.
     const s = lesson.unit.sentences.find((x) => ws.some((w) => normText(x.t).includes(normText(w.bare)))) || pickOne(lesson.unit.sentences);
@@ -416,7 +419,7 @@ function buildLessonQueue(lesson) {
   // The story: the host says each of the unit's sentences.
   lesson.unit.sentences.forEach((s, i) => {
     const kind = i % 3 === 2 ? 'build' : 'decode';
-    q.push({ kind, sentence: s, gen: kind === 'build' ? () => EX.build(s) : () => EX.decode(s, { listenOnly: i === 4 && speakable() }) });
+    q.push({ kind, sentence: s, gen: kind === 'build' ? () => EX.build(s) : () => EX.decode(s, { listenOnly: i === 4 && canListen() }) });
   });
   q.splice(3, 0, { kind: 'match', gen: () => EX.match(shuffle(lesson.unit.words).slice(0, 5)) });
   shuffle(lesson.unit.words).slice(0, 3).forEach((w) => q.push(reviewExercise(w, L)));
@@ -429,7 +432,7 @@ function buildPracticeQueue(kind) {
   if (pool.length < 8) pool = [...pool, ...weakWords().filter((w) => !pool.includes(w))];
   const ws = pool.slice(0, 12);
   const L = { words: ws };
-  if (kind === 'listen') return ws.map((w, i) => (i % 2 ? { kind: 'dictation', word: w, gen: () => EX.type(w, L, { dictation: true }) } : { kind: 'listen', word: w, gen: () => EX.listen(w, L) }));
+  if (kind === 'listen') return ws.map((w, i) => (i % 2 && canType() ? { kind: 'dictation', word: w, gen: () => EX.type(w, L, { dictation: true }) } : { kind: 'listen', word: w, gen: () => EX.listen(w, L) }));
   const q = ws.map((w) => reviewExercise(w, L));
   if (ws.length >= 5) q.splice(4, 0, { kind: 'match', gen: () => EX.match(ws.slice(0, 5)) });
   return q;
@@ -564,7 +567,7 @@ function openSession(queue, meta) {
     d.sessions = (d.sessions || 0) + 1;
     Store.save();
     const mins = Math.max(1, Math.round(secs / 60));
-    const weekPct = Math.min(100, Math.round((d.week.secs / WEEKLY_GOAL_SECS) * 100));
+    const weekPct = Math.min(100, Math.round((d.week.secs / goalSecs()) * 100));
     const host2 = App.openOverlay('results');
     const c0 = cast;
     host2.replaceChildren(h('div', { class: 'results' },
@@ -577,7 +580,7 @@ function openSession(queue, meta) {
         stat('target', Math.round(acc * 100) + '%', t('res.accuracy')),
         stat('clock', t('res.mins', { n: mins }), t('res.time'))),
       h('div', { class: 'week-mini' },
-        h('div', { class: 'wm-head' }, h('span', {}, t('home.weekGoal')), h('b', {}, t('home.minsOf', { n: Math.floor(d.week.secs / 60), goal: WEEKLY_GOAL_SECS / 60 }))),
+        h('div', { class: 'wm-head' }, h('span', {}, t('home.weekGoal')), h('b', {}, t('home.minsOf', { n: Math.floor(d.week.secs / 60), goal: goalSecs() / 60 }))),
         h('div', { class: 'bar' }, h('i', { style: { width: weekPct + '%' } }))),
       h('button', { class: 'btn primary wide', onclick: () => (mountain ? App.revealMountain(mountain) : App.closeOverlay()) }, t('ex.continue'))));
     Sfx.fanfare();

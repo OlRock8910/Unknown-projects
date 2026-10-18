@@ -5,10 +5,14 @@ backs up their progress, and shows leaderboards: this week, learners of the
 same language, all time, and friends. It uses the same free Supabase project
 as before.
 
-## 1. Allow anonymous accounts
+## 1. Allow anonymous accounts and email accounts
 
 Supabase → **Authentication** → **Sign In / Providers** (or **Settings**) →
 turn on **Allow anonymous sign-ins** → **Save**.
+
+For **Log in with email** to work straight away, open **Email** on the same
+page, turn **off** **Confirm email** and **Save** (otherwise Supabase must
+send a confirmation email, which needs working email sending set up).
 
 ## 2. Make the tables
 
@@ -94,6 +98,15 @@ language sql security definer set search_path = public as $$
   delete from public.lp_friends
   where (user_id = auth.uid() and friend_id = friend) or (user_id = friend and friend_id = auth.uid());
 $$;
+-- Lets a player delete their own account (and, through "on delete cascade",
+-- their profile, progress and friends).
+create or replace function public.lp_delete_me() returns void
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  if auth.uid() is null then raise exception 'sign in first'; end if;
+  delete from auth.users where id = auth.uid();
+end $$;
+grant execute on function public.lp_delete_me() to authenticated;
 ```
 
 It should say **Success. No rows returned.** That's it — open the app's
@@ -101,6 +114,20 @@ It should say **Success. No rows returned.** That's it — open the app's
 
 ## Good to know
 
-- Anonymous accounts live on the phone. When email sign-in is added later,
-  players will be able to attach an email so their account moves with them.
+- Every phone gets an anonymous account first. **Save your progress** (on the
+  Me tab or in Settings) turns it into an email and password account that
+  can log in on any phone. **Settings → Delete account** deletes it (needs
+  `lp_delete_me` from the SQL above).
 - To remove a player: **Authentication → Users** → ⋯ → **Delete user**.
+
+## Starting everyone afresh
+
+The app clears saves made before its last fresh start (`DATA_EPOCH` in
+`web/js/core.js`). To clear the online accounts too, run this in the SQL
+Editor. It removes every Lingo Peak player (anonymous and email accounts made
+by the app) and leaves anything else in the project alone:
+
+```sql
+delete from auth.users where id in (select user_id from public.lp_profiles) or (is_anonymous and raw_user_meta_data->>'app' = 'lingopeak');
+truncate public.lp_friends, public.lp_progress, public.lp_profiles;
+```

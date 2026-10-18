@@ -25,6 +25,7 @@ const Onboarding = {
     $('#view').replaceChildren(this['step' + step]());
   },
   back() {
+    if (this.step === 'Login') { this.go(0); return true; }
     if (this.step === 0 || (this.changing && this.step === 1)) {
       if (this.changing) { this.active = false; App.enter(); return true; }
       return false;
@@ -36,7 +37,7 @@ const Onboarding = {
     return h('div', { class: 'onb' },
       h('div', { class: 'onb-top' },
         this.step > 0 ? h('button', { class: 'icon-btn', onclick: () => this.back() }, icon('left')) : h('span'),
-        h('div', { class: 'onb-dots' }, ...[1, 2, 3, 4].map((k) => h('i', { class: k <= this.step ? 'on' : '' })))),
+        h('div', { class: 'onb-dots' }, ...[1, 2, 3, 4, 5].map((k) => h('i', { class: k <= this.step ? 'on' : '' })))),
       opts.cast || null,
       h('h1', {}, title),
       sub ? h('p', { class: 'muted' }, sub) : null,
@@ -51,7 +52,7 @@ const Onboarding = {
       h('p', { class: 'tagline' }, t('onb.tagline')),
       h('div', { class: 'onb-foot' },
         h('button', { class: 'btn primary wide', onclick: () => this.go(1) }, t('onb.start')),
-        h('button', { class: 'btn ghost wide', onclick: () => toast(t('onb.emailLater'), 3000) }, t('onb.haveAccount'))));
+        h('button', { class: 'btn ghost wide', onclick: () => this.go('Login') }, icon('user'), t('onb.haveAccount'))));
   },
 
   // A list of languages; choosing one just moves the highlight (no reload).
@@ -126,10 +127,54 @@ const Onboarding = {
           h('li', {}, icon('refresh'), t('onb.how2')),
           h('li', {}, icon('mountain'), t('onb.how3')),
           h('li', {}, icon('coin'), t('onb.how4')))),
-      h('button', { class: 'btn primary wide', onclick: () => this.finish() }, t('onb.go')));
+      h('button', { class: 'btn primary wide', onclick: () => (Cloud.enabled() && !Cloud.email() ? this.go(5) : this.finish()) }, t('onb.go')));
   },
 
-  finish() {
+  // Save your progress to an email (or skip for now).
+  step5() {
+    const form = authForm(t('auth.create'), async (email, pw, setErr) => {
+      this.save();
+      try {
+        const r = await Cloud.signUp(email, pw);
+        if (r === 'confirm') toast(t('auth.confirm'), 5000);
+        else toast(t('auth.saved', { email }), 4000);
+        this.finish();
+      } catch (e) { setErr(Cloud.authError(e)); }
+    });
+    return this.shell(t('auth.saveTitle'), t('auth.saveSub'), form,
+      h('button', { class: 'btn ghost wide', onclick: () => this.finish() }, t('auth.skip')),
+      { cast: h('div', { class: 'auth-art' }, icon('cloud', 'big')) });
+  },
+
+  // Log in on a new phone: loads your progress and goes straight in.
+  stepLogin() {
+    const form = authForm(t('auth.go'), async (email, pw, setErr) => {
+      try {
+        const ready = await Cloud.logIn(email, pw);
+        Sfx.win();
+        if (ready) {
+          this.active = false;
+          UI.lang = Store.data.native;
+          Theme.apply();
+          App.enter();
+          toast(t('auth.welcomeBack', { name: Store.data.profile.name }), 3000);
+        } else {
+          // An account with no profile yet: finish setting it up.
+          this.draft.name = (Store.data.profile && Store.data.profile.name) || '';
+          this.go(1);
+        }
+      } catch (e) { setErr(Cloud.authError(e)); }
+    }, h('button', { class: 'link-btn', onclick: () => this.go(1) }, t('auth.noAccount')));
+    return h('div', { class: 'onb' },
+      h('div', { class: 'onb-top' }, h('button', { class: 'icon-btn', onclick: () => this.back() }, icon('left')), h('span')),
+      h('div', { class: 'auth-art' }, icon('user', 'big')),
+      h('h1', {}, t('auth.loginTitle')),
+      h('p', { class: 'muted' }, t('auth.loginSub')),
+      h('div', { class: 'onb-body' }, form));
+  },
+
+  // Keeps what was chosen (without going into the app yet).
+  save() {
     const d = Store.data;
     d.native = this.draft.native;
     d.target = this.draft.target;
@@ -137,6 +182,9 @@ const Onboarding = {
       d.profile = { name: this.draft.name, look: this.draft.look, banner: 'blue', joined: today() };
     }
     Store.save();
+  },
+  finish() {
+    this.save();
     this.active = false;
     App.enter();
   },

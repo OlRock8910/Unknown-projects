@@ -1,7 +1,8 @@
 // Leaderboards, friends and an online backup of your progress, through
-// Supabase's REST API (no SDK). You get an anonymous account automatically —
-// no email needed — the first time the phone is online. Setting up the
-// database: docs/CLOUD.md. Without it, everything else still works.
+// Supabase's REST API (no SDK). You get an anonymous account automatically
+// the first time the phone is online, and can save it to an email and
+// password to log in on another phone. Setting up the database:
+// docs/CLOUD.md. Without it, everything else still works.
 
 const CLOUD = window.CLOUD_OVERRIDE || {
   url: 'https://sjbncalappjgwidhookp.supabase.co',
@@ -50,10 +51,81 @@ const Cloud = {
     return data;
   },
   fromAuth(a) {
-    return { access_token: a.access_token, refresh_token: a.refresh_token, expires_at: a.expires_at ? a.expires_at * 1000 : Date.now() + (a.expires_in || 3600) * 1000, user: { id: a.user.id } };
+    return { access_token: a.access_token, refresh_token: a.refresh_token, expires_at: a.expires_at ? a.expires_at * 1000 : Date.now() + (a.expires_in || 3600) * 1000, user: { id: a.user.id, email: a.user.email || null } };
+  },
+  email() { return (this.session && this.session.user.email) || null; },
+
+  // ---- email accounts
+  // Why an email sign-in failed, as a key for t().
+  authError(e) {
+    if (e.offline) return 'auth.offline';
+    const m = `${e.code} ${e.message}`;
+    if (/invalid_credentials|invalid login/i.test(m)) return 'auth.wrong';
+    if (/not_confirmed|not confirmed/i.test(m)) return 'auth.confirm';
+    if (/already|exists|registered/i.test(m)) return 'auth.taken';
+    if (/weak_password|password/i.test(m)) return 'auth.shortPw';
+    if (/email/i.test(m)) return 'auth.badEmail';
+    return 'auth.offline';
+  },
+  // Makes a new email account and moves this phone's progress onto it.
+  // Returns 'ok' or 'confirm' (the email has to be confirmed first).
+  async signUp(email, password) {
+    const old = this.session;
+    const a = await this.call('/auth/v1/signup', { body: { email, password, data: { app: 'lingopeak' } } });
+    if (!a || !a.access_token) return 'confirm';
+    this.keep(this.fromAuth(a));
+    // The anonymous account this phone had before goes, so its username is free.
+    if (old && !old.user.email) {
+      try { await this.call('/rest/v1/rpc/lp_delete_me', { token: old.access_token, body: {} }); } catch (e) { /* not set up yet */ }
+    }
+    this.state = 'off';
+    await this.sync();
+    return 'ok';
+  },
+  // Logs in and loads that account's progress onto this phone. Returns
+  // true if the account already has a profile (false: finish setting up).
+  async logIn(email, password) {
+    const a = await this.call('/auth/v1/token?grant_type=password', { body: { email, password } });
+    this.keep(this.fromAuth(a));
+    const token = this.session.access_token, uid = this.session.user.id;
+    let saved = null, prof = null;
+    try {
+      [saved, prof] = await Promise.all([
+        this.call(`/rest/v1/lp_progress?select=data&user_id=eq.${uid}`, { method: 'GET', token }),
+        this.call(`/rest/v1/lp_profiles?select=*&user_id=eq.${uid}`, { method: 'GET', token }),
+      ]);
+    } catch (e) { if (e.offline) throw e; }
+    const data = saved && saved[0] && saved[0].data;
+    const d = Store.defaults();
+    Store.data = { ...d, ...(data || {}), epoch: DATA_EPOCH, settings: { ...d.settings, ...((data && data.settings) || {}) } };
+    this.profile = prof && prof[0];
+    if (!Store.data.profile && this.profile) Store.data.profile = { name: this.profile.name, look: this.profile.look, banner: 'blue', joined: today() };
+    Store.rollWeek();
+    Store.save({ quiet: true });
+    this.state = 'ok';
+    return !!(Store.data.profile && Store.data.target);
+  },
+  // Forgets this phone's copy (the account stays online to log back in to).
+  async logOut() {
+    try { await this.sync(); } catch (e) { /* keep going */ }
+    this.wipePhone();
+  },
+  // Deletes the account online and everything on this phone.
+  async deleteAccount() {
+    if (this.session) {
+      const token = await this.token();
+      await this.call('/rest/v1/rpc/lp_delete_me', { token, body: {} });
+    }
+    this.wipePhone();
+  },
+  wipePhone() {
+    this.keep(null);
+    try { localStorage.removeItem(Store.KEY); } catch (e) { /* ignore */ }
+    Store.data = null;
   },
   // A token good for at least a minute: signs up anonymously the first time.
   async token() {
+    if (!this.enabled()) throw Object.assign(new Error('offline'), { offline: true });
     const s = this.session;
     if (s && s.expires_at - Date.now() > 60000) return s.access_token;
     if (s) {
@@ -235,13 +307,45 @@ function friendsCard() {
     err);
 }
 
-// The account card on the Me tab: email sign-in comes later.
-function accountCard() {
-  const st = Cloud.state;
-  return h('div', { class: 'card account' },
-    h('div', { class: 'pc-icon' }, icon(st === 'ok' ? 'check' : 'globe')),
-    h('div', { class: 'pc-text' },
-      h('b', {}, st === 'ok' ? t('acc.online') : t('acc.local')),
-      h('span', {}, st === 'ok' ? t('acc.onlineSub') : t('acc.localSub')),
-      h('em', {}, t('onb.emailLater'))));
+// Email and password fields, checked before sending. onSubmit(email, password, setErr).
+function authForm(buttonLabel, onSubmit, extra = null) {
+  const email = h('input', { class: 'field', type: 'email', placeholder: t('auth.email'), autocomplete: 'email', autocapitalize: 'off', spellcheck: 'false' });
+  const pw = h('input', { class: 'field', type: 'password', placeholder: t('auth.password'), autocomplete: 'current-password' });
+  const show = h('button', { class: 'pw-eye', type: 'button', 'aria-label': t('auth.show') }, t('auth.show'));
+  show.addEventListener('click', () => { pw.type = pw.type === 'password' ? 'text' : 'password'; show.textContent = pw.type === 'password' ? t('auth.show') : t('auth.hide'); });
+  const err = h('div', { class: 'err' });
+  const go = h('button', { class: 'btn primary wide' }, buttonLabel);
+  const setErr = (k) => { err.textContent = k ? t(k) : ''; if (k) Sfx.bad(); };
+  const submit = async () => {
+    const e = email.value.trim(), p = pw.value;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return setErr('auth.badEmail');
+    if (p.length < 6) return setErr('auth.shortPw');
+    setErr(null);
+    go.disabled = true;
+    go.classList.add('busy');
+    try { await onSubmit(e, p, setErr); } finally { go.disabled = false; go.classList.remove('busy'); }
+  };
+  go.addEventListener('click', submit);
+  pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  email.addEventListener('input', () => setErr(null));
+  return h('div', { class: 'auth-form' }, email, h('div', { class: 'pw-wrap' }, pw, show), err, go, extra);
+}
+
+// "Save your progress": add an email and password to this phone's account.
+function openSaveAccount() {
+  const host = App.openOverlay('account');
+  host.replaceChildren(h('div', { class: 'sheet-page' },
+    h('div', { class: 'sheet-top' }, h('button', { class: 'icon-btn', onclick: () => App.closeOverlay() }, icon('x'))),
+    h('div', { class: 'auth-art' }, icon('cloud', 'big')),
+    h('h1', {}, t('auth.saveTitle')),
+    h('p', { class: 'muted' }, t('auth.saveSub')),
+    authForm(t('auth.create'), async (email, pw, setErr) => {
+      try {
+        const r = await Cloud.signUp(email, pw);
+        if (r === 'confirm') { toast(t('auth.confirm'), 5000); return; }
+        Sfx.win();
+        toast(t('auth.saved', { email }), 4000);
+        App.closeOverlay();
+      } catch (e) { setErr(Cloud.authError(e)); }
+    })));
 }

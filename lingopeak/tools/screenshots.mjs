@@ -9,7 +9,7 @@ const b = await chromium.launch();
 const p = await b.newPage({ viewport: { width: 400, height: 860 } });
 const errs = [];
 p.on('pageerror', (e) => errs.push(e.message));
-await p.addInitScript((th) => { window.CLOUD_OVERRIDE = { url: '', anonKey: '' }; if (!localStorage.getItem('lingopeak.v1')) localStorage.setItem('lingopeak.v1', JSON.stringify({ profile: { name: 'Oli', look: { skin: 2, hair: 2, hairColor: 0, hat: 'cap', top: 'tee-coral', pants: 'jeans' } }, native: 'en', target: 'es', settings: { theme: th, sound: false, voice: true, vibrate: true, rate: 0.9 } })); }, theme);
+await p.addInitScript((th) => { window.CLOUD_OVERRIDE = { url: '', anonKey: '' }; if (!localStorage.getItem('lingopeak.v1')) localStorage.setItem('lingopeak.v1', JSON.stringify({ epoch: 2, profile: { name: 'Oli', look: { skin: 2, hair: 2, hairColor: 0, hat: 'cap', top: 'tee-coral', pants: 'jeans' } }, native: 'en', target: 'es', settings: { theme: th, sound: false, voice: true, vibrate: true, rate: 0.9 } })); }, theme);
 await p.goto(pathToFileURL(path.join(root, 'web', 'index.html')).href);
 await p.evaluate(() => {
   const c = Store.course;

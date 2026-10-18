@@ -35,10 +35,10 @@ const App = {
   show(tab, keep = false) {
     if (!keep) Sfx.tap();
     this.tab = tab;
-    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === (tab === 'settings' ? 'me' : tab)));
     const view = $('#view');
     const top = view.scrollTop;
-    view.replaceChildren({ learn: renderLearn, practice: renderPractice, ranks: renderRanks, shop: renderShop, me: renderMe }[tab]());
+    view.replaceChildren({ learn: renderLearn, practice: renderPractice, ranks: renderRanks, shop: renderShop, me: renderMe, settings: renderSettings }[tab]());
     view.firstChild.classList.toggle('still', keep);
     if (keep) { view.scrollTop = top; return; }
     view.scrollTop = 0;
@@ -71,6 +71,7 @@ const App = {
     if (Onboarding.active) return Onboarding.back();
     if (this.overlayKind === 'game' && Games.session) { Games.session.quit(); return true; }
     if (this.overlayKind) { this.closeOverlay(); return true; }
+    if (this.tab === 'settings') { this.show('me'); return true; }
     if (this.tab !== 'learn') { this.show('learn'); return true; }
     return false;
   },
@@ -119,6 +120,7 @@ const Theme = {
     const pref = Store.s.theme;
     const dark = pref === 'dark' || (pref === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    document.documentElement.dataset.text = Store.s.text || 'normal';
     try { if (window.Native && window.Native.setBars) window.Native.setBars(dark); } catch (e) { /* ignore */ }
   },
 };
@@ -149,11 +151,11 @@ function ring(frac, label, size = 84) {
 
 function weekCard() {
   const d = Store.data;
-  const mins = Math.floor(d.week.secs / 60), goal = WEEKLY_GOAL_SECS / 60;
-  const done = d.week.secs >= WEEKLY_GOAL_SECS;
+  const mins = Math.floor(d.week.secs / 60), goal = goalSecs() / 60;
+  const done = d.week.secs >= goalSecs();
   const streak = Store.weekStreakNow();
   return h('div', { class: 'card week' },
-    ring(d.week.secs / WEEKLY_GOAL_SECS, done ? '' : `${mins}<small>/${goal}</small>`),
+    ring(d.week.secs / goalSecs(), done ? '' : `${mins}<small>/${goal}</small>`),
     done ? h('div', { class: 'ring-check' }, icon('check')) : null,
     h('div', { class: 'week-text' },
       h('b', {}, done ? t('home.weekDone') : t('home.weekGoal')),
@@ -183,15 +185,15 @@ function renderLearn() {
   const altitude = Math.round((m.height * done) / lessons.length);
 
   // Heading: which mountain, how high you are, this week.
-  const mins = Math.floor(d.week.secs / 60), goal = WEEKLY_GOAL_SECS / 60;
+  const mins = Math.floor(d.week.secs / 60), goal = goalSecs() / 60;
   page.append(
     h('div', { class: 'mtn-heading' },
       h('div', { class: 'eyebrow' }, t('mtn.numberOf', { n: mi + 1, of: LP_COURSE.length })),
       h('h1', {}, m.name),
       h('div', { class: 'alt' }, h('b', {}, `${fmtNum(altitude)} m`), h('span', {}, t('mtn.climbedPct', { n: Math.floor((done / lessons.length) * 100) })))),
     h('button', { class: 'week-strip', onclick: () => toast(t('onb.goalSub'), 3500) },
-      ring(d.week.secs / WEEKLY_GOAL_SECS, d.week.secs >= WEEKLY_GOAL_SECS ? '' : String(mins), 46),
-      h('div', {}, h('b', {}, d.week.secs >= WEEKLY_GOAL_SECS ? t('home.weekDone') : t('home.minsOf', { n: mins, goal })),
+      ring(d.week.secs / goalSecs(), d.week.secs >= goalSecs() ? '' : String(mins), 46),
+      h('div', {}, h('b', {}, d.week.secs >= goalSecs() ? t('home.weekDone') : t('home.minsOf', { n: mins, goal })),
         h('span', {}, Store.weekStreakNow() ? t('home.streak', { n: Store.weekStreakNow() }) : t('home.noStreak'))),
       h('div', { class: 'ws-pct' }, h('b', {}, stats.pct + '%'), h('span', {}, t('lang.' + d.target)))));
 
@@ -342,7 +344,7 @@ function renderPractice() {
     h('h1', { class: 'page-title' }, t('tab.practice')),
     card('review', 'refresh', t('practice.review'), stats.due ? t('practice.dueN', { n: stats.due }) : t('practice.noneDue'), learned >= 4),
     card('weak', 'target', t('practice.weak'), t('practice.weakSub'), learned >= 4),
-    speakable() ? card('listen', 'headphones', t('practice.listen'), t('practice.listenSub'), learned >= 4) : null,
+    canListen() ? card('listen', 'headphones', t('practice.listen'), t('practice.listenSub'), learned >= 4) : null,
     h('button', { class: 'card practice-card', onclick: () => openCards() }, h('div', { class: 'pc-icon' }, icon('cards')), h('div', { class: 'pc-text' }, h('b', {}, t('practice.cards')), h('span', {}, t('practice.cardsSub'))), icon('right', 'chev')),
     typeof renderGamesList === 'function' ? renderGamesList() : null);
 }
@@ -425,6 +427,7 @@ function renderShop() {
 }
 
 // ------------------------------------------------------------------ Me tab
+const APP_VERSION = '2.1';
 // Changing your username (it has to be one nobody else has).
 async function renameMe() {
   const name = (prompt(t('me.rename'), Store.data.profile.name) || '').trim();
@@ -442,18 +445,62 @@ function profileBanner(p, opts = {}) {
     lookAvatar(p.look, 'lg'),
     h('div', { class: 'banner-text' },
       h('button', { class: 'banner-name', onclick: () => renameMe() }, p.name),
-      h('div', { class: 'banner-badges' }, badges.length ? badges.map((m) => badgeArt(m, 'xs')) : h('small', {}, t('me.noBadges')))));
+      p.joined ? h('small', { class: 'banner-since' }, t('me.since', { date: fmtDate(p.joined) })) : null,
+      h('div', { class: 'banner-badges' }, badges.length ? badges.map((m) => badgeArt(m, 'xs')) : h('small', {}, t('me.noBadges')))),
+    opts.gear ? h('button', { class: 'banner-gear', 'aria-label': t('set.title'), onclick: () => App.show('settings') }, icon('gear')) : null);
 }
+const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(I18N_LOCALE[UI.lang], { month: 'long', year: 'numeric' }); } catch (e) { return iso; } };
 
 function renderMe() {
   const d = Store.data;
   const s = courseStats();
   const lv = Store.level();
-  const toggle = (key, label) => {
+  const mins = Math.round((d.totalSecs || 0) / 60);
+  const unsaved = Cloud.enabled() && !Cloud.email();
+  return h('div', { class: 'page' },
+    profileBanner(d.profile, { gear: true }),
+    h('div', { class: 'stat-grid' },
+      stat('mountain', s.pct + '%', t('me.course', { lang: t('lang.' + d.target) })),
+      stat('book', fmtNum(s.words), t('home.words')),
+      stat('star', fmtNum(s.mastered), t('home.mastered')),
+      stat('calendar', Store.weekStreakNow(), t('me.weekStreak')),
+      stat('bolt', fmtNum(d.xp), t('me.level', { n: lv.lvl })),
+      stat('clock', t('res.mins', { n: mins }), t('me.time'))),
+    unsaved ? h('button', { class: 'card save-card', onclick: () => openSaveAccount() },
+      h('div', { class: 'pc-icon' }, icon('cloud', '', 'globe')),
+      h('div', { class: 'pc-text' }, h('b', {}, t('auth.saveTitle')), h('span', {}, t('auth.saveShort'))),
+      icon('right')) : null,
+    h('h2', { class: 'section' }, t('me.languages')),
+    h('div', { class: 'card lang-card' },
+      h('div', { class: 'lang-pair' }, h('span', {}, t('lang.' + d.native)), icon('right'), h('b', {}, t('lang.' + d.target))),
+      h('button', { class: 'btn ghost small', onclick: () => Onboarding.start(1) }, t('me.change'))),
+    h('button', { class: 'btn ghost wide', onclick: () => Share.send(t('share.invite')) }, icon('share'), t('me.invite')),
+    h('button', { class: 'btn ghost wide', onclick: () => App.show('settings') }, icon('gear'), t('set.title')),
+    h('div', { class: 'foot-note' }, 'Lingo Peak'));
+}
+
+// A yes/no question in a sheet that slides up. opts: { title, sub, yes, danger, onYes }
+function askSheet(opts) {
+  const host = App.openOverlay('ask');
+  const yes = h('button', { class: 'btn wide ' + (opts.danger ? 'danger solid' : 'primary') }, opts.yes);
+  yes.addEventListener('click', async () => { yes.disabled = true; try { await opts.onYes(); } finally { yes.disabled = false; } });
+  host.replaceChildren(h('div', { class: 'ask-wrap', onclick: (e) => { if (e.target === e.currentTarget) App.closeOverlay(); } },
+    h('div', { class: 'ask-sheet' },
+      opts.icon ? h('div', { class: 'ask-icon' }, icon(opts.icon, 'big')) : null,
+      h('h2', {}, opts.title),
+      opts.sub ? h('p', { class: 'muted' }, opts.sub) : null,
+      yes,
+      h('button', { class: 'btn ghost wide', onclick: () => App.closeOverlay() }, t('set.cancel')))));
+}
+
+// ------------------------------------------------------------------ Settings
+function renderSettings() {
+  const d = Store.data;
+  const toggle = (key, label, sub, onChange) => {
     const input = h('input', { type: 'checkbox' });
-    input.checked = !!Store.s[key];
-    input.addEventListener('change', () => { Store.s[key] = input.checked; Store.save(); Sfx.tap(); });
-    return h('label', { class: 'setting' }, h('span', {}, label), h('span', { class: 'switch' }, input, h('i')));
+    input.checked = Store.s[key] !== false;
+    input.addEventListener('change', () => { Store.s[key] = input.checked; Store.save(); Sfx.tap(); if (onChange) onChange(); });
+    return h('label', { class: 'setting' }, h('span', {}, label, sub ? h('small', {}, sub) : null), h('span', { class: 'switch' }, input, h('i')));
   };
   // A row of choices that just moves its highlight (nothing reloads).
   const seg = (key, opts, onChange) => {
@@ -470,36 +517,79 @@ function renderMe() {
     });
     return row;
   };
-  const mins = Math.round((d.totalSecs || 0) / 60);
-  return h('div', { class: 'page' },
-    profileBanner(d.profile),
-    h('div', { class: 'stat-grid' },
-      stat('mountain', s.pct + '%', t('me.course', { lang: t('lang.' + d.target) })),
-      stat('book', fmtNum(s.words), t('home.words')),
-      stat('star', fmtNum(s.mastered), t('home.mastered')),
-      stat('calendar', Store.weekStreakNow(), t('me.weekStreak')),
-      stat('bolt', fmtNum(d.xp), t('me.level', { n: lv.lvl })),
-      stat('clock', t('res.mins', { n: mins }), t('me.time'))),
-    h('h2', { class: 'section' }, t('me.languages')),
-    h('div', { class: 'card lang-card' },
-      h('div', { class: 'lang-pair' }, h('span', {}, t('lang.' + d.native)), icon('right'), h('b', {}, t('lang.' + d.target))),
-      h('button', { class: 'btn ghost small', onclick: () => Onboarding.start(1) }, t('me.change'))),
-    h('h2', { class: 'section' }, t('me.settings')),
+  const row = (label, value, btn) => h('div', { class: 'setting' }, h('span', {}, label, value ? h('small', {}, value) : null), btn || null);
+  const email = Cloud.email();
+  const code = Cloud.profile && Cloud.profile.code;
+  const colours = h('div', { class: 'colour-row' });
+  ['blue', 'coral', 'yellow', 'ink'].forEach((c) => {
+    const b = h('button', { class: 'colour-dot b-' + c + ((d.profile.banner || 'blue') === c ? ' on' : ''), 'aria-label': c });
+    b.addEventListener('click', () => { d.profile.banner = c; Store.save(); Sfx.select(); colours.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); });
+    colours.append(b);
+  });
+
+  return h('div', { class: 'page settings-page' },
+    h('div', { class: 'settings-head' },
+      h('button', { class: 'icon-btn', 'aria-label': t('set.back'), onclick: () => App.show('me') }, icon('left')),
+      h('h1', { class: 'page-title' }, t('set.title'))),
+
+    h('h2', { class: 'section' }, t('set.account')),
     h('div', { class: 'card settings' },
-      h('div', { class: 'setting' }, h('span', {}, t('me.theme')), seg('theme', [['light', t('me.light')], ['dark', t('me.dark')], ['system', t('me.auto')]], () => Theme.apply())),
+      row(t('set.username'), d.profile.name, h('button', { class: 'btn ghost small', onclick: () => renameMe() }, t('me.change'))),
+      Cloud.enabled() ? row(t('auth.email'), email || t('set.noEmail'),
+        email ? h('span', { class: 'ok-tag' }, icon('check'), t('set.saved')) : h('button', { class: 'btn primary small', onclick: () => openSaveAccount() }, t('set.addEmail'))) : null,
+      code ? row(t('set.friendCode'), code, h('button', { class: 'btn ghost small', onclick: () => Share.send(t('ranks.shareCode', { code })) }, icon('share'))) : null,
+      h('div', { class: 'setting' }, h('span', {}, t('set.colour')), colours)),
+
+    h('h2', { class: 'section' }, t('set.learning')),
+    h('div', { class: 'card settings' },
+      row(t('me.languages'), `${t('lang.' + d.native)} → ${t('lang.' + d.target)}`, h('button', { class: 'btn ghost small', onclick: () => Onboarding.start(1) }, t('me.change'))),
+      h('div', { class: 'setting col' }, h('span', {}, t('set.goal'), h('small', {}, t('set.goalSub'))),
+        seg('goal', [10, 20, 30, 45].map((n) => [n, t('set.goalMins', { n })]), () => Widget.update())),
+      toggle('listen', t('set.listen'), t('set.listenSub')),
+      toggle('typing', t('set.typing'), t('set.typingSub'))),
+
+    h('h2', { class: 'section' }, t('set.soundVoice')),
+    h('div', { class: 'card settings' },
       toggle('sound', t('me.sound')),
       toggle('vibrate', t('me.vibrate')),
       toggle('voice', t('me.voice')),
       h('div', { class: 'setting' }, h('span', {}, t('me.speed')), seg('rate', [[0.65, t('me.slow')], [0.9, t('me.normal')], [1.15, t('me.fast')]], () => setTimeout(() => Voice.say(C.units[0].sentences[0].t, { force: true }), 100))),
       Voice.native() && Voice.state() !== 'ok' ? h('button', { class: 'btn ghost small', onclick: () => Voice.install() }, t('me.getVoice')) : null),
-    h('h2', { class: 'section' }, t('me.account')),
-    typeof accountCard === 'function' ? accountCard() : null,
-    h('button', { class: 'btn ghost wide', onclick: () => Share.send(t('share.invite')) }, icon('share'), t('me.invite')),
-    h('button', {
-      class: 'btn danger wide',
-      onclick: () => { if (confirm(t('me.resetQ'))) { localStorage.removeItem(Store.KEY); location.reload(); } },
-    }, t('me.reset')),
-    h('div', { class: 'foot-note' }, 'Lingo Peak'));
+
+    h('h2', { class: 'section' }, t('set.look')),
+    h('div', { class: 'card settings' },
+      h('div', { class: 'setting' }, h('span', {}, t('me.theme')), seg('theme', [['light', t('me.light')], ['dark', t('me.dark')], ['system', t('me.auto')]], () => Theme.apply())),
+      h('div', { class: 'setting' }, h('span', {}, t('set.textSize')), seg('text', [['normal', t('me.normal')], ['big', t('set.textBig')]], () => Theme.apply())),
+      toggle('effects', t('set.effects'), t('set.effectsSub'))),
+
+    h('h2', { class: 'section' }, t('set.about')),
+    h('div', { class: 'card settings' },
+      h('details', { class: 'setting how-details' }, h('summary', {}, t('set.how')),
+        h('ul', { class: 'how' },
+          h('li', {}, icon('refresh'), t('set.how1')),
+          h('li', {}, icon('target'), t('set.how2')),
+          h('li', {}, icon('speaker'), t('set.how3')),
+          h('li', {}, icon('cards'), t('set.how4')))),
+      row(t('me.invite'), null, h('button', { class: 'btn ghost small', onclick: () => Share.send(t('share.invite')) }, icon('share'))),
+      row('Lingo Peak', t('set.version', { v: APP_VERSION }))),
+
+    h('h2', { class: 'section danger-head' }, t('set.danger')),
+    h('div', { class: 'card settings danger-card' },
+      email ? row(t('set.logout'), t('set.logoutSub', { email }), h('button', { class: 'btn ghost small', onclick: () => askSheet({
+        icon: 'user', title: t('set.logoutQ'), sub: t('set.logoutSub', { email }), yes: t('set.logout'),
+        onYes: async () => { await Cloud.logOut(); location.reload(); },
+      }) }, t('set.logout'))) : null,
+      row(t('set.delete'), t('set.deleteHint'), h('button', { class: 'btn danger small', onclick: () => askSheet({
+        icon: 'lock', danger: true, title: t('set.deleteQ'), sub: t('set.deleteSub'), yes: t('set.deleteYes'),
+        onYes: async () => {
+          try { await Cloud.deleteAccount(); } catch (e) {
+            if (e.offline) { toast(t('set.needNet'), 3500); return; }
+            Cloud.wipePhone();
+          }
+          location.reload();
+        },
+      }) }, t('set.deleteBtn')))),
+    h('div', { class: 'foot-note' }, `Lingo Peak ${APP_VERSION}`));
 }
 
 // ------------------------------------------------------------------ Ranks tab

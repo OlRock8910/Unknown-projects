@@ -62,7 +62,10 @@ const prevWeekId = (id) => {
 const daysLeftInWeek = () => 8 - (new Date().getDay() || 7);
 
 // ------------------------------------------------------------------ saved progress
-const WEEKLY_GOAL_SECS = 20 * 60;
+// The weekly goal in seconds (20 minutes unless changed in Settings).
+const goalSecs = () => (Number(Store.data && Store.s.goal) || 20) * 60;
+// Bumped to start everyone afresh: older saves are cleared on the next launch.
+const DATA_EPOCH = 2;
 const WEEK_COINS = 50, MOUNTAIN_COINS = 200;
 const Store = {
   KEY: 'lingopeak.v1',
@@ -78,12 +81,18 @@ const Store = {
       freezes: 0, boostUntil: 0,
       owned: ['banana', 'shark', 'dino', 'astro'],
       totalSecs: 0, sessions: 0,
-      settings: { theme: 'system', sound: true, vibrate: true, voice: true, rate: 0.9, voiceName: '' },
+      epoch: DATA_EPOCH,
+      settings: { theme: 'system', sound: true, vibrate: true, voice: true, rate: 0.9, voiceName: '', goal: 20, listen: true, typing: true, effects: true, text: 'normal' },
     };
   },
   load() {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(this.KEY)) || {}; } catch (e) { saved = {}; }
+    if (saved.epoch !== DATA_EPOCH) {
+      // An account from before the last fresh start: begin again.
+      saved = {};
+      try { localStorage.removeItem(this.KEY); localStorage.removeItem('lingopeak.session'); } catch (e) { /* ignore */ }
+    }
     const d = this.defaults();
     this.data = { ...d, ...saved, settings: { ...d.settings, ...(saved.settings || {}) } };
     this.rollWeek();
@@ -124,7 +133,7 @@ const Store = {
     const before = d.week.secs;
     d.week.secs += secs;
     d.totalSecs = (d.totalSecs || 0) + secs;
-    if (before >= WEEKLY_GOAL_SECS || d.week.secs < WEEKLY_GOAL_SECS) return false;
+    if (before >= goalSecs() || d.week.secs < goalSecs()) return false;
     const st = d.weekStreak;
     st.n = st.last === prevWeekId(d.week.id) ? st.n + 1 : 1;
     st.last = d.week.id;
@@ -369,7 +378,7 @@ const Widget = {
       const d = Store.data;
       const stats = typeof courseStats === 'function' ? courseStats() : { words: 0, pct: 0 };
       const json = JSON.stringify({
-        weekId: d.week.id, mins: Math.floor(d.week.secs / 60), goal: WEEKLY_GOAL_SECS / 60, streak: Store.weekStreakNow(),
+        weekId: d.week.id, mins: Math.floor(d.week.secs / 60), goal: goalSecs() / 60, streak: Store.weekStreakNow(),
         words: stats.words, pct: stats.pct, lang: t('lang.' + d.target), days: daysLeftInWeek(),
         labels: { week: t('widget.week'), streak: t('widget.streak'), words: t('widget.words'), done: t('widget.done') },
       });
@@ -403,6 +412,7 @@ function toast(msg, ms = 2000) {
   setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, ms);
 }
 function burst(x, y, color, n = 12, root = document.body) {
+  if (Store.data && Store.s.effects === false) return;
   const rect = root.getBoundingClientRect();
   for (let i = 0; i < n; i++) {
     const p = h('div', { class: 'particle' });
@@ -419,6 +429,7 @@ function burst(x, y, color, n = 12, root = document.body) {
 }
 // A burst of gold sparks and a shock ring at (x, y): the reward for a right answer.
 function goldBurst(x, y, big = false) {
+  if (Store.data && Store.s.effects === false) return;
   const layer = document.body;
   const ring = h('div', { class: 'gold-ring' + (big ? ' big' : '') });
   ring.style.left = x + 'px'; ring.style.top = y + 'px';
@@ -440,6 +451,7 @@ function goldBurst(x, y, big = false) {
 }
 // Gold coins that fly from (x, y) to an element (the coin counter).
 function coinFly(x, y, toEl, n = 6) {
+  if (Store.data && Store.s.effects === false) return;
   if (!toEl) return;
   const [tx, ty] = centerOf(toEl);
   for (let i = 0; i < n; i++) {
@@ -475,6 +487,7 @@ function floatText(x, y, text, cls = 'good', root = document.body) {
 }
 const centerOf = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
 function confetti(host) {
+  if (Store.data && Store.s.effects === false) return;
   const colors = ['var(--blue)', 'var(--gold)', 'var(--coral)', 'var(--gold)'];
   for (let i = 0; i < 50; i++) {
     const c = h('div', { class: 'confetti' });

@@ -21,7 +21,9 @@ async function newPage(state) {
   page.on('console', (m) => { if (m.type() === 'error') fail('console: ' + m.text()); });
   await page.addInitScript((s) => {
     window.CLOUD_OVERRIDE = { url: '', anonKey: '' };
-    if (s && !localStorage.getItem('lingopeak.v1')) localStorage.setItem('lingopeak.v1', JSON.stringify(s));
+    // Seeded once per page, so a reload after deleting the account stays empty.
+    if (s && !sessionStorage.getItem('seeded') && !localStorage.getItem('lingopeak.v1')) localStorage.setItem('lingopeak.v1', JSON.stringify({ epoch: 2, ...s }));
+    sessionStorage.setItem('seeded', '1');
   }, state || null);
   await page.goto(url);
   return page;
@@ -136,7 +138,7 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
     await playSession(page, "openPractice('weak')", 'practice weak');
     const stats = await page.evaluate(() => courseStats());
     if (stats.words < 12 || stats.lessons !== 4) fail('course stats wrong: ' + JSON.stringify(stats));
-    const tabs = ['learn', 'practice', 'ranks', 'shop', 'me'];
+    const tabs = ['learn', 'practice', 'ranks', 'shop', 'me', 'settings'];
     for (const tab of tabs) {
       await page.evaluate((x) => App.show(x), tab);
       const s = await stray(page);
@@ -145,6 +147,55 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   }
   await page.close();
   console.log(`  ok lessons ${nat}>${tgt}`);
+}
+
+// ---------------------------------------------------------------- fresh start, email log-in, settings, deleting
+{
+  // A save from before the fresh start is cleared.
+  const page = await newPage({ profile: { name: 'Old' }, native: 'en', target: 'es', epoch: 1 });
+  if (!(await page.$('.welcome'))) fail('an old save was not cleared by the fresh start');
+  if (!/email/i.test(await page.textContent('.welcome .btn.ghost'))) fail('no log in with email on the welcome screen');
+  await page.click('.welcome .btn.ghost');
+  await page.fill('.auth-form input[type=email]', 'nope');
+  await page.fill('.auth-form input[type=password]', 'secret1');
+  await page.click('.auth-form .btn.primary');
+  if (!/email/i.test(await page.textContent('.auth-form .err'))) fail('log in accepted a bad email');
+  await page.fill('.auth-form input[type=email]', 'mia@example.com');
+  await page.fill('.auth-form input[type=password]', '123');
+  await page.click('.auth-form .btn.primary');
+  if (!/6/.test(await page.textContent('.auth-form .err'))) fail('log in accepted a 3-letter password');
+  if (!(await page.evaluate(() => appBack())) || !(await page.$('.welcome'))) fail('back from log in does not go to the welcome screen');
+  await page.close();
+}
+{
+  const page = await newPage({ profile: { name: 'Sett', joined: '2026-10-01' }, native: 'en', target: 'es', settings: { sound: false } });
+  await page.waitForSelector('#tabs:not([hidden])');
+  await page.evaluate(() => App.show('me'));
+  if (/reset/i.test(await page.textContent('#view'))) fail('"reset everything" is still on the Me tab');
+  await page.click('.banner-gear');
+  const txt = await page.textContent('#view');
+  for (const want of ['Settings', 'Weekly goal', 'Delete account', 'Listening exercises', 'Text size']) if (!txt.includes(want)) fail('settings page has no ' + want);
+  if (!(await page.$('#tabs button.active[data-tab=me]'))) fail('Me tab not highlighted on Settings');
+  await page.click('.seg button:has-text("45 min")');
+  await page.click('label.setting:has-text("Typing exercises") .switch');
+  const learn = await page.evaluate(() => {
+    const kinds = new Set();
+    for (let k = 0; k < 30; k++) C.lessons.slice(0, 8).forEach((l) => buildLessonQueue(l).forEach((x) => kinds.add(x.kind)));
+    return [goalSecs(), Store.s.typing, ['spell', 'type', 'dictation'].filter((x) => kinds.has(x)).join()];
+  });
+  if (learn.join('|') !== '2700|false|') fail('goal / typing settings: ' + learn.join('|'));
+  if (!(await page.evaluate(() => appBack() && App.tab === 'me'))) fail('back from Settings does not go to Me');
+  // Deleting the account asks first, then starts again from the welcome screen.
+  await page.click('.banner-gear');
+  await page.click('.danger-card .btn.danger');
+  await page.click('.ask-sheet .btn.ghost');
+  if (!(await page.evaluate(() => !!Store.data.profile))) fail('cancelling deleted the account');
+  await page.click('.danger-card .btn.danger');
+  await page.click('.ask-sheet .btn.danger');
+  await page.waitForSelector('.welcome');
+  if (await page.evaluate(() => localStorage.getItem('lingopeak.v1'))) fail('deleting the account left a save behind');
+  await page.close();
+  console.log('  ok fresh start, log-in checks, settings, delete account');
 }
 
 // ---------------------------------------------------------------- games, shop, weekly goal, mountains
@@ -273,7 +324,7 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
 
   // Changing a setting doesn't jump back to the top of the page.
   const kept = await page.evaluate(() => {
-    App.show('me');
+    App.show('settings');
     const view = document.querySelector('#view');
     view.scrollTop = 300;
     const before = view.scrollTop;
@@ -307,7 +358,7 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   page.on('pageerror', (e) => fail(e.message));
   await page.addInitScript(() => {
     window.CLOUD_OVERRIDE = { url: '', anonKey: '' };
-    localStorage.setItem('lingopeak.v1', JSON.stringify({ profile: { name: 'Night', avatar: 'astro' }, native: 'en', target: 'pt' }));
+    localStorage.setItem('lingopeak.v1', JSON.stringify({ epoch: 2, profile: { name: 'Night', avatar: 'astro' }, native: 'en', target: 'pt' }));
     window.__widget = [];
     window.Native = { speakIn: () => {}, stop: () => {}, ttsState: () => 'ok', vibrate: () => {}, setBars: (d) => { window.__bars = d; }, updateWidget: (j) => window.__widget.push(JSON.parse(j)) };
   });
