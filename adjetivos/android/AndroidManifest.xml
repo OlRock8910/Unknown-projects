@@ -3,6 +3,8 @@
     package="com.olrock.adjetivos">
 
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Only used by "Play online"; everything else works offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Android 11+ only lets apps see the text-to-speech engine if they say they use it. -->
     <queries>

@@ -3,7 +3,7 @@
 const App = {
   tab: 'play',
   session: null,
-  overlayKind: null, // 'game' | 'results' | 'cards' | 'friends' | 'duel' | null
+  overlayKind: null, // 'game' | 'results' | 'cards' | 'friends' | 'duel' | 'online' | null
   overlayCleanup: null,
   lastGame: null,
 
@@ -133,7 +133,7 @@ const App = {
   // Android back button. Returns true when handled, false to leave the app.
   back() {
     if (this.overlayKind === 'game' && this.session) { this.session.quit(); return true; }
-    if (this.overlayKind === 'duel') { openFriends(); return true; }
+    if (this.overlayKind === 'duel' || this.overlayKind === 'online') { openFriends(); return true; }
     if (this.overlayKind) { this.closeOverlay(); return true; }
     if (this.tab !== 'play') { this.show('play'); return true; }
     return false;
@@ -274,7 +274,7 @@ function renderPlay() {
     h('button', { class: 'btn primary wide shuffle', onclick: () => App.startGame(pickOne(GAMES)) }, '🎲 Surprise me — random game'),
     h('button', { class: 'card friends-card', onclick: () => openFriends() },
       h('span', { class: 'inv-emoji' }, '👥'),
-      h('div', {}, h('b', {}, 'Play with friends'), h('span', {}, 'Duel on one phone, or send a challenge code')),
+      h('div', {}, h('b', {}, 'Play with friends'), h('span', {}, 'Online, on one phone, or with a challenge code')),
       h('span', { class: 'chev' }, '›')),
     ...groups,
     h('button', { class: 'card invite', onclick: () => Share.send(INVITE_TEXT) },
@@ -304,6 +304,9 @@ function openFriends() {
       h('button', { class: 'icon-btn', onclick: () => App.closeOverlay() }, '✕'),
       h('div', { class: 'flash-count' }, '👥 Play with friends'),
       h('span', {})),
+    h('button', { class: 'card friends-option online-option', onclick: () => openOnline() },
+      h('div', { class: 'fo-emoji' }, '🌐'),
+      h('div', {}, h('b', {}, 'Play online'), h('span', {}, 'Play a friend on their own phone, anywhere. Make a room, send them the code, and race to tap the right word.'))),
     h('button', { class: 'card friends-option duel-option', onclick: () => openDuel() },
       h('div', { class: 'fo-emoji' }, '⚔️'),
       h('div', {}, h('b', {}, 'Duel on one phone'), h('span', {}, 'Put the phone flat between you. First to tap the right Spanish word wins the point. First to 7 wins!'))),

@@ -228,7 +228,7 @@ for (const state of ['missing', 'ok']) {
     if (!first || /\s/.test(first.text)) errors.push('bubble task was not a single Spanish word: ' + JSON.stringify(said));
     else if (!(first.rate < 0.9)) errors.push('single words are not spoken slowly: rate ' + first.rate);
     const before = said.length;
-    await p.click('.prompt .replay-btn');
+    await p.evaluate(() => document.querySelector('.prompt .replay-btn').click()); // the prompt can be replaced mid-click
     const after = await p.evaluate(() => window.__said);
     const last = said[said.length - 1];
     if (after.length <= before || after[after.length - 1].text !== last.text) errors.push('🔊 did not repeat the word');

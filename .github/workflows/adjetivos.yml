@@ -35,6 +35,9 @@ jobs:
           npx playwright install --with-deps chromium
           node tests/smoke.mjs
 
+      - name: Online play test (two phones through a local PeerJS server)
+        run: node tests/online.mjs
+
       - name: Build APK
         run: ./build-apk.sh
 

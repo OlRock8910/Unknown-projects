@@ -12,7 +12,7 @@
 
 **Learn Spanish describing words by popping bubbles, slicing words and
 whacking moles.** *Mi hermano es muy molesto* 😤 — 96 adjectives, 19 mini
-games, a real Spanish voice, and no ads, accounts or internet needed.
+games, a real Spanish voice, and no ads or accounts.
 
 | **Home** | **Bubble Pop** — right answers flash up big | **Whack-a-Word** | **Gender Pop** |
 |:---:|:---:|:---:|:---:|
@@ -34,7 +34,7 @@ computer. Nothing to install. On a phone, use your browser's
    manager to **install unknown apps**.
 3. Tap **Install**, then open **Adjetivos**.
 
-It works fully offline.
+Everything works offline except **Play online**, which needs internet on both phones.
 
 ### The voice
 
@@ -93,6 +93,13 @@ Spanish over English (**AMABLE · KIND**), and says it out loud.
 
 **👥 Play with friends**
 
+- **Play online** — on two phones, anywhere. One player taps **Make a room**
+  and sends the 5-letter code; the other taps **Join**. Both see the same
+  word at the same time, and the faster right tap wins the point (each phone
+  times its own tap, so a slow connection doesn't cost you). First to 7 wins,
+  then rematch. It uses [PeerJS](https://peerjs.com): their free server only
+  introduces the two phones, which then talk directly. Nothing is stored and
+  no account is needed.
 - **Duel on one phone** — put the phone flat between two players; each gets
   half the screen. First to tap the right Spanish word wins the point, first
   to 7 wins.
@@ -115,9 +122,11 @@ web/            The whole app: plain HTML, CSS and JavaScript, no build step
   js/core.js      Saving, sound effects, speech, the game session and scoring
   js/games.js     The 19 mini games
   js/app.js       Screens and navigation
+  js/online.js    Online duels between two phones (PeerJS, in js/vendor/)
 android/        A WebView wrapper that adds Spanish text-to-speech and vibration
 build-apk.sh    Builds and signs the APK without Gradle
 tests/smoke.mjs Plays every game in a real browser and fails on any error
+tests/online.mjs Plays an online match between two browsers through a local PeerJS server
 ```
 
 Open `web/index.html` in a desktop browser to play without building anything.
