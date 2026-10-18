@@ -321,7 +321,8 @@ function friendsCard() {
     err);
 }
 
-// Email first; Continue emails a 6-digit code, then the code is typed in.
+// Email first; Continue emails a code, then the code is typed in. Codes are
+// 6 digits if Supabase's "Email OTP length" is 6, but up to 8 also work.
 // onCode(email, code, setErr) finishes (log in, or save progress).
 function emailCodeForm(onCode, extra = null) {
   const wrap = h('div', { class: 'auth-form' });
@@ -351,7 +352,7 @@ function emailCodeForm(onCode, extra = null) {
   };
 
   const codeStage = () => {
-    const input = h('input', { class: 'field code-field', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', placeholder: '······', 'aria-label': t('auth.code') });
+    const input = h('input', { class: 'field code-field', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '8', placeholder: '······', 'aria-label': t('auth.code') });
     const err = h('div', { class: 'err' });
     const verify = h('button', { class: 'btn primary wide' }, t('auth.verify'));
     const resend = h('button', { class: 'link-btn' });
@@ -366,17 +367,21 @@ function emailCodeForm(onCode, extra = null) {
     const startWait = () => { left = 60; tick(); clearInterval(wait); wait = setInterval(tick, 1000); };
     const check = async () => {
       const code = input.value.replace(/\D/g, '');
-      if (code.length !== 6) { err.textContent = t('auth.badCode'); Sfx.oops(); return; }
+      if (code.length < 6 || code.length > 8) { err.textContent = t('auth.badCode'); Sfx.oops(); return; }
       err.textContent = '';
       verify.disabled = true; verify.classList.add('busy');
       try { await onCode(email, code, (k) => { err.textContent = t(k); Sfx.oops(); }); clearInterval(wait); }
       catch (x) { err.textContent = Cloud.authMessage(x); Sfx.oops(); input.select(); }
       finally { verify.disabled = false; verify.classList.remove('busy'); }
     };
+    // 8 digits is a whole code; 6 might be, so check it once typing stops.
+    let pause = null;
     input.addEventListener('input', () => {
-      input.value = input.value.replace(/\D/g, '').slice(0, 6);
+      input.value = input.value.replace(/\D/g, '').slice(0, 8);
       err.textContent = '';
-      if (input.value.length === 6) check();
+      clearTimeout(pause);
+      if (input.value.length === 8) check();
+      else if (input.value.length === 6) pause = setTimeout(check, 1300);
     });
     verify.addEventListener('click', check);
     resend.addEventListener('click', async () => {

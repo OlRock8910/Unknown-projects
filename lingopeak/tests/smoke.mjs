@@ -176,7 +176,7 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
       const body = o.body ? JSON.parse(o.body) : null;
       window.__calls.push(path.split('?')[0]);
       if (path === '/auth/v1/otp') return body.email === 'blocked@example.com' ? json({ code: 400, error_code: 'email_address_not_authorized', msg: 'Email address "blocked@example.com" cannot be used as it is not authorized' }, 400) : json({});
-      if (path === '/auth/v1/verify') return body.token === '123456' ? json({ access_token: 'at', refresh_token: 'rt', expires_in: 3600, user: { id: 'u1', email: body.email } }) : json({ error_code: 'otp_expired', msg: 'Token has expired or is invalid' }, 403);
+      if (path === '/auth/v1/verify') return ['123456', '12345678'].includes(body.token) ? json({ access_token: 'at', refresh_token: 'rt', expires_in: 3600, user: { id: 'u1', email: body.email } }) : json({ error_code: 'otp_expired', msg: 'Token has expired or is invalid' }, 403);
       if (path.startsWith('/rest/v1/lp_progress')) return json([{ data: { epoch: 2, profile: { name: 'Mia', look: {} }, native: 'en', target: 'fr', xp: 321, courses: {} } }]);
       if (path.startsWith('/rest/v1/lp_profiles')) return json([{ name: 'Mia', code: 'ABC123' }]);
       return json([]);
@@ -195,7 +195,8 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   if (!/mia@example\.com/.test(await page.textContent('.code-sent'))) fail('code screen does not say where the code went');
   await page.fill('.code-field', '111111');
   await page.waitForFunction(() => /wrong|expired/i.test(document.querySelector('.auth-form .err').textContent));
-  await page.fill('.code-field', '123456');
+  // An 8-digit code (Supabase's default length) is accepted too.
+  await page.fill('.code-field', '12345678');
   await page.waitForSelector('#tabs:not([hidden])');
   const st = await page.evaluate(() => [Store.data.xp, Store.data.target, Cloud.email(), window.__calls.includes('/auth/v1/otp')]);
   if (st.join() !== '321,fr,mia@example.com,true') fail('logging in with a code: ' + st);
