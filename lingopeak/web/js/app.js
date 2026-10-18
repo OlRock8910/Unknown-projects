@@ -31,19 +31,23 @@ const App = {
     Widget.update();
   },
 
-  show(tab) {
-    Sfx.tap();
+  // keep: redraw in place, staying where you've scrolled to.
+  show(tab, keep = false) {
+    if (!keep) Sfx.tap();
     this.tab = tab;
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
     const view = $('#view');
-    view.scrollTop = 0;
+    const top = view.scrollTop;
     view.replaceChildren({ learn: renderLearn, practice: renderPractice, ranks: renderRanks, shop: renderShop, me: renderMe }[tab]());
+    view.firstChild.classList.toggle('still', keep);
+    if (keep) { view.scrollTop = top; return; }
+    view.scrollTop = 0;
     if (tab === 'learn') requestAnimationFrame(() => {
       const stop = view.querySelector('.stop.next');
       if (stop) view.scrollTop += stop.getBoundingClientRect().top - view.clientHeight * 0.55;
     });
   },
-  refresh() { if (Store.data.profile && C) this.show(this.tab); },
+  refresh() { if (Store.data.profile && C) this.show(this.tab, true); },
 
   openOverlay(kind) {
     if (this.overlayCleanup) { const f = this.overlayCleanup; this.overlayCleanup = null; f(); }
@@ -183,7 +187,7 @@ function renderLearn() {
   page.append(
     h('div', { class: 'mtn-heading' },
       h('div', { class: 'eyebrow' }, t('mtn.numberOf', { n: mi + 1, of: LP_COURSE.length })),
-      h('h1', {}, t('mtn.hidden')),
+      h('h1', {}, m.name),
       h('div', { class: 'alt' }, h('b', {}, `${fmtNum(altitude)} m`), h('span', {}, t('mtn.climbedPct', { n: Math.floor((done / lessons.length) * 100) })))),
     h('button', { class: 'week-strip', onclick: () => toast(t('onb.goalSub'), 3500) },
       ring(d.week.secs / WEEKLY_GOAL_SECS, d.week.secs >= WEEKLY_GOAL_SECS ? '' : String(mins), 46),
@@ -202,102 +206,114 @@ function renderLearn() {
   return page;
 }
 
-// The side of the mountain, one section per unit, climbing north-east: the
-// trail runs up the ridge from bottom left to top right, and the scenery
-// changes as you go up (grass and dirt, forest, rock, cliffs, snow). The
-// summit stays in the clouds until you reach it.
-const ZONES = [
-  { body: ['#86BD5E', '#4F8A3A'], edge: '#8B5A2B', strata: '#3E6B2D', decor: ['tree', 'rock', 'tree', 'bush'] },
-  { body: ['#5E9A4A', '#3D6E33'], edge: '#7A5230', strata: '#2F5226', decor: ['tree', 'cabin', 'tree', 'tree'] },
-  { body: ['#928D88', '#615C58'], edge: '#6B5A4A', strata: '#3F3B38', decor: ['rock', 'tree', 'rock', 'cabin'] },
-  { body: ['#77737C', '#4C4852'], edge: '#E9EEF5', strata: '#2E2B33', decor: ['rock', 'flag', 'rock', 'rock'] },
-  { body: ['#E2EAF4', '#B6C4D8'], edge: '#FFFFFF', strata: '#8FA0B8', decor: ['rock', 'flag', 'snow', 'rock'] },
-];
+// One mountain, seen from the side: a single ridge climbing north-east from
+// the bottom of the screen to the summit, with every lesson on it. The
+// scenery changes as you climb (grass, forest, rock, snow), birds fly low
+// down, planes higher up and a rocket near the top, and the summit has a
+// flag with the mountain's name.
 const DECOR = {
   tree: '<svg viewBox="0 0 40 52"><rect x="17" y="38" width="6" height="12" fill="#6B4423" stroke="#1B1D2A" stroke-width="2"/><path d="M20 2 L36 40 H4Z" fill="#3E7D3A" stroke="#1B1D2A" stroke-width="2.4" stroke-linejoin="round"/><path d="M20 12 L30 36 H10Z" fill="#4E9446"/></svg>',
+  pine: '<svg viewBox="0 0 34 56"><rect x="14" y="44" width="6" height="10" fill="#6B4423" stroke="#1B1D2A" stroke-width="2"/><path d="M17 2 L29 22 H23 L32 36 H24 L33 46 H1 L10 36 H2 L11 22 H5Z" fill="#2F6B34" stroke="#1B1D2A" stroke-width="2.2" stroke-linejoin="round"/></svg>',
   bush: '<svg viewBox="0 0 44 26"><path d="M4 24 Q2 10 14 10 Q18 2 26 6 Q38 4 40 24Z" fill="#4E9446" stroke="#1B1D2A" stroke-width="2.4" stroke-linejoin="round"/></svg>',
   rock: '<svg viewBox="0 0 44 30"><path d="M3 28 L10 12 L20 6 L32 9 L41 28Z" fill="#8F8A86" stroke="#1B1D2A" stroke-width="2.4" stroke-linejoin="round"/><path d="M20 6 L24 18 L32 9" fill="none" stroke="#6F6A66" stroke-width="2"/></svg>',
   cabin: '<svg viewBox="0 0 46 40"><path d="M6 18 L23 4 L40 18 V38 H6Z" fill="#B9772F" stroke="#1B1D2A" stroke-width="2.4" stroke-linejoin="round"/><path d="M2 20 L23 2 L44 20" fill="none" stroke="#FF5A4E" stroke-width="5" stroke-linecap="round"/><rect x="18" y="24" width="10" height="14" fill="#1B1D2A"/></svg>',
-  flag: '<svg viewBox="0 0 30 44"><path d="M5 42 V4" stroke="#1B1D2A" stroke-width="3" stroke-linecap="round"/><path d="M6 5 L27 11 L6 18Z" fill="#FF5A4E" stroke="#1B1D2A" stroke-width="2" stroke-linejoin="round"/></svg>',
+  tent: '<svg viewBox="0 0 46 34"><path d="M3 32 L23 3 L43 32Z" fill="#FFC531" stroke="#1B1D2A" stroke-width="2.4" stroke-linejoin="round"/><path d="M23 3 L18 32 H28Z" fill="#1B1D2A"/></svg>',
   snow: '<svg viewBox="0 0 44 22"><path d="M2 20 Q8 6 18 10 Q26 2 34 8 Q42 8 42 20Z" fill="#FFFFFF" stroke="#8FA0B8" stroke-width="2"/></svg>',
-  cloud: '<svg viewBox="0 0 80 36"><path d="M10 32 Q0 32 4 22 Q6 14 16 16 Q20 4 34 6 Q46 0 52 12 Q66 8 70 20 Q80 22 74 32Z" fill="#FFFFFF" opacity=".9"/></svg>',
-  bird: '<svg viewBox="0 0 24 10"><path d="M2 8 Q7 1 12 7 Q17 1 22 8" fill="none" stroke="#1B1D2A" stroke-width="2" stroke-linecap="round"/></svg>',
+  cloud: '<svg viewBox="0 0 80 36"><path d="M10 32 Q0 32 4 22 Q6 14 16 16 Q20 4 34 6 Q46 0 52 12 Q66 8 70 20 Q80 22 74 32Z" fill="#FFFFFF"/></svg>',
+  bird: '<svg viewBox="0 0 24 12"><path class="wing" d="M2 9 Q7 1 12 8 Q17 1 22 9" fill="none" stroke="#1B1D2A" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  plane: '<svg viewBox="0 0 64 24"><path d="M6 13 H50 Q60 13 60 9 Q58 6 50 7 H14 L8 2 H3 L7 9Z" fill="#F2F1EC" stroke="#1B1D2A" stroke-width="2" stroke-linejoin="round"/><path d="M24 9 L34 9 L26 20 H20Z" fill="#2F5BEA" stroke="#1B1D2A" stroke-width="2" stroke-linejoin="round"/><circle cx="44" cy="10" r="1.6" fill="#1B1D2A"/><circle cx="38" cy="10" r="1.6" fill="#1B1D2A"/></svg>',
+  balloon: '<svg viewBox="0 0 36 52"><path d="M18 2 Q34 2 33 18 Q32 30 20 36 H16 Q4 30 3 18 Q2 2 18 2Z" fill="#FF5A4E" stroke="#1B1D2A" stroke-width="2.2"/><path d="M18 2 Q10 18 16 36 M18 2 Q26 18 20 36" fill="none" stroke="#FFC531" stroke-width="3"/><rect x="13" y="42" width="10" height="8" rx="2" fill="#B9772F" stroke="#1B1D2A" stroke-width="2"/><path d="M15 36 L14 42 M21 36 L22 42" stroke="#1B1D2A" stroke-width="1.5"/></svg>',
+  rocket: '<svg viewBox="0 0 30 64"><path class="flame" d="M10 48 Q15 64 20 48Z" fill="#FFC531"/><path d="M15 2 Q26 14 24 40 L20 48 H10 L6 40 Q4 14 15 2Z" fill="#F2F1EC" stroke="#1B1D2A" stroke-width="2.2" stroke-linejoin="round"/><circle cx="15" cy="22" r="4.5" fill="#2F5BEA" stroke="#1B1D2A" stroke-width="2"/><path d="M6 34 L1 46 L7 44 M24 34 L29 46 L23 44" fill="#FF5A4E" stroke="#1B1D2A" stroke-width="2" stroke-linejoin="round"/></svg>',
+  flag: '<svg viewBox="0 0 30 44"><path d="M5 42 V4" stroke="#1B1D2A" stroke-width="3" stroke-linecap="round"/><path d="M6 5 L27 11 L6 18Z" fill="#FF5A4E" stroke="#1B1D2A" stroke-width="2" stroke-linejoin="round"/></svg>',
 };
-const ridgeX = (f) => 4 + 92 * f;
-const ridgeY = (f) => 96 - 88 * f;
 
 function mountainView(m, lessons, next) {
-  const units = [...new Set(lessons.map((l) => l.unit))];
-  const col = h('div', { class: 'mountain-side' });
-  units.forEach((u, ui) => col.append(campSection(u, ui, units.length, next)));
-  return col;
-}
-
-function campSection(u, ui, count, next) {
-  const z = ZONES[Math.min(ZONES.length - 1, ui)];
-  const top = ui === count - 1;
-  const ls = u.lessons;
-  const H = ls.length * 116 + (top ? 150 : 70);
-  const fAt = (k) => (top ? 0.08 : 0.12) + ((top ? 0.62 : 0.76) * k) / (ls.length - 1);
-  // The ridge, a little jagged, and the cliff face below it with rock layers.
-  const steps = 18;
-  const fMax = top ? 0.86 : 1;
-  const ridge = Array.from({ length: steps + 1 }, (_, k) => {
-    const f = (k / steps) * fMax;
-    return [ridgeX(f), ridgeY(f) + (k && k < steps ? (k % 3 === 1 ? 1.4 : k % 3 === 2 ? -1 : 0) : 0)];
-  });
-  if (top) ridge.push([ridgeX(fMax) + 3, 2]); // the summit, hidden in cloud
+  const W = 360, n = lessons.length;
+  const summitY = 300, H = n * 118 + summitY + 260;
+  const summitX = 252;
+  // Where the ridge is at height y: from the bottom left up to the summit,
+  // with shoulders and bumps along the way.
+  const edge = (y) => {
+    const p = clamp((H - y) / (H - summitY), 0, 1);
+    return 24 + (summitX - 24) * Math.pow(p, 1.15) + (1 - p) * (24 * Math.sin(y / 160) + 9 * Math.sin(y / 47));
+  };
+  const ys = [];
+  for (let y = H; y > summitY; y -= 10) ys.push(y);
+  const ridge = [...ys.map((y) => [edge(y), y]), [summitX, summitY]];
   const pts = (ps) => ps.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const shifted = (dy) => ridge.map(([x, y]) => [x, Math.min(100, y + dy)]);
-  const gid = 'zg' + u.id.replace(/\W/g, '');
-  const svg = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${z.body[0]}"/><stop offset="1" stop-color="${z.body[1]}"/></linearGradient></defs>
-    <polygon points="0,100 ${pts(ridge)} 100,${top ? 2 : 0} 100,100" fill="url(#${gid})"/>
-    <polygon points="${pts([...shifted(15), ...shifted(18).reverse()])}" fill="${z.strata}" opacity=".3"/>
-    <polygon points="${pts([...shifted(33), ...shifted(35).reverse()])}" fill="${z.strata}" opacity=".25"/>
-    <polygon points="${pts([...shifted(54), ...shifted(57).reverse()])}" fill="${z.strata}" opacity=".2"/>
-    <polygon points="${pts([...ridge, ...shifted(ui >= 3 ? 4.5 : 3).reverse()])}" fill="${z.edge}"/>
+  const offset = (dx) => ridge.map(([x, y]) => [x + dx * (0.5 + 0.5 * (y - summitY) / (H - summitY)), y]);
+  const far = [[summitX + 40, summitY + 70], [summitX + 70, summitY + 60], [W + 10, summitY + 150], [W + 10, H + 10]];
+  const body = [[-10, H + 10], ...ridge, ...far];
+  const svg = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    <defs>
+      <linearGradient id="mBody" gradientUnits="userSpaceOnUse" x1="0" y1="${H}" x2="0" y2="${summitY}">
+        <stop offset="0" stop-color="#7CB85A"/><stop offset=".22" stop-color="#4F8A3A"/><stop offset=".42" stop-color="#3F6E35"/>
+        <stop offset=".55" stop-color="#6E6863"/><stop offset=".75" stop-color="#8B8681"/><stop offset=".9" stop-color="#C5CFDC"/><stop offset="1" stop-color="#FFFFFF"/>
+      </linearGradient>
+      <linearGradient id="mEdge" gradientUnits="userSpaceOnUse" x1="0" y1="${H}" x2="0" y2="${summitY}">
+        <stop offset="0" stop-color="#8B5A2B"/><stop offset=".45" stop-color="#6B4A30"/><stop offset=".6" stop-color="#5A5550"/><stop offset=".8" stop-color="#E9EEF5"/><stop offset="1" stop-color="#FFFFFF"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${pts(body)}" fill="url(#mBody)"/>
+    ${[40, 95, 170, 260].map((dx, k) => `<polyline points="${pts(offset(dx))}" fill="none" stroke="#1B1D2A" stroke-opacity="${0.12 - k * 0.02}" stroke-width="${9 - k * 1.5}" stroke-linejoin="round"/>`).join('')}
+    <polyline points="${pts(ridge)}" fill="none" stroke="url(#mEdge)" stroke-width="10" stroke-linejoin="round"/>
   </svg>`;
-  const scene = h('div', { class: 'scene', style: { height: H + 'px' } }, h('div', { class: 'scene-art', html: svg }));
-  const place = (f, cls, child, dx = 0, dy = 0) => {
-    const el = h('div', { class: cls, style: { left: `calc(${ridgeX(f)}% + ${dx}px)`, top: `calc(${ridgeY(f)}% + ${dy}px)` } }, child);
-    scene.append(el);
+  const wrap = h('div', { class: 'big-mountain', style: { aspectRatio: `${W} / ${H}` } }, h('div', { class: 'bm-sky' }), h('div', { class: 'bm-art', html: svg }));
+  const pct = (v, of) => (v / of) * 100 + '%';
+  const at = (x, y, cls, child, extra = {}) => {
+    const el = h('div', { class: cls, style: { left: pct(x, W), top: pct(y, H), ...extra } }, child);
+    wrap.append(el);
     return el;
   };
-  // Scenery on the slope and in the sky.
-  z.decor.forEach((d, k) => {
-    const f = 0.18 + k * 0.2;
-    const depth = 46 + ((k * 31 + ui * 17) % 3) * 30;
-    const nearStop = ls.some((l, j) => Math.abs(fAt(j) - f) < 0.09) && depth < 80;
-    if (!nearStop && ridgeY(f) + (depth / H) * 100 < 94 && f < (top ? 0.75 : 0.95)) place(f, 'decor', h('div', { html: DECOR[d] }), 14 + (k % 2) * 16, depth);
-  });
-  [[10, 12], [36, 30], [18, 48]].slice(0, 2 + (ui % 2)).forEach(([x, y], k) => {
-    scene.append(h('div', { class: 'sky-bit' + (k === 2 ? ' bird' : ''), style: { left: x + (ui * 7) % 20 + '%', top: y + '%' }, html: DECOR[k === 2 ? 'bird' : 'cloud'] }));
-  });
-  // The lessons, on the ridge.
-  ls.forEach((l, k) => {
+  // In the sky: stars near the top, a rocket, planes, a balloon, clouds and birds lower down.
+  for (let k = 0; k < 14; k++) at((k * 53) % 230 + 10, (k * 37) % 260 + 10, 'bm-star', '');
+  at(70, 90, 'bm-rocket', h('div', { html: DECOR.rocket }));
+  at(-60, H * 0.22, 'bm-plane', h('div', { html: DECOR.plane }), { '--dur': '16s' });
+  at(-60, H * 0.38, 'bm-plane rev', h('div', { html: DECOR.plane }), { '--dur': '21s', animationDelay: '-8s' });
+  at(40, H * 0.5, 'bm-balloon', h('div', { html: DECOR.balloon }));
+  [0.3, 0.46, 0.6, 0.74, 0.88].forEach((f, k) => at(10 + (k * 61) % 120, H * f, 'bm-cloud', h('div', { html: DECOR.cloud }), { '--dur': 26 + k * 6 + 's', animationDelay: -k * 5 + 's' }));
+  [0.7, 0.78, 0.86, 0.93].forEach((f, k) => at(20 + (k * 47) % 110, H * f, 'bm-bird', h('div', { html: DECOR.bird }), { '--dur': 9 + k * 2 + 's', animationDelay: -k * 2 + 's' }));
+  // Altitude marks along the left.
+  const done = lessons.filter((l) => lessonDone(l.id)).length;
+  for (let k = 1; k <= 4; k++) {
+    const y = H - (H - summitY) * (k / 5);
+    at(4, y, 'bm-alt', `${fmtNum(Math.round((m.height * k) / 5))} m`);
+  }
+  // Scenery on the mountain, changing with height.
+  for (let y = H - 60, k = 0; y > summitY + 60; y -= 70, k++) {
+    const p = (H - y) / (H - summitY);
+    const kind = p < 0.25 ? ['tree', 'bush', 'tree', 'pine'][k % 4] : p < 0.45 ? ['pine', 'tree', 'cabin', 'pine'][k % 4] : p < 0.7 ? ['rock', 'tent', 'rock', 'pine'][k % 4] : ['rock', 'snow', 'snow', 'rock'][k % 4];
+    const x = edge(y) + 50 + ((k * 47) % 120);
+    if (x < W - 20) at(x, y, 'bm-decor', h('div', { html: DECOR[kind] }));
+  }
+  // The summit: a flag with the mountain's name.
+  at(summitX, summitY, 'bm-summit', [h('div', { class: 'bm-flag', html: DECOR.flag }), h('div', { class: 'bm-name' }, h('b', {}, m.name), h('span', {}, `${fmtNum(m.height)} m`))]);
+  // The lessons, evenly up the ridge.
+  let lastUnit = null;
+  lessons.forEach((l, i) => {
+    const y = H - 110 - (i * (H - 110 - (summitY + 120))) / (n - 1);
+    const x = edge(y) + 16;
     const isDone = lessonDone(l.id), open = lessonOpen(l), isNext = next && next.id === l.id;
     const btn = h('button', {
       class: 'stop' + (isDone ? ' done' : '') + (isNext ? ' next' : '') + (open ? '' : ' locked') + (l.kind === 'story' ? ' story' : ''),
-      'data-lesson': l.id, 'aria-label': `${u.title} ${l.kind === 'story' ? t('path.story') : t('path.lesson', { n: l.n })}`,
+      'data-lesson': l.id, 'aria-label': `${l.unit.title} ${l.kind === 'story' ? t('path.story') : t('path.lesson', { n: l.n })}`,
     }, isDone ? icon('check') : !open ? icon('lock') : l.kind === 'story' ? icon('book') : String(l.n));
     btn.addEventListener('click', () => {
       if (!open) { Sfx.bad(); toast(t('path.lockedMsg')); return; }
       Sfx.select();
       openLesson(l);
     });
-    place(fAt(k), 'stop-spot', btn);
-    if (isNext) place(fAt(k), 'you', lookAvatar(myLook(), 'sm'), 0, -62);
+    at(x, y, 'stop-spot', btn);
+    if (isNext) at(x, y, 'you', lookAvatar(myLook(), 'sm'));
+    if (l.unit !== lastUnit) {
+      lastUnit = l.unit;
+      const ud = l.unit.lessons.filter((x2) => lessonDone(x2.id)).length;
+      at(x, y, 'bm-unit' + (x > 150 ? ' left' : '') + (open ? '' : ' locked'),
+        [h('small', {}, t('path.unit', { n: l.unit.n + 1 })), h('b', {}, l.unit.title), h('span', {}, `${ud}/4`)]);
+    }
   });
-  if (top) {
-    const peak = place(fMax, 'peak-cloud', [h('div', { class: 'cloud-shape' }), h('div', { class: 'cloud-q' }, '?')], 0, -20);
-    peak.style.top = '10px';
-  }
-  // The camp's name, up in the sky.
-  const done = ls.filter((l) => lessonDone(l.id)).length;
-  scene.append(h('div', { class: 'camp-tag' + (lessonOpen(ls[0]) ? '' : ' locked') },
-    h('small', {}, t('path.unit', { n: ui + 1 })), h('b', {}, u.title), h('span', {}, `${done}/${ls.length}`)));
-  return h('section', { class: 'camp z' + ui }, scene);
+  at(edge(H - 30) + 30, H - 26, 'base-camp', t('mtn.base'));
+  return wrap;
 }
 
 // Badges for the mountains you've climbed (tap to see one again).
@@ -372,7 +388,7 @@ function openCards() {
 
 // ------------------------------------------------------------------ Shop tab
 const SHOP_ITEMS = [
-  { id: 'boost', ic: 'bolt', cost: 150, apply: () => { Store.data.boostUntil = Math.max(Date.now(), Store.data.boostUntil || 0) + 15 * 60e3; } },
+  { id: 'boost', ic: 'potion', fb: 'bolt', cost: 150, apply: () => { Store.data.boostUntil = Math.max(Date.now(), Store.data.boostUntil || 0) + 15 * 60e3; } },
   { id: 'freeze', ic: 'snowflake', cost: 300, max: () => (Store.data.freezes || 0) >= 2, apply: () => { Store.data.freezes = (Store.data.freezes || 0) + 1; } },
 ];
 
@@ -398,7 +414,7 @@ function renderShop() {
       const maxed = it.max && it.max();
       const extra = it.id === 'boost' && Store.boosted() ? t('shop.boostOn', { n: Math.ceil((d.boostUntil - Date.now()) / 60e3) }) : it.id === 'freeze' ? t('shop.have', { n: d.freezes || 0 }) : '';
       return h('div', { class: 'card shop-row' },
-        h('div', { class: 'pc-icon' }, icon(it.ic)),
+        h('div', { class: 'pc-icon' }, icon(it.ic, '', it.fb)),
         h('div', { class: 'pc-text' }, h('b', {}, t('shop.' + it.id)), h('span', {}, t('shop.' + it.id + 'Sub')), extra ? h('em', {}, extra) : null),
         h('button', { class: 'btn small price', disabled: maxed || null, onclick: () => buy(it.cost, 'coins', it.apply) }, icon('coin'), fmtNum(it.cost)));
     }),
@@ -438,10 +454,21 @@ function renderMe() {
     input.addEventListener('change', () => { Store.s[key] = input.checked; Store.save(); Sfx.tap(); });
     return h('label', { class: 'setting' }, h('span', {}, label), h('span', { class: 'switch' }, input, h('i')));
   };
-  const seg = (key, opts, onChange) => h('div', { class: 'seg' }, ...opts.map(([v, label]) => h('button', {
-    class: Store.s[key] === v ? 'on' : '',
-    onclick: () => { Store.s[key] = v; Store.save(); onChange && onChange(); App.refresh(); },
-  }, label)));
+  // A row of choices that just moves its highlight (nothing reloads).
+  const seg = (key, opts, onChange) => {
+    const row = h('div', { class: 'seg' });
+    opts.forEach(([v, label]) => {
+      const b = h('button', { class: Store.s[key] === v ? 'on' : '' }, label);
+      b.addEventListener('click', () => {
+        Store.s[key] = v; Store.save();
+        row.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+        Sfx.tap();
+        if (onChange) onChange();
+      });
+      row.append(b);
+    });
+    return row;
+  };
   const mins = Math.round((d.totalSecs || 0) / 60);
   return h('div', { class: 'page' },
     profileBanner(d.profile),

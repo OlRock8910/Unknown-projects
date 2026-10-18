@@ -245,7 +245,8 @@ const Sfx = {
   },
   semis: (n) => Math.pow(2, n / 12),
 
-  tap() { if (!this.on()) return; this.noise(0, 0.03, { vol: 0.12, type: 'highpass', freq: 3000 }); this.note(1400, 0, 0.04, { type: 'triangle', vol: 0.04, wet: false }); },
+  // A soft, low beep for taps (no clicky ticks).
+  tap() { if (!this.on()) return; this.note(330, 0, 0.07, { vol: 0.09, wet: false }); },
   select() { if (!this.on()) return; this.note(740, 0, 0.09, { type: 'triangle', vol: 0.09 }); this.note(1110, 0.02, 0.07, { vol: 0.04 }); },
   // "da-DUN": two bells a fifth apart, higher with every answer in a row.
   good(streak = 0) {
@@ -260,7 +261,8 @@ const Sfx = {
   },
   bad() { if (!this.on()) return; this.note(330, 0, 0.18, { type: 'triangle', vol: 0.16, to: 262 }); this.note(220, 0.12, 0.32, { type: 'triangle', vol: 0.14, to: 165 }); },
   coin() { if (!this.on()) return; this.note(1976, 0, 0.06, { type: 'square', vol: 0.045 }); this.note(2637, 0.055, 0.32, { type: 'square', vol: 0.045 }); this.bell(2637, 0.055, 0.05, 0.4); },
-  tick() { if (!this.on()) return; this.note(2200, 0, 0.03, { type: 'triangle', vol: 0.05, wet: false }); },
+  // A soft low beep (counting up rewards).
+  tick() { if (!this.on()) return; this.note(392, 0, 0.05, { vol: 0.06, wet: false }); },
   // A deep thump for big moments.
   boom() {
     if (!this.on()) return;

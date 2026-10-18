@@ -6,6 +6,7 @@ const I18N_LOCALE = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', de: 'de-DE', pt: 'p
 
 const STRINGS = {
   en: {
+    'ex.noGloss': 'No hint for this word',
     'look.top': 'Tops',
     'look.pants': 'Trousers',
     'look.hat': 'Hats',
@@ -248,6 +249,7 @@ const STRINGS = {
   },
 
   es: {
+    'ex.noGloss': 'No hay pista para esta palabra',
     'look.top': 'Camisetas',
     'look.pants': 'Pantalones',
     'look.hat': 'Gorros',
@@ -490,6 +492,7 @@ const STRINGS = {
   },
 
   fr: {
+    'ex.noGloss': 'Pas d’indice pour ce mot',
     'look.top': 'Hauts',
     'look.pants': 'Pantalons',
     'look.hat': 'Chapeaux',
@@ -732,6 +735,7 @@ const STRINGS = {
   },
 
   de: {
+    'ex.noGloss': 'Kein Hinweis für dieses Wort',
     'look.top': 'Oberteile',
     'look.pants': 'Hosen',
     'look.hat': 'Hüte',
@@ -974,6 +978,7 @@ const STRINGS = {
   },
 
   pt: {
+    'ex.noGloss': 'Sem dica para esta palavra',
     'look.top': 'Camisetas',
     'look.pants': 'Calças',
     'look.hat': 'Chapéus',

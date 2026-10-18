@@ -44,11 +44,16 @@ const ICON_PATHS = {
   heart: '<path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/>',
   hint: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
 };
-function icon(name, cls = '') {
+// The app's icon called name: the drawn picture from img/icons/ when there
+// is one, otherwise the line icon (or the line icon called fallback).
+function icon(name, cls = '', fallback = null) {
+  if (typeof ART_FILES !== 'undefined' && ART_FILES.has(`icons/${name}.webp`)) {
+    return h('img', { class: 'ic img ' + cls, src: `img/icons/${name}.webp`, alt: '', draggable: 'false' });
+  }
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('viewBox', '0 0 24 24');
   s.setAttribute('class', 'ic ' + cls);
   s.setAttribute('aria-hidden', 'true');
-  s.innerHTML = ICON_PATHS[name] || ICON_PATHS.star;
+  s.innerHTML = ICON_PATHS[name] || ICON_PATHS[fallback] || ICON_PATHS.star;
   return s;
 }

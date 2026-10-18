@@ -202,7 +202,7 @@ const GAMES = [];
 const addGame = (g) => GAMES.push(g);
 
 addGame({
-  id: 'bubble', icon: 'sparkle', goal: 12,
+  id: 'bubble', art: 'bubble', icon: 'sparkle', goal: 12,
   play(S) {
     S.countdown(60);
     const prompt = h('div', { class: 'g-prompt-holder' });
@@ -247,7 +247,7 @@ addGame({
 });
 
 addGame({
-  id: 'rain', icon: 'target', goal: 12,
+  id: 'rain', art: 'raindrop', icon: 'target', goal: 12,
   play(S) {
     S.setLives(3);
     const prompt = h('div', { class: 'g-prompt-holder' });
@@ -289,7 +289,7 @@ addGame({
 });
 
 addGame({
-  id: 'whack', icon: 'star', goal: 12,
+  id: 'whack', art: 'mallet', icon: 'star', goal: 12,
   play(S) {
     S.countdown(45);
     const prompt = h('div', { class: 'g-prompt-holder' });
@@ -338,7 +338,7 @@ addGame({
 });
 
 addGame({
-  id: 'memory', icon: 'cards', goal: 6,
+  id: 'memory', art: 'memory', icon: 'cards', goal: 6,
   play(S) {
     const words = [];
     for (const w of pickGameWords(14)) if (words.length < 6 && words.every((x) => !clashW(x, w))) words.push(w);
@@ -378,7 +378,7 @@ addGame({
 });
 
 addGame({
-  id: 'truefalse', icon: 'check', goal: 15,
+  id: 'truefalse', art: 'truefalse', icon: 'check', goal: 15,
   play(S) {
     S.countdown(60);
     const card = h('div', { class: 'tf' });
@@ -409,7 +409,7 @@ addGame({
 });
 
 addGame({
-  id: 'quiz', icon: 'hint', goal: 7,
+  id: 'quiz', art: 'quiz', icon: 'hint', goal: 7,
   play(S) {
     const words = pickGameWords(10);
     roundsGame(S, {
@@ -425,7 +425,7 @@ addGame({
 });
 
 addGame({
-  id: 'survival', icon: 'heart', goal: 15,
+  id: 'survival', art: 'heart', icon: 'heart', goal: 15,
   play(S) {
     let last = null;
     roundsGame(S, {
@@ -444,7 +444,7 @@ addGame({
 });
 
 addGame({
-  id: 'listen', icon: 'headphones', goal: 7, needsVoice: true,
+  id: 'listen', art: 'headphones', icon: 'headphones', goal: 7, needsVoice: true,
   play(S) {
     const words = pickGameWords(10);
     roundsGame(S, {
@@ -458,7 +458,7 @@ addGame({
 });
 
 addGame({
-  id: 'oddone', icon: 'users', goal: 7,
+  id: 'oddone', art: 'oddone', icon: 'users', goal: 7,
   play(S) {
     roundsGame(S, {
       rounds: 10, time: 12,
@@ -474,7 +474,7 @@ addGame({
 });
 
 addGame({
-  id: 'scramble', icon: 'keyboard', goal: 5,
+  id: 'scramble', art: 'scramble', icon: 'keyboard', goal: 5,
   play(S) {
     const words = pickGameWords(8, (w) => canSpell(w) && !/\s/.test(w.bare));
     let i = 0;
@@ -526,7 +526,7 @@ addGame({
 });
 
 addGame({
-  id: 'hangman', icon: 'heart', goal: 4,
+  id: 'hangman', art: 'hearts', icon: 'heart', goal: 4,
   play(S) {
     const words = pickGameWords(5, (w) => canSpell(w) && w.bare.length >= 4);
     let i = 0;
@@ -569,7 +569,7 @@ addGame({
 });
 
 addGame({
-  id: 'duel', icon: 'swords', duel: true,
+  id: 'duel', art: 'swords', icon: 'swords', duel: true,
   play() { openDuel(); },
 });
 
@@ -672,7 +672,7 @@ function renderGamesList() {
   return h('div', { class: 'games-wrap' },
     h('h2', { class: 'section' }, t('game.title')),
     h('div', { class: 'game-grid' }, ...GAMES.filter((g) => !g.needsVoice || speakable()).map((g) => {
-      const b = h('button', { class: 'game-card' }, h('div', { class: 'gc-icon' }, icon(g.icon)), h('b', {}, t('game.' + g.id)), h('small', {}, t('game.' + g.id + 'Sub')),
+      const b = h('button', { class: 'game-card' }, h('div', { class: 'gc-icon' }, icon(g.art, '', g.icon)), h('b', {}, t('game.' + g.id)), h('small', {}, t('game.' + g.id + 'Sub')),
         best[Store.pair + ':' + g.id] ? h('span', { class: 'gc-best' }, icon('trophy'), fmtNum(best[Store.pair + ':' + g.id])) : null);
       b.addEventListener('click', () => {
         if (learnedWords().length < 4) { toast(t('practice.learnFirst')); return; }

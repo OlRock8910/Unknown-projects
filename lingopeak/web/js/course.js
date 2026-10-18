@@ -57,7 +57,13 @@ function buildCourse() {
       units.push(unit);
     });
   });
-  C = { nat, tgt, words, byId, units, lessons, lessonById: Object.fromEntries(lessons.map((l) => [l.id, l])) };
+  // Every way each word can be written, for looking words up when tapped.
+  const forms = new Map();
+  const artRe = ARTICLES[tgt] ? new RegExp(`^(${ARTICLES[tgt]})\\s+|^l['’]`, 'i') : null;
+  for (const w of words) {
+    for (const f of [...w.tAll, w.bare, ...(artRe ? w.tAll.map((x) => x.replace(artRe, '')) : [])]) if (!forms.has(normText(f))) forms.set(normText(f), w);
+  }
+  C = { nat, tgt, words, byId, units, lessons, forms, lessonById: Object.fromEntries(lessons.map((l) => [l.id, l])) };
   return C;
 }
 
@@ -139,3 +145,18 @@ function distractorsFor(w, n, pool) {
 
 // Splits a sentence into word tiles (punctuation dropped).
 const tokens = (s) => String(s).replace(/[¿?¡!.,;:"“”«»]/g, ' ').split(/\s+/).filter(Boolean);
+
+// What a word in a sentence means: a phrase from the course that includes it
+// (e.g. "buenos días"), the word itself, or the glossary of sentence words.
+function lookupWord(toks, i) {
+  const n = toks.length;
+  for (let len = 3; len >= 1; len--) {
+    for (let start = Math.max(0, i - len + 1); start <= i && start + len <= n; start++) {
+      const w = C.forms.get(normText(toks.slice(start, start + len).join(' ')));
+      if (w) return { text: toks.slice(start, start + len).join(' '), meaning: w.nAll.slice(0, 2).join(' / ') };
+    }
+  }
+  const g = (LP_GLOSS[C.tgt] || {})[normText(toks[i])];
+  if (g && g[C.nat]) return { text: toks[i], meaning: g[C.nat] };
+  return null;
+}

@@ -243,7 +243,45 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   await page.evaluate(() => { App.closeOverlay(); App.show('me'); });
   if (!(await page.$('.banner .badge'))) fail('no badge on the banner after a mountain');
   await page.evaluate(() => App.show('learn'));
-  if (!/Snowdon/.test(await page.textContent('#view')) || /Ben Nevis/.test(await page.textContent('#view'))) fail('mountain names: climbed one should show, the next should stay hidden');
+  // Only the mountain you're on is shown (with its name at the summit), plus badges for climbed ones.
+  const view = await page.textContent('#view');
+  if (!/Ben Nevis/.test(view) || !/Snowdon/.test(view) || /Mulhac/.test(view) || (await page.$$('.big-mountain')).length !== 1) fail('mountain view: should show just Ben Nevis, with Snowdon climbed');
+
+  // Tapping a word in what a character says shows what it means.
+  const gloss = await page.evaluate(async () => {
+    const out = [];
+    for (const pair of [['en', 'es'], ['en', 'de'], ['es', 'fr'], ['de', 'pt'], ['fr', 'en']]) {
+      Store.data.native = pair[0]; Store.data.target = pair[1]; UI.lang = pair[0]; buildCourse();
+      let missing = 0, total = 0;
+      for (const u of C.units) for (const s of u.sentences) {
+        const toks = tokens(s.t);
+        toks.forEach((_, i) => { total++; if (!lookupWord(toks, i)) missing++; });
+      }
+      out.push(`${pair.join('>')}:${missing}/${total}`);
+    }
+    Store.data.native = 'en'; Store.data.target = 'de'; UI.lang = 'en'; buildCourse();
+    const s = C.units[0].sentences[0];
+    openSession([{ kind: 'decode', sentence: s, gen: () => EX.decode(s) }], { practice: 'review' });
+    document.querySelector('.bubble-text .tw').click();
+    const pop = document.querySelector('.gloss');
+    out.push(pop ? 'popup:' + pop.textContent : 'no popup');
+    App.closeOverlay();
+    return out;
+  });
+  if (gloss.some((x) => /:(\d+)\//.test(x) && Number(x.match(/:(\d+)\//)[1]) > 0)) fail('words with no translation when tapped: ' + gloss.join(' '));
+  if (!/^popup:\S/.test(gloss.at(-1))) fail('tapping a word showed nothing: ' + gloss.at(-1));
+
+  // Changing a setting doesn't jump back to the top of the page.
+  const kept = await page.evaluate(() => {
+    App.show('me');
+    const view = document.querySelector('#view');
+    view.scrollTop = 300;
+    const before = view.scrollTop;
+    [...document.querySelectorAll('.seg button')].find((b) => b.textContent === t('me.fast')).click();
+    App.refresh();
+    return [before > 0, view.scrollTop === before, Store.s.rate];
+  });
+  if (kept.join() !== 'true,true,1.15') fail('settings jump the page: ' + kept);
 
   // Typing: accents and a small typo are forgiven, a different word isn't.
   const typed = await page.evaluate(() => [markTyped('por favore', ['por favor']).ok, markTyped('adios', ['adiós']).how, markTyped('favor', ['por favor']).ok, markTyped('hund', ['der Hund']).ok]);

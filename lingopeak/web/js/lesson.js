@@ -71,12 +71,47 @@ function spareTiles(sentence, others, n) {
 // The host of a unit: one of the cast, the same each time.
 const hostOf = (unit) => CAST[(unit.mountain.index * 5 + unit.n) % CAST.length];
 
+// A sentence in the new language where every word can be tapped to see
+// what it means (and hear it).
+function tappable(text) {
+  const parts = String(text).split(/(\s+)/);
+  const toks = tokens(text);
+  let k = -1;
+  return h('span', { class: 'tappable' }, ...parts.map((p) => {
+    if (/^\s+$/.test(p) || !p) return p;
+    const core = p.replace(/[¿?¡!.,;:"“”«»]/g, '');
+    if (!core) return p;
+    const i = ++k;
+    const b = h('button', { class: 'tw' }, p);
+    b.addEventListener('click', (e) => { e.stopPropagation(); showGloss(b, toks, i); });
+    return b;
+  }));
+}
+function showGloss(el, toks, i) {
+  document.querySelectorAll('.gloss').forEach((g) => g.remove());
+  document.querySelectorAll('.tw.on').forEach((x) => x.classList.remove('on'));
+  const found = lookupWord(toks, i);
+  el.classList.add('on');
+  Sfx.tap();
+  Voice.say(found ? found.text : toks[i]);
+  const pop = h('div', { class: 'gloss' }, found ? [h('b', {}, found.text), h('span', {}, found.meaning)] : h('span', {}, t('ex.noGloss')));
+  document.body.append(pop);
+  const r = el.getBoundingClientRect();
+  const w = pop.offsetWidth;
+  pop.style.left = clamp(r.left + r.width / 2 - w / 2, 8, window.innerWidth - w - 8) + 'px';
+  pop.style.top = r.top - pop.offsetHeight - 10 + 'px';
+  pop.style.setProperty('--ax', r.left + r.width / 2 - parseFloat(pop.style.left) + 'px');
+  const close = () => { pop.remove(); el.classList.remove('on'); document.removeEventListener('pointerdown', close, true); };
+  setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
+  setTimeout(close, 4000);
+}
+
 // A character saying something, in a speech bubble.
 function speaker(c, text, opts = {}) {
   return h('div', { class: 'speaker' + (opts.big ? ' big' : '') },
     castArt(c.id, '', 'speaker-art'),
     h('div', { class: 'bubble' },
-      opts.hidden ? null : h('div', { class: 'bubble-text' }, text),
+      opts.hidden ? null : h('div', { class: 'bubble-text' }, tappable(text)),
       h('div', { class: 'bubble-btns' }, sayBtn(text), slowBtn(text))));
 }
 

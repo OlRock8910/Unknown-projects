@@ -35,6 +35,7 @@ p { margin: 0; line-height: 1.45; }
 #app { height: 100%; display: flex; flex-direction: column; }
 #view { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
 .page { padding: calc(10px + var(--safe-top)) 16px 28px; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; animation: up 0.3s ease both; }
+.page.still { animation: none; }
 @keyframes up { from { opacity: 0; transform: translateY(10px); } }
 .page-title { font-size: 28px; margin-top: 4px; }
 .section { font-size: 15px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 10px 2px -2px; }
@@ -673,3 +674,90 @@ p { margin: 0; line-height: 1.45; }
 .gw-day.on i { background: var(--gold); border-color: var(--gold-d); }
 .gw-day small { font-size: 12px; font-weight: 900; color: var(--muted); }
 .center { text-align: center; }
+
+/* ------------------------------------------------------------ tap a word to translate it */
+.tappable { display: inline; }
+.tw { display: inline; font: inherit; color: inherit; padding: 0 1px; border-radius: 6px; background: none; border-bottom: 2px dashed color-mix(in srgb, var(--muted) 55%, transparent); }
+.tw.on { background: var(--blue-l); color: var(--blue); border-bottom-color: var(--blue); }
+.gloss { position: fixed; z-index: 70; max-width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 14px; background: var(--ink); color: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,0.25); animation: glossIn 0.18s ease-out; pointer-events: none; }
+.gloss b { font-weight: 900; font-size: 15px; color: var(--gold); }
+.gloss span { font-size: 15px; font-weight: 700; }
+.gloss::after { content: ''; position: absolute; top: 100%; left: var(--ax, 50%); margin-left: -7px; border: 7px solid transparent; border-top-color: var(--ink); }
+@keyframes glossIn { from { opacity: 0; transform: translateY(6px); } }
+
+/* ------------------------------------------------------------ slide-ups */
+#overlay.open > .session, #overlay.open > .game, #overlay.open > .results, #overlay.open > .reveal, #overlay.open > .page { animation: slideUp 0.32s cubic-bezier(.2,.8,.3,1); }
+@keyframes slideUp { from { transform: translateY(40px); opacity: 0; } }
+.ses-foot { position: relative; transition: background 0.2s; }
+.ses-foot.show { animation: sheetUp 0.32s cubic-bezier(.2,.9,.3,1.15); box-shadow: 0 -8px 24px rgba(0,0,0,0.08); border-radius: 22px 22px 0 0; }
+@keyframes sheetUp { from { transform: translateY(100%); } }
+.ses-foot.show .foot-cast { animation: castPop 0.5s cubic-bezier(.3,1.6,.5,1) 0.1s both; }
+@keyframes castPop { from { transform: translateY(40px) scale(0.6); opacity: 0; } }
+
+/* ------------------------------------------------------------ one big mountain (Learn) */
+.big-mountain { position: relative; width: calc(100% + 32px); margin: 4px -16px 0; overflow: hidden; }
+.bm-sky { position: absolute; inset: 0; background: linear-gradient(to bottom, #1E2A6B 0%, #3C5BC9 12%, #8FB2F5 30%, #CFE0FF 55%, #EEF3FF 100%); }
+[data-theme=dark] .bm-sky { background: linear-gradient(to bottom, #050817 0%, #121A45 20%, #1E2A57 55%, #263566 100%); }
+.bm-art, .bm-art svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.m-far { fill: #A9B6D9; opacity: 0.6; }
+[data-theme=dark] .m-far { fill: #3A4775; }
+.big-mountain > div:not(.bm-sky):not(.bm-art) { position: absolute; }
+.bm-star { width: 3px; height: 3px; border-radius: 50%; background: #fff; opacity: 0.8; animation: twinkle 2.4s ease-in-out infinite; }
+.bm-star:nth-of-type(3n) { animation-delay: -1.2s; } .bm-star:nth-of-type(4n) { width: 2px; height: 2px; }
+@keyframes twinkle { 50% { opacity: 0.2; } }
+.bm-rocket { width: 30px; animation: rocket 6s ease-in-out infinite; }
+.bm-rocket svg { width: 100%; display: block; }
+.bm-rocket .flame { animation: flame 0.15s steps(2) infinite; transform-origin: 15px 48px; }
+@keyframes flame { 50% { transform: scaleY(1.5); } }
+@keyframes rocket { 0% { transform: translate(0, 40px); } 50% { transform: translate(14px, -30px) rotate(6deg); } 100% { transform: translate(0, 40px); } }
+.bm-plane { width: 60px; animation: fly var(--dur) linear infinite; }
+.bm-plane.rev { animation-direction: reverse; }
+.bm-plane.rev svg { transform: scaleX(-1); }
+.bm-plane svg { width: 100%; display: block; }
+.bm-plane::before { content: ''; position: absolute; right: 100%; top: 40%; width: 80px; height: 3px; border-radius: 3px; background: linear-gradient(to left, rgba(255,255,255,0.8), transparent); }
+.bm-plane.rev::before { right: auto; left: 100%; background: linear-gradient(to right, rgba(255,255,255,0.8), transparent); }
+@keyframes fly { from { transform: translateX(0); } to { transform: translateX(560px); } }
+.bm-balloon { width: 34px; animation: float 7s ease-in-out infinite; }
+.bm-balloon svg { width: 100%; display: block; }
+@keyframes float { 50% { transform: translate(18px, -26px); } }
+.bm-cloud { width: 90px; opacity: 0.85; animation: drift var(--dur) ease-in-out infinite alternate; pointer-events: none; }
+[data-theme=dark] .bm-cloud { opacity: 0.18; }
+.bm-cloud svg { width: 100%; display: block; }
+@keyframes drift { to { transform: translateX(70px); } }
+.bm-bird { width: 22px; animation: birdFly var(--dur) ease-in-out infinite alternate; }
+.bm-bird svg { width: 100%; display: block; overflow: visible; }
+.bm-bird .wing { animation: flap 0.35s ease-in-out infinite alternate; transform-origin: 12px 8px; }
+[data-theme=dark] .bm-bird .wing { stroke: #CFD6EA; }
+@keyframes flap { to { transform: scaleY(0.4); } }
+@keyframes birdFly { 0% { transform: translate(0, 0); } 50% { transform: translate(60px, -14px); } 100% { transform: translate(110px, 6px); } }
+.bm-alt { transform: translateY(-50%); font-size: 11px; font-weight: 900; color: rgba(27,29,42,0.45); padding-left: 6px; border-left: 2px solid rgba(27,29,42,0.25); }
+[data-theme=dark] .bm-alt { color: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.25); }
+.bm-decor { transform: translate(-50%, -50%); pointer-events: none; }
+.bm-decor svg { width: 34px; display: block; }
+.bm-summit { transform: translate(-100%, -100%); margin-left: 8px; display: flex; flex-direction: row-reverse; align-items: flex-end; gap: 6px; z-index: 3; }
+.bm-flag { width: 30px; animation: wave 1.6s ease-in-out infinite; transform-origin: 5px 42px; }
+.bm-flag svg { width: 100%; display: block; }
+@keyframes wave { 50% { transform: skewY(-6deg); } }
+.bm-name { display: flex; flex-direction: column; padding: 6px 12px; margin-bottom: 30px; border-radius: 14px; background: var(--surface); border: 2px solid var(--line); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
+.bm-name b { font-size: 17px; font-weight: 1000; line-height: 1.1; }
+.bm-name span { font-size: 12px; font-weight: 800; color: var(--muted); }
+.big-mountain .stop-spot { transform: translate(-50%, -50%); z-index: 4; }
+.big-mountain .stop-spot .stop { position: relative; margin: 0; width: 58px; height: 54px; font-size: 20px; }
+.big-mountain .stop-spot .stop.next { width: 68px; height: 64px; }
+.big-mountain .you { transform: translate(-50%, calc(-50% - 62px)); z-index: 5; pointer-events: none; animation: youBob 1.4s ease-in-out infinite; }
+@keyframes youBob { 50% { margin-top: -6px; } }
+.bm-unit { transform: translate(44px, -50%); z-index: 3; display: flex; flex-direction: column; padding: 6px 10px; border-radius: 12px; background: var(--surface); border: 2px solid var(--line); max-width: 128px; }
+.bm-unit.left { transform: translate(calc(-100% - 44px), -50%); text-align: right; }
+.bm-unit small { font-size: 10.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px; color: var(--blue); }
+.bm-unit b { font-size: 14px; font-weight: 900; line-height: 1.15; }
+.bm-unit span { font-size: 11.5px; font-weight: 800; color: var(--muted); }
+.bm-unit.locked { opacity: 0.8; }
+.big-mountain .base-camp { transform: translate(-50%, -50%); z-index: 2; }
+
+/* drawn icons (from the art sheets) */
+img.ic { object-fit: contain; stroke: none; }
+.gc-icon img.ic, .pc-icon img.ic { width: 34px; height: 34px; }
+#tabs button img.ic { width: 28px; height: 28px; filter: grayscale(0.6); opacity: 0.75; }
+#tabs button.active img.ic { filter: none; opacity: 1; }
+.chip img.ic { width: 20px; height: 20px; }
+.stat img.ic { width: 30px; height: 30px; }

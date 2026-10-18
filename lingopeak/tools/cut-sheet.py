@@ -6,6 +6,7 @@ separate pictures with see-through backgrounds.
         banana shark dino astro penguin bee pizza knight avocado croissant
 
 Writes web/img/cast/banana.webp etc. Add a suffix with --suffix=-happy.
+Other grids: --cols=5 --rows=3 (then give 15 names).
 """
 import sys
 import numpy as np
@@ -60,7 +61,9 @@ def main():
     src, out_dir, names = args[0], args[1], args[2:]
     suffix = opts.get('suffix', '')
     size = int(opts.get('size', '0'))
-    assert len(names) == COLS * ROWS, 'need 10 names'
+    global COLS, ROWS
+    COLS, ROWS = int(opts.get('cols', COLS)), int(opts.get('rows', ROWS))
+    assert len(names) == COLS * ROWS, f'need {COLS * ROWS} names'
     sheet = np.array(Image.open(src).convert('RGB'))
     rgb, alpha = key_out_magenta(sheet)
     H, W = alpha.shape
