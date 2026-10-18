@@ -1,3 +1,5 @@
+<img src="docs/icon.png" width="96" align="right" alt="Infinink icon">
+
 # Infinink
 
 Endless paper for sketches, notes and ideas on Android phones and tablets. An infinite
