@@ -61,9 +61,18 @@ const Cloud = {
     if (e.offline) return 'auth.offline';
     const m = `${e.status} ${e.code} ${e.message}`;
     if (/429|rate|too many|security purposes/i.test(m)) return 'auth.tooMany';
+    // The email couldn't be sent (e.g. Supabase's own mailer only reaches the
+    // project's team until custom SMTP is set up).
+    if (/not.?authori[sz]ed|sending|smtp|signups? (are )?not allowed|signup_disabled/i.test(m)) return 'auth.cantSend';
+    if (/email_address_invalid|email.*invalid|invalid.*email/i.test(m)) return 'auth.badEmail';
     if (/otp|token|expired|invalid/i.test(m)) return 'auth.badCode';
-    if (/email/i.test(m)) return 'auth.badEmail';
-    return 'auth.offline';
+    return 'auth.failed';
+  },
+  // The message to show for a failed sign-in, with the server's reason when
+  // it's one only the app's owner can fix.
+  authMessage(e) {
+    const k = this.authError(e);
+    return t(k) + (['auth.cantSend', 'auth.failed'].includes(k) && e.message ? ` (${e.message})` : '');
   },
   // Emails a code (making the account if the email is new).
   async sendCode(email) {
@@ -332,7 +341,7 @@ function emailCodeForm(onCode, extra = null) {
         await Cloud.sendCode(e);
         email = e;
         codeStage();
-      } catch (x) { err.textContent = t(Cloud.authError(x)); Sfx.oops(); } finally { go.disabled = false; go.classList.remove('busy'); }
+      } catch (x) { err.textContent = Cloud.authMessage(x); Sfx.oops(); } finally { go.disabled = false; go.classList.remove('busy'); }
     };
     go.addEventListener('click', send);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
@@ -361,7 +370,7 @@ function emailCodeForm(onCode, extra = null) {
       err.textContent = '';
       verify.disabled = true; verify.classList.add('busy');
       try { await onCode(email, code, (k) => { err.textContent = t(k); Sfx.oops(); }); clearInterval(wait); }
-      catch (x) { err.textContent = t(Cloud.authError(x)); Sfx.oops(); input.select(); }
+      catch (x) { err.textContent = Cloud.authMessage(x); Sfx.oops(); input.select(); }
       finally { verify.disabled = false; verify.classList.remove('busy'); }
     };
     input.addEventListener('input', () => {
@@ -372,7 +381,7 @@ function emailCodeForm(onCode, extra = null) {
     verify.addEventListener('click', check);
     resend.addEventListener('click', async () => {
       if (left > 0) return;
-      try { await Cloud.sendCode(email); toast(t('auth.newCode')); startWait(); } catch (x) { err.textContent = t(Cloud.authError(x)); }
+      try { await Cloud.sendCode(email); toast(t('auth.newCode')); startWait(); } catch (x) { err.textContent = Cloud.authMessage(x); }
     });
     wrap.replaceChildren(
       h('div', { class: 'code-sent' }, icon('check', 'big', 'check'), h('b', {}, t('auth.codeTitle')), h('span', {}, t('auth.codeSent', { email }))),

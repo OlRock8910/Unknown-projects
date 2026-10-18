@@ -175,7 +175,7 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
       const path = String(u).replace('https://cloud.test', '');
       const body = o.body ? JSON.parse(o.body) : null;
       window.__calls.push(path.split('?')[0]);
-      if (path === '/auth/v1/otp') return json({});
+      if (path === '/auth/v1/otp') return body.email === 'blocked@example.com' ? json({ code: 400, error_code: 'email_address_not_authorized', msg: 'Email address "blocked@example.com" cannot be used as it is not authorized' }, 400) : json({});
       if (path === '/auth/v1/verify') return body.token === '123456' ? json({ access_token: 'at', refresh_token: 'rt', expires_in: 3600, user: { id: 'u1', email: body.email } }) : json({ error_code: 'otp_expired', msg: 'Token has expired or is invalid' }, 403);
       if (path.startsWith('/rest/v1/lp_progress')) return json([{ data: { epoch: 2, profile: { name: 'Mia', look: {} }, native: 'en', target: 'fr', xp: 321, courses: {} } }]);
       if (path.startsWith('/rest/v1/lp_profiles')) return json([{ name: 'Mia', code: 'ABC123' }]);
@@ -184,6 +184,11 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   });
   await page.goto(url);
   await page.click('.welcome .btn.ghost');
+  // When the server can't email that address, say so (not "that's not an email").
+  await page.fill('.auth-form input[type=email]', 'blocked@example.com');
+  await page.click('.auth-form .btn.primary');
+  await page.waitForFunction(() => /send a code/i.test(document.querySelector('.auth-form .err').textContent));
+  if (!/not authorized/.test(await page.textContent('.auth-form .err'))) fail('send failure does not show the reason');
   await page.fill('.auth-form input[type=email]', 'mia@example.com');
   await page.click('.auth-form .btn.primary');
   await page.waitForSelector('.code-field');

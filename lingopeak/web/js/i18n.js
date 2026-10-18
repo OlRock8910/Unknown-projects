@@ -304,6 +304,8 @@ const STRINGS = {
     'auth.badCode': 'That code is wrong or has expired',
     'auth.tooMany': 'Too many tries. Wait a minute, then try again.',
     'auth.newCode': 'New code sent',
+    'auth.cantSend': 'Couldn’t send a code to that email right now.',
+    'auth.failed': 'Something went wrong. Try again.',
   },
 
   es: {
@@ -605,6 +607,8 @@ const STRINGS = {
     'auth.badCode': 'Ese código no es correcto o ha caducado',
     'auth.tooMany': 'Demasiados intentos. Espera un minuto y vuelve a intentarlo.',
     'auth.newCode': 'Código nuevo enviado',
+    'auth.cantSend': 'Ahora mismo no se ha podido enviar un código a ese email.',
+    'auth.failed': 'Algo ha fallado. Inténtalo de nuevo.',
   },
 
   fr: {
@@ -906,6 +910,8 @@ const STRINGS = {
     'auth.badCode': 'Ce code est faux ou a expiré',
     'auth.tooMany': 'Trop d’essais. Attends une minute, puis réessaie.',
     'auth.newCode': 'Nouveau code envoyé',
+    'auth.cantSend': 'Impossible d’envoyer un code à cet e-mail pour le moment.',
+    'auth.failed': 'Un problème est survenu. Réessaie.',
   },
 
   de: {
@@ -1207,6 +1213,8 @@ const STRINGS = {
     'auth.badCode': 'Der Code ist falsch oder abgelaufen',
     'auth.tooMany': 'Zu viele Versuche. Warte eine Minute und versuch es dann nochmal.',
     'auth.newCode': 'Neuer Code gesendet',
+    'auth.cantSend': 'An diese E-Mail kann gerade kein Code gesendet werden.',
+    'auth.failed': 'Etwas ist schiefgelaufen. Versuch es nochmal.',
   },
 
   pt: {
@@ -1508,6 +1516,8 @@ const STRINGS = {
     'auth.badCode': 'Esse código está errado ou expirou',
     'auth.tooMany': 'Tentativas demais. Espere um minuto e tente de novo.',
     'auth.newCode': 'Novo código enviado',
+    'auth.cantSend': 'Não foi possível enviar um código para esse e-mail agora.',
+    'auth.failed': 'Algo deu errado. Tente de novo.',
   },
 };
 
