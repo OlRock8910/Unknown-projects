@@ -837,3 +837,8 @@ img.ic { object-fit: contain; stroke: none; }
 
 /* Bigger text, from Settings. */
 html[data-text="big"] #view .page, html[data-text="big"] #overlay .session { zoom: 1.12; }
+
+.ask-check { margin: 4px 0 8px; font-weight: 800; overflow-wrap: anywhere; }
+.ask-sheet .auth-form .field[readonly] { color: var(--muted); text-align: center; }
+.ask-sheet .code-sent .ic { display: none; }
+.btn.danger.solid:disabled { opacity: 0.4; }

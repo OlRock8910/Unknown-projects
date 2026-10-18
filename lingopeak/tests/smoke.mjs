@@ -204,6 +204,16 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   if (st.join() !== '321,fr,mia@example.com,true') fail('logging in with a code: ' + st);
   await page.evaluate(() => App.show('settings'));
   if (!/mia@example\.com/.test(await page.textContent('#view')) || !/Log out/.test(await page.textContent('#view'))) fail('settings does not show the email account');
+  // Deleting an email account needs a code sent to that email first.
+  await page.click('.danger-card .btn.danger');
+  if (!/mia@example\.com/.test(await page.textContent('.ask-sheet'))) fail('delete does not say where the code goes');
+  await page.click('.ask-sheet .btn.primary');
+  await page.waitForSelector('.ask-sheet .code-field');
+  await page.fill('.ask-sheet .code-field', '11111111');
+  await page.waitForFunction(() => /wrong|expired/i.test(document.querySelector('.ask-sheet .err').textContent));
+  if (await page.$('.welcome')) fail('a wrong code deleted the account');
+  await page.fill('.ask-sheet .code-field', '12345678');
+  await page.waitForSelector('.welcome');
   await page.close();
 }
 {
@@ -230,6 +240,10 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   await page.click('.ask-sheet .btn.ghost');
   if (!(await page.evaluate(() => !!Store.data.profile))) fail('cancelling deleted the account');
   await page.click('.danger-card .btn.danger');
+  // With no email on the account, you type your username to confirm.
+  await page.fill('.ask-sheet .field', 'someone');
+  if (!(await page.isDisabled('.ask-sheet .btn.danger'))) fail('delete allowed with the wrong username');
+  await page.fill('.ask-sheet .field', 'sett');
   await page.click('.ask-sheet .btn.danger');
   await page.waitForSelector('.welcome');
   if (await page.evaluate(() => localStorage.getItem('lingopeak.v1'))) fail('deleting the account left a save behind');

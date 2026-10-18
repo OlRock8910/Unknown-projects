@@ -306,6 +306,9 @@ const STRINGS = {
     'auth.newCode': 'New code sent',
     'auth.cantSend': 'Couldn’t send a code to that email right now.',
     'auth.failed': 'Something went wrong. Try again.',
+    'set.checkEmail': 'To check it’s you, we’ll email a code to {email}.',
+    'set.sendCode': 'Email me a code',
+    'set.typeName': 'To check it’s you, type your username: {name}',
   },
 
   es: {
@@ -609,6 +612,9 @@ const STRINGS = {
     'auth.newCode': 'Código nuevo enviado',
     'auth.cantSend': 'Ahora mismo no se ha podido enviar un código a ese email.',
     'auth.failed': 'Algo ha fallado. Inténtalo de nuevo.',
+    'set.checkEmail': 'Para comprobar que eres tú, te enviaremos un código a {email}.',
+    'set.sendCode': 'Envíame un código',
+    'set.typeName': 'Para comprobar que eres tú, escribe tu nombre de usuario: {name}',
   },
 
   fr: {
@@ -912,6 +918,9 @@ const STRINGS = {
     'auth.newCode': 'Nouveau code envoyé',
     'auth.cantSend': 'Impossible d’envoyer un code à cet e-mail pour le moment.',
     'auth.failed': 'Un problème est survenu. Réessaie.',
+    'set.checkEmail': 'Pour vérifier que c’est bien toi, on va envoyer un code à {email}.',
+    'set.sendCode': 'M’envoyer un code',
+    'set.typeName': 'Pour vérifier que c’est bien toi, tape ton nom d’utilisateur : {name}',
   },
 
   de: {
@@ -1215,6 +1224,9 @@ const STRINGS = {
     'auth.newCode': 'Neuer Code gesendet',
     'auth.cantSend': 'An diese E-Mail kann gerade kein Code gesendet werden.',
     'auth.failed': 'Etwas ist schiefgelaufen. Versuch es nochmal.',
+    'set.checkEmail': 'Um zu prüfen, dass du es bist, schicken wir einen Code an {email}.',
+    'set.sendCode': 'Code per E-Mail senden',
+    'set.typeName': 'Um zu prüfen, dass du es bist, gib deinen Benutzernamen ein: {name}',
   },
 
   pt: {
@@ -1518,6 +1530,9 @@ const STRINGS = {
     'auth.newCode': 'Novo código enviado',
     'auth.cantSend': 'Não foi possível enviar um código para esse e-mail agora.',
     'auth.failed': 'Algo deu errado. Tente de novo.',
+    'set.checkEmail': 'Para confirmar que é você, vamos mandar um código para {email}.',
+    'set.sendCode': 'Me mande um código',
+    'set.typeName': 'Para confirmar que é você, digite seu nome de usuário: {name}',
   },
 };
 

@@ -493,6 +493,41 @@ function askSheet(opts) {
       h('button', { class: 'btn ghost wide', onclick: () => App.closeOverlay() }, t('set.cancel')))));
 }
 
+// Deleting the account: first prove it's you, with a code emailed to the
+// account's address (or, with no email, by typing your username).
+function openDeleteAccount() {
+  const host = App.openOverlay('ask');
+  const email = Cloud.email();
+  const name = Store.data.profile.name;
+  const gone = async () => {
+    try { await Cloud.deleteAccount(); } catch (e) {
+      if (e.offline) { toast(t('set.needNet'), 3500); return; }
+      Cloud.wipePhone();
+    }
+    location.reload();
+  };
+  let check;
+  if (email) {
+    check = h('div', {},
+      h('p', { class: 'ask-check' }, t('set.checkEmail', { email })),
+      emailCodeForm(async (em, code) => { await Cloud.verifyCode(em, code); await gone(); }, null,
+        { lockedEmail: email, sendLabel: t('set.sendCode'), verifyLabel: t('set.deleteYes'), danger: true }));
+  } else {
+    const input = h('input', { class: 'field', placeholder: t('set.username'), autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
+    const yes = h('button', { class: 'btn wide danger solid', disabled: '' }, t('set.deleteYes'));
+    input.addEventListener('input', () => { yes.disabled = input.value.trim().toLowerCase() !== name.toLowerCase(); });
+    yes.addEventListener('click', async () => { yes.disabled = true; yes.classList.add('busy'); await gone(); yes.classList.remove('busy'); });
+    check = h('div', { class: 'auth-form' }, h('p', { class: 'ask-check' }, t('set.typeName', { name })), input, yes);
+  }
+  host.replaceChildren(h('div', { class: 'ask-wrap', onclick: (e) => { if (e.target === e.currentTarget) App.closeOverlay(); } },
+    h('div', { class: 'ask-sheet' },
+      h('div', { class: 'ask-icon' }, icon('lock', 'big')),
+      h('h2', {}, t('set.deleteQ')),
+      h('p', { class: 'muted' }, t('set.deleteSub')),
+      check,
+      h('button', { class: 'btn ghost wide', onclick: () => App.closeOverlay() }, t('set.cancel')))));
+}
+
 // ------------------------------------------------------------------ Settings
 function renderSettings() {
   const d = Store.data;
@@ -579,16 +614,7 @@ function renderSettings() {
         icon: 'user', title: t('set.logoutQ'), sub: t('set.logoutSub', { email }), yes: t('set.logout'),
         onYes: async () => { await Cloud.logOut(); location.reload(); },
       }) }, t('set.logout'))) : null,
-      row(t('set.delete'), t('set.deleteHint'), h('button', { class: 'btn danger small', onclick: () => askSheet({
-        icon: 'lock', danger: true, title: t('set.deleteQ'), sub: t('set.deleteSub'), yes: t('set.deleteYes'),
-        onYes: async () => {
-          try { await Cloud.deleteAccount(); } catch (e) {
-            if (e.offline) { toast(t('set.needNet'), 3500); return; }
-            Cloud.wipePhone();
-          }
-          location.reload();
-        },
-      }) }, t('set.deleteBtn')))),
+      row(t('set.delete'), t('set.deleteHint'), h('button', { class: 'btn danger small', onclick: () => openDeleteAccount() }, t('set.deleteBtn')))),
     h('div', { class: 'foot-note' }, `Lingo Peak ${APP_VERSION}`));
 }
 

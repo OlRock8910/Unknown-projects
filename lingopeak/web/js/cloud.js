@@ -324,15 +324,18 @@ function friendsCard() {
 // Email first; Continue emails a code, then the code is typed in. Codes are
 // 6 digits if Supabase's "Email OTP length" is 6, but up to 8 also work.
 // onCode(email, code, setErr) finishes (log in, or save progress).
-function emailCodeForm(onCode, extra = null) {
+// opts.lockedEmail: the code goes to this address, which can't be changed
+// (checking it's you before deleting the account); opts.sendLabel,
+// opts.verifyLabel and opts.danger change the buttons.
+function emailCodeForm(onCode, extra = null, opts = {}) {
   const wrap = h('div', { class: 'auth-form' });
-  let email = '';
+  let email = opts.lockedEmail || '';
   let wait = null;
 
   const emailStage = () => {
-    const input = h('input', { class: 'field', type: 'email', placeholder: t('auth.email'), value: email, autocomplete: 'email', autocapitalize: 'off', spellcheck: 'false', inputmode: 'email' });
+    const input = h('input', { class: 'field', type: 'email', placeholder: t('auth.email'), value: email, autocomplete: 'email', autocapitalize: 'off', spellcheck: 'false', inputmode: 'email', readonly: opts.lockedEmail ? '' : null });
     const err = h('div', { class: 'err' });
-    const go = h('button', { class: 'btn primary wide' }, t('auth.continue'));
+    const go = h('button', { class: 'btn primary wide' }, opts.sendLabel || t('auth.continue'));
     const send = async () => {
       const e = input.value.trim();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { err.textContent = t('auth.badEmail'); Sfx.oops(); return; }
@@ -354,7 +357,7 @@ function emailCodeForm(onCode, extra = null) {
   const codeStage = () => {
     const input = h('input', { class: 'field code-field', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '8', placeholder: '······', 'aria-label': t('auth.code') });
     const err = h('div', { class: 'err' });
-    const verify = h('button', { class: 'btn primary wide' }, t('auth.verify'));
+    const verify = h('button', { class: 'btn wide ' + (opts.danger ? 'danger solid' : 'primary') }, opts.verifyLabel || t('auth.verify'));
     const resend = h('button', { class: 'link-btn' });
     let left = 0;
     clearInterval(wait);
@@ -391,7 +394,7 @@ function emailCodeForm(onCode, extra = null) {
     wrap.replaceChildren(
       h('div', { class: 'code-sent' }, icon('check', 'big', 'check'), h('b', {}, t('auth.codeTitle')), h('span', {}, t('auth.codeSent', { email }))),
       input, err, verify,
-      h('div', { class: 'code-links' }, resend, h('button', { class: 'link-btn', onclick: () => { clearInterval(wait); emailStage(); } }, t('auth.otherEmail'))));
+      h('div', { class: 'code-links' }, resend, opts.lockedEmail ? null : h('button', { class: 'link-btn', onclick: () => { clearInterval(wait); emailStage(); } }, t('auth.otherEmail'))));
     wrap.classList.add('code-stage');
     startWait();
     setTimeout(() => input.focus(), 50);
