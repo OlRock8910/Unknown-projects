@@ -157,7 +157,7 @@ function lookBuilder(look, onChange, { shop = false } = {}) {
       });
     }
     grid.replaceChildren(...items.map((it) => {
-      const b = h('button', { class: 'look-item' + (it.sel ? ' on' : '') + (it.owned === false ? ' locked' : '') },
+      const b = h('button', { class: 'look-item' + (it.sel ? ' on' : '') + (it.owned === false ? ' locked' + (Store.data.coins < it.cost ? ' poor' : ' can-buy') : '') },
         it.swatch ? h('span', { class: 'swatch', style: { background: it.swatch } }) : h('span', { class: 'look-thumb', html: it.svg }),
         it.owned === false ? h('span', { class: 'look-price' }, icon('coin'), fmtNum(it.cost)) : null);
       b.addEventListener('click', () => {

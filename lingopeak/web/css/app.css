@@ -656,7 +656,15 @@ p { margin: 0; line-height: 1.45; }
 .look-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .look-item { position: relative; aspect-ratio: 1; border-radius: 14px; background: var(--surface); border: 2px solid var(--line); border-bottom-width: 4px; display: grid; place-items: center; overflow: hidden; padding: 4px; }
 .look-item.on { border-color: var(--blue); background: var(--blue-l); }
-.look-item.locked .look-thumb { opacity: 0.45; }
+.look-item.locked .look-thumb { opacity: 0.8; }
+.look-item.poor .look-thumb { opacity: 0.3; filter: grayscale(0.6); }
+.look-item.poor .look-price { opacity: 0.5; }
+.look-item.can-buy .look-price { background: var(--gold); color: var(--ink); }
+.look-item.can-buy .look-price .ic { color: var(--ink); }
+/* Power-ups you can't afford yet look see-through. */
+.shop-row .pc-icon, .shop-row .price { transition: opacity 0.2s, filter 0.2s; }
+.shop-row.poor .pc-icon { opacity: 0.35; filter: grayscale(0.7); }
+.shop-row.poor .price { opacity: 0.45; filter: grayscale(0.6); box-shadow: none; }
 .look-thumb { width: 100%; height: 100%; display: grid; place-items: center; }
 .look-thumb svg { width: 100%; height: 100%; display: block; }
 .swatch { width: 70%; height: 70%; border-radius: 50%; border: 3px solid var(--ink); }

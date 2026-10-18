@@ -413,7 +413,8 @@ function renderShop() {
     ...SHOP_ITEMS.map((it) => {
       const maxed = it.max && it.max();
       const extra = it.id === 'boost' && Store.boosted() ? t('shop.boostOn', { n: Math.ceil((d.boostUntil - Date.now()) / 60e3) }) : it.id === 'freeze' ? t('shop.have', { n: d.freezes || 0 }) : '';
-      return h('div', { class: 'card shop-row' },
+      // Faded when you can't buy it yet (not enough coins, or you have the most you can hold).
+      return h('div', { class: 'card shop-row' + (maxed || d.coins < it.cost ? ' poor' : '') },
         h('div', { class: 'pc-icon' }, icon(it.ic, '', it.fb)),
         h('div', { class: 'pc-text' }, h('b', {}, t('shop.' + it.id)), h('span', {}, t('shop.' + it.id + 'Sub')), extra ? h('em', {}, extra) : null),
         h('button', { class: 'btn small price', disabled: maxed || null, onclick: () => buy(it.cost, 'coins', it.apply) }, icon('coin'), fmtNum(it.cost)));
