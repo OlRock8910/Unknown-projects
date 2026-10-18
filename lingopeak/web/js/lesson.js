@@ -561,9 +561,12 @@ function openSession(queue, meta) {
       c.lessons[meta.lesson.id] = { n: (was ? was.n : 0) + 1, at: today(), perfect: perfect || !!(was && was.perfect) };
       if (perfect && meta.lesson.kind === 'story' && !was) bonus += 10;
       const m = meta.lesson.unit.mountain;
-      if (!c.mountains[m.id] && mountainDone(m)) { c.mountains[m.id] = today(); bonus += MOUNTAIN_COINS; mountain = m; }
+      if (!c.mountains[m.id] && mountainDone(m)) { c.mountains[m.id] = today(); mountain = m; }
     }
     d.coins += bonus;
+    // A whole mountain: a big pile of coins and XP, handed out on the reveal screen.
+    const prize = mountain ? { coins: MOUNTAIN_COINS, xp: Store.addXp(MOUNTAIN_XP) } : null;
+    if (prize) d.coins += prize.coins;
     d.sessions = (d.sessions || 0) + 1;
     Store.save();
     const mins = Math.max(1, Math.round(secs / 60));
@@ -582,7 +585,7 @@ function openSession(queue, meta) {
       h('div', { class: 'week-mini' },
         h('div', { class: 'wm-head' }, h('span', {}, t('home.weekGoal')), h('b', {}, t('home.minsOf', { n: Math.floor(d.week.secs / 60), goal: goalSecs() / 60 }))),
         h('div', { class: 'bar' }, h('i', { style: { width: weekPct + '%' } }))),
-      h('button', { class: 'btn primary wide', onclick: () => (mountain ? App.revealMountain(mountain) : App.closeOverlay()) }, t('ex.continue'))));
+      h('button', { class: 'btn primary wide', onclick: () => (mountain ? App.revealMountain(mountain, { prize }) : App.closeOverlay()) }, t('ex.continue'))));
     Sfx.fanfare();
     countStats(host2);
     const [cx, cy] = centerOf(host2.querySelector('.res-cast'));

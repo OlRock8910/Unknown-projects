@@ -338,8 +338,10 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
     return { hiddenBefore, last: ls.at(-1).id };
   });
   await playSession(page, '0', 'last lesson of Snowdon');
-  const after = await page.evaluate(() => [!!Store.course.mountains.snowdon, App.tab]);
+  const MOUNTAIN_XP_T = 500;
+  const after = await page.evaluate(() => [!!Store.course.mountains.snowdon, App.tab, Store.data.xp, Store.data.coins]);
   if (!after[0]) fail('finishing Snowdon did not complete the mountain');
+  if (after[2] < MOUNTAIN_XP_T || after[3] < 300) fail('a finished mountain did not give its XP and coins: ' + after);
   await page.evaluate(() => App.revealMountain(LP_COURSE[0]));
   if (/Snowdon/.test(await page.textContent('.reveal'))) fail('reveal gives the name away before the drum roll');
   await page.waitForTimeout(2600); // drum roll, then the name types itself in

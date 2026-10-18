@@ -81,36 +81,80 @@ const App = {
     toast(t('week.reached', { n: Store.weekStreakNow() }), 3500);
   },
 
-  // A finished mountain: a drum roll, the clouds part, and its name and badge.
-  // opts.again: just looking at a mountain climbed before.
+  // A finished mountain: a drum roll, the clouds part and its name types in;
+  // then a flash, its badge fills the screen, and a pile of coins and XP.
+  // opts.again: just looking at a mountain climbed before. opts.prize: { coins, xp }.
   revealMountain(m, opts = {}) {
     const host = this.openOverlay('reveal');
     const i = LP_COURSE.indexOf(m);
+    const prize = opts.prize || { coins: MOUNTAIN_COINS, xp: MOUNTAIN_XP };
     const name = h('div', { class: 'reveal-name' }, opts.again ? m.name : '');
     const badge = h('div', { class: 'reveal-badge' + (opts.again ? ' in' : '') }, badgeArt(m, 'big'), h('div', {}, h('b', {}, t('mtn.badge')), h('span', {}, t('mtn.badgeSub'))));
-    const gems = opts.again ? null : h('div', { class: 'res-stats' }, stat('coin', '+' + MOUNTAIN_COINS, t('res.coins')));
+    const rewards = opts.again ? null : h('div', { class: 'res-stats reveal-prize' },
+      stat('coin', '+' + prize.coins, t('res.coins'), 'gold', prize.coins),
+      stat('bolt', '+' + prize.xp, t('res.xp'), 'gold', prize.xp));
     host.replaceChildren(h('div', { class: 'reveal' },
       h('div', { class: 'eyebrow' }, t('mtn.number', { n: i + 1 })),
       h('h1', {}, t('mtn.complete')),
       h('div', { class: 'reveal-frame' + (opts.again ? ' open' : '') }, mountainArt(m, 'reveal-art'), h('div', { class: 'reveal-cover' }, artImg('icons/cloud.webp', 'cloud-img') || h('div', { class: 'cloud-shape' }), h('div', { class: 'cloud-q' }, '?'))),
       name,
       h('div', { class: 'muted' }, `${fmtNum(m.height)} m`),
-      badge, gems,
+      badge, rewards,
       h('button', { class: 'btn primary wide big', onclick: () => this.closeOverlay() }, t('ex.continue'))));
     if (opts.again) return;
     const frame = host.querySelector('.reveal-frame');
+    const alive = () => frame.isConnected;
     Sfx.drumroll(1300);
     setTimeout(() => {
-      if (!frame.isConnected) return;
+      if (!alive()) return;
       frame.classList.add('open');
       Sfx.fanfare();
       const [x, y] = centerOf(frame);
       goldBurst(x, y, true);
       confetti(host);
-      // The name types itself in.
-      [...m.name].forEach((ch, k) => setTimeout(() => { name.textContent += ch; Sfx.tick(); }, 300 + k * 70));
-      setTimeout(() => { badge.classList.add('in'); Sfx.coin(); const [bx, by] = centerOf(badge); goldBurst(bx, by); }, 600 + m.name.length * 70);
+      // The name types itself in, then the badge takes over the screen.
+      [...m.name].forEach((ch, k) => setTimeout(() => { if (alive()) { name.textContent += ch; Sfx.tick(); } }, 300 + k * 70));
+      setTimeout(() => { if (alive()) this.badgeMoment(m, host, badge, rewards); }, 700 + m.name.length * 70);
     }, 1350);
+  },
+  // A white-gold flash, the badge huge in the middle of the screen with
+  // spinning rays, then it drops into place and the prize counts up.
+  badgeMoment(m, host, badge, rewards) {
+    const fx = Store.s.effects !== false;
+    if (fx) { const flash = h('div', { class: 'screen-flash' }); document.body.append(flash); setTimeout(() => flash.remove(), 1000); }
+    Sfx.boom();
+    const pop = h('div', { class: 'badge-pop' },
+      h('div', { class: 'bp-rays' }),
+      h('div', { class: 'bp-badge' }, badgeArt(m, 'huge')),
+      h('div', { class: 'bp-text' }, h('b', {}, t('mtn.badgeEarned')), h('span', {}, m.name)));
+    host.append(pop);
+    Haptics.buzz([30, 60, 30, 60, 80]);
+    setTimeout(() => { if (pop.isConnected) { const [x, y] = centerOf(pop.querySelector('.bp-badge')); goldBurst(x, y, true); Sfx.coin(); } }, 350);
+    let done = false;
+    const finish = () => {
+      if (done || !pop.isConnected) return;
+      done = true;
+      pop.classList.add('out');
+      setTimeout(() => {
+        pop.remove();
+        badge.classList.add('in');
+        const [bx, by] = centerOf(badge);
+        goldBurst(bx, by);
+        Sfx.coin();
+        // The prize: coins fly in and both numbers count up.
+        if (!rewards) return;
+        setTimeout(() => {
+          rewards.classList.add('in');
+          const coinStat = rewards.querySelector('.stat');
+          coinFly(bx, by, coinStat, 10);
+          countStats(rewards);
+          [0, 120, 240, 360, 480].forEach((d) => setTimeout(() => Sfx.coin(), d + 300));
+          setTimeout(() => { const [rx, ry] = centerOf(rewards); goldBurst(rx, ry, true); }, 900);
+        }, 250);
+      }, 350);
+    };
+    pop.addEventListener('click', finish);
+    setTimeout(finish, 2400);
   },
 };
 

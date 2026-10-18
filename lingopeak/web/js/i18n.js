@@ -314,6 +314,7 @@ const STRINGS = {
     'widget.goalDone': 'Goal hit! Nice climbing',
     'widget.daysLeft': '{n} days left',
     'widget.lastDay': 'Last day this week',
+    'mtn.badgeEarned': 'Badge earned!',
   },
 
   es: {
@@ -625,6 +626,7 @@ const STRINGS = {
     'widget.goalDone': '¡Meta cumplida! Buena escalada',
     'widget.daysLeft': 'Quedan {n} días',
     'widget.lastDay': 'Último día de la semana',
+    'mtn.badgeEarned': '¡Insignia conseguida!',
   },
 
   fr: {
@@ -936,6 +938,7 @@ const STRINGS = {
     'widget.goalDone': 'Objectif atteint ! Belle ascension',
     'widget.daysLeft': 'Encore {n} jours',
     'widget.lastDay': 'Dernier jour de la semaine',
+    'mtn.badgeEarned': 'Badge gagné !',
   },
 
   de: {
@@ -1247,6 +1250,7 @@ const STRINGS = {
     'widget.goalDone': 'Ziel geschafft! Stark geklettert',
     'widget.daysLeft': 'Noch {n} Tage',
     'widget.lastDay': 'Letzter Tag der Woche',
+    'mtn.badgeEarned': 'Abzeichen verdient!',
   },
 
   pt: {
@@ -1558,6 +1562,7 @@ const STRINGS = {
     'widget.goalDone': 'Meta batida! Boa escalada',
     'widget.daysLeft': 'Faltam {n} dias',
     'widget.lastDay': 'Último dia da semana',
+    'mtn.badgeEarned': 'Emblema conquistado!',
   },
 };
 

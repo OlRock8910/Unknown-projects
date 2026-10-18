@@ -842,3 +842,22 @@ html[data-text="big"] #view .page, html[data-text="big"] #overlay .session { zoo
 .ask-sheet .auth-form .field[readonly] { color: var(--muted); text-align: center; }
 .ask-sheet .code-sent .ic { display: none; }
 .btn.danger.solid:disabled { opacity: 0.4; }
+
+/* ---------------------------------------------------------------- mountain prize */
+.screen-flash { position: fixed; inset: 0; z-index: 60; pointer-events: none; background: radial-gradient(circle at 50% 45%, #FFFFFF 0%, #FFF3C4 35%, rgba(255, 197, 49, 0.55) 65%, rgba(255, 197, 49, 0) 100%); animation: screenFlash 0.95s ease-out forwards; }
+@keyframes screenFlash { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
+.badge-pop { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(10, 12, 24, 0.72); animation: fadeIn 0.2s ease both; overflow: hidden; }
+.badge-pop.out { animation: popOut 0.35s ease forwards; }
+@keyframes popOut { to { opacity: 0; transform: scale(0.85); } }
+.bp-rays { position: absolute; width: 760px; height: 760px; left: 50%; top: 50%; margin: -400px 0 0 -380px; background: repeating-conic-gradient(from 0deg, rgba(255, 197, 49, 0.32) 0deg 10deg, rgba(255, 197, 49, 0) 10deg 24deg); border-radius: 50%; -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%); mask: radial-gradient(circle, #000 18%, transparent 62%); animation: spin 9s linear infinite; }
+.bp-badge { position: relative; animation: badgeIn 0.7s cubic-bezier(.2,1.6,.4,1) both; filter: drop-shadow(0 0 28px rgba(255, 197, 49, 0.85)); }
+.badge.huge { width: 190px; height: 190px; }
+.badge.huge span { font-size: 22px; min-width: 40px; height: 40px; bottom: 4px; right: 4px; }
+@keyframes badgeIn { 0% { transform: scale(0.1) rotate(-30deg); opacity: 0; } 70% { transform: scale(1.12) rotate(6deg); opacity: 1; } 100% { transform: none; } }
+.bp-text { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; color: #fff; animation: up 0.4s 0.35s ease both; }
+.bp-text b { font-size: 28px; font-weight: 1000; color: #FFC531; }
+.bp-text span { font-size: 18px; font-weight: 800; }
+.reveal-prize { opacity: 0; transform: translateY(14px) scale(0.9); transition: 0.4s cubic-bezier(.3,1.6,.5,1); width: 100%; }
+.reveal-prize.in { opacity: 1; transform: none; }
+.reveal-prize .stat.gold { background: var(--yellow-l); border-color: var(--yellow); }
+.reveal-prize .stat.gold b { font-size: 26px; }
