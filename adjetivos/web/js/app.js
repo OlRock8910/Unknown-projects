@@ -10,6 +10,9 @@ const App = {
   init() {
     Store.load();
     Voice.init();
+    Account.init();
+    // A sync in the background can bring in progress from another phone.
+    window.onAccountChanged = () => { if (!this.overlayKind && (this.tab === 'me' || this.tab === 'play')) this.refresh(); };
     document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => this.show(b.dataset.tab)));
     // Browsers only allow audio after a user gesture.
     document.addEventListener('pointerdown', () => Sfx.ensure(), { once: true });
@@ -590,6 +593,7 @@ function renderMe() {
       h('div', { class: 'big-level' }, h('small', {}, 'Level'), h('b', {}, lv.lvl)),
       h('div', { class: 'grow' }, h('b', {}, `${d.xp} XP`), h('div', { class: 'xp-bar' }, h('i', { style: { width: (lv.into / lv.need) * 100 + '%' } })),
         h('small', {}, `${lv.need - lv.into} XP to level ${lv.lvl + 1}`))),
+    accountCard(),
     h('div', { class: 'stats' },
       stat('🔥 ' + Store.streakNow(), 'day streak'),
       stat(d.played, 'games played'),

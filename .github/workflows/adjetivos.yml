@@ -38,6 +38,9 @@ jobs:
       - name: Online play test (two phones through a local PeerJS server)
         run: node tests/online.mjs
 
+      - name: Sign-in test (two phones against a stand-in for Supabase)
+        run: node tests/account.mjs
+
       - name: Build APK
         run: ./build-apk.sh
 

@@ -57,8 +57,10 @@ const Store = {
     this.data = { ...d, ...saved, settings: { ...d.settings, ...(saved.settings || {}) } };
     if (this.data.daily.date !== today()) this.data.daily = { date: today(), xp: 0 };
   },
-  save() {
+  // quiet: don't upload to the account (used when the account itself just updated it).
+  save(opts = {}) {
     try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); } catch (e) { /* storage full or blocked */ }
+    if (!opts.quiet && typeof Account !== 'undefined') Account.queueSync();
   },
   get s() { return this.data.settings; },
   mastery(id) { return this.data.mastery[id] || 0; },

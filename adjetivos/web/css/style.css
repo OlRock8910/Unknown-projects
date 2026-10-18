@@ -613,3 +613,16 @@ input { font: inherit; }
 .friends-hero .fh-emoji { font-size: 36px; opacity: 1; }
 .friends-hero .fh-go { font-size: 30px; opacity: 1; }
 .oh-join .code-input::placeholder { letter-spacing: 0; font-size: 15px; text-transform: none; font-weight: 700; }
+
+/* ------------------------------------------------------------ account */
+.account { display: flex; flex-direction: column; gap: 10px; background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(139, 92, 246, 0.2)); }
+.acc-head { display: flex; gap: 12px; align-items: flex-start; }
+.acc-head > div { display: flex; flex-direction: column; gap: 3px; }
+.acc-head span:not(.acc-emoji) { color: var(--muted); font-size: 14px; line-height: 1.4; word-break: break-word; }
+.acc-emoji { font-size: 30px; }
+.account .search { margin: 0; -webkit-user-select: text; user-select: text; }
+.account .otp { text-align: center; font-size: 28px; letter-spacing: 10px; }
+.account .otp::placeholder { letter-spacing: 6px; }
+.acc-error { color: #fda4af; font-size: 14px; font-weight: 700; min-height: 0; }
+.acc-error:empty { display: none; }
+.acc-status { font-weight: 700; color: #86efac; }
