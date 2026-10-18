@@ -103,11 +103,11 @@ const Onboarding = {
     name.addEventListener('input', () => { this.draft.name = name.value; err.textContent = ''; });
     next.addEventListener('click', async () => {
       const n = name.value.trim();
-      if (!validName(n)) { err.textContent = t('onb.nameErr'); Sfx.bad(); return; }
+      if (!validName(n)) { err.textContent = t('onb.nameErr'); Sfx.oops(); return; }
       next.disabled = true;
       const free = await Cloud.nameFree(n);
       next.disabled = false;
-      if (free === false) { err.textContent = t('onb.nameTaken'); Sfx.bad(); return; }
+      if (free === false) { err.textContent = t('onb.nameTaken'); Sfx.oops(); return; }
       this.draft.name = n;
       this.go(4);
     });

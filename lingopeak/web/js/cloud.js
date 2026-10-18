@@ -325,14 +325,14 @@ function emailCodeForm(onCode, extra = null) {
     const go = h('button', { class: 'btn primary wide' }, t('auth.continue'));
     const send = async () => {
       const e = input.value.trim();
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { err.textContent = t('auth.badEmail'); Sfx.bad(); return; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { err.textContent = t('auth.badEmail'); Sfx.oops(); return; }
       err.textContent = '';
       go.disabled = true; go.classList.add('busy');
       try {
         await Cloud.sendCode(e);
         email = e;
         codeStage();
-      } catch (x) { err.textContent = t(Cloud.authError(x)); Sfx.bad(); } finally { go.disabled = false; go.classList.remove('busy'); }
+      } catch (x) { err.textContent = t(Cloud.authError(x)); Sfx.oops(); } finally { go.disabled = false; go.classList.remove('busy'); }
     };
     go.addEventListener('click', send);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
@@ -357,11 +357,11 @@ function emailCodeForm(onCode, extra = null) {
     const startWait = () => { left = 60; tick(); clearInterval(wait); wait = setInterval(tick, 1000); };
     const check = async () => {
       const code = input.value.replace(/\D/g, '');
-      if (code.length !== 6) { err.textContent = t('auth.badCode'); Sfx.bad(); return; }
+      if (code.length !== 6) { err.textContent = t('auth.badCode'); Sfx.oops(); return; }
       err.textContent = '';
       verify.disabled = true; verify.classList.add('busy');
-      try { await onCode(email, code, (k) => { err.textContent = t(k); Sfx.bad(); }); clearInterval(wait); }
-      catch (x) { err.textContent = t(Cloud.authError(x)); Sfx.bad(); input.select(); }
+      try { await onCode(email, code, (k) => { err.textContent = t(k); Sfx.oops(); }); clearInterval(wait); }
+      catch (x) { err.textContent = t(Cloud.authError(x)); Sfx.oops(); input.select(); }
       finally { verify.disabled = false; verify.classList.remove('busy'); }
     };
     input.addEventListener('input', () => {

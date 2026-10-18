@@ -195,7 +195,7 @@ document.addEventListener('pointerdown', () => { Timer.lastTouch = Date.now(); }
 
 // ------------------------------------------------------------------ sound
 // Every sound is synthesised (no audio files): bells for right answers that
-// climb in pitch with your streak, a soft "bwom" for wrong ones, coin chings,
+// climb in pitch with your streak, a buzzy "uh-uh" for wrong ones, coin chings,
 // a deep boom and a fanfare for big moments, all through a little reverb.
 const Sfx = {
   ctx: null, out: null, verb: null,
@@ -224,7 +224,7 @@ const Sfx = {
   },
   on() { return Store.s.sound && this.ensure(); },
   // One note: type, frequency (and optional glide), volume envelope.
-  note(freq, at, dur, { type = 'sine', vol = 0.2, attack = 0.005, to = 0, wet = true } = {}) {
+  note(freq, at, dur, { type = 'sine', vol = 0.2, attack = 0.005, to = 0, wet = true, lp = 0 } = {}) {
     const ctx = this.ctx, t = ctx.currentTime + at;
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = type;
@@ -233,7 +233,8 @@ const Sfx = {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(vol, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g); g.connect(this.out); if (wet) g.connect(this.verb);
+    if (lp) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; o.connect(f).connect(g); } else o.connect(g);
+    g.connect(this.out); if (wet) g.connect(this.verb);
     o.start(t); o.stop(t + dur + 0.05);
   },
   // A bell: a sine with two quieter overtones.
@@ -268,7 +269,18 @@ const Sfx = {
     [2, 2.5, 3].forEach((m, i) => this.note(base * m, 0.17 + i * 0.045, 0.18, { vol: 0.035 }));
     if (streak >= 3) this.noise(0.08, 0.35, { vol: 0.05, type: 'highpass', freq: 6000, wet: true });
   },
-  bad() { if (!this.on()) return; this.note(330, 0, 0.18, { type: 'triangle', vol: 0.16, to: 262 }); this.note(220, 0.12, 0.32, { type: 'triangle', vol: 0.14, to: 165 }); },
+  // A wrong answer: a game-show "uh-uh" buzzer, two buzzy notes going down with a thud.
+  bad() {
+    if (!this.on()) return;
+    this.note(140, 0, 0.2, { vol: 0.42, to: 55, wet: false });
+    [[233, 0, 0.15, 0], [175, 0.17, 0.36, 150]].forEach(([f, at, dur, to]) => {
+      this.note(f, at, dur, { type: 'sawtooth', vol: 0.26, to, lp: 1300, attack: 0.01 });
+      this.note(f * 1.012, at, dur, { type: 'square', vol: 0.11, to: to && to * 1.012, lp: 1000, attack: 0.01, wet: false });
+    });
+    this.noise(0, 0.12, { vol: 0.08, freq: 500 });
+  },
+  // A small mistake typing into a form: a soft "bwom".
+  oops() { if (!this.on()) return; this.note(330, 0, 0.18, { type: 'triangle', vol: 0.16, to: 262 }); this.note(220, 0.12, 0.32, { type: 'triangle', vol: 0.14, to: 165 }); },
   coin() { if (!this.on()) return; this.note(1976, 0, 0.06, { type: 'square', vol: 0.045 }); this.note(2637, 0.055, 0.32, { type: 'square', vol: 0.045 }); this.bell(2637, 0.055, 0.05, 0.4); },
   // A soft low beep (counting up rewards).
   tick() { if (!this.on()) return; this.note(392, 0, 0.05, { vol: 0.06, wet: false }); },
