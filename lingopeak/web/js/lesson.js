@@ -171,7 +171,8 @@ const EX = {
       const slots = h('div', { class: 'slots' });
       const tiles = h('div', { class: 'ltiles' });
       const draw = () => {
-        slots.replaceChildren(...letters.map((_, k) => {
+        // The article (el, la, der…) sits ready-made in its own box in front.
+        slots.replaceChildren(...(w.art ? [h('div', { class: 'slot art' }, w.art), h('div', { class: 'slot space' })] : []), ...letters.map((_, k) => {
           const p = placed[k];
           const s = h('button', { class: 'slot' + (p ? ' filled' : '') + (letters[k] === ' ' ? ' space' : '') }, p ? p.ch : '');
           if (p) s.addEventListener('click', () => { if (ctl.locked()) return; p.btn.classList.remove('used'); placed[k] = null; Sfx.tap(); draw(); });
@@ -198,45 +199,29 @@ const EX = {
       draw();
       return {
         title: t('ex.spell'), word: w,
-        node: h('div', {}, h('div', { class: 'card center' }, h('div', { class: 'prompt-word' }, w.n), w.art ? h('div', { class: 'chip' }, w.art + ' …') : null), slots, tiles),
+        node: h('div', {}, h('div', { class: 'card center' }, h('div', { class: 'prompt-word' }, w.n)), slots, tiles),
         check: () => ({ ok: placed.map((p) => p.ch).join('') === w.bare, answer: w.t, say: w.t }),
       };
     };
   },
 
-  // Type it, with buttons for accented letters. A missing accent still counts.
+  // Type it. Missing accents and a small typo still count, with a reminder.
   type(w, L, opts = {}) {
     return (ctl) => {
       const input = h('input', { class: 'field type-in', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: t('ex.typeHere', { lang: t('lang.' + Store.data.target) }) });
       input.addEventListener('input', () => ctl.ready(input.value.trim().length > 0));
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') ctl.submit(); });
-      const keys = { es: 'áéíóúñü¿¡', fr: 'àâçéèêëîïôûù', de: 'äöüß', pt: 'ãáâàçéêíóôõú', en: '' }[Store.data.target];
-      const accents = h('div', { class: 'accent-keys' }, ...[...keys].map((ch) => h('button', {
-        class: 'akey',
-        onpointerdown: (e) => e.preventDefault(),
-        onclick: () => {
-          if (ctl.locked()) return;
-          const a = input.selectionStart ?? input.value.length, b = input.selectionEnd ?? a;
-          input.value = input.value.slice(0, a) + ch + input.value.slice(b);
-          input.focus();
-          input.setSelectionRange(a + 1, a + 1);
-          ctl.ready(true);
-        },
-      }, ch)));
       const prompt = opts.dictation
         ? h('div', { class: 'listen-row' }, h('button', { class: 'big-say', onclick: () => Voice.say(w.t, { force: true }) }, icon('speaker')), slowBtn(w.t))
         : h('div', { class: 'card center' }, h('div', { class: 'prompt-word' }, w.n));
       return {
         title: opts.dictation ? t('ex.dictation') : t('ex.type', { lang: t('lang.' + Store.data.target) }), word: w,
-        node: h('div', {}, prompt, input, accents),
+        node: h('div', {}, prompt, input),
         onShow: () => { if (opts.dictation) Voice.say(w.t, { force: true }); setTimeout(() => input.focus(), 250); },
         check: () => {
           input.blur();
-          const typed = normText(input.value);
-          const goods = [...w.tAll, ...w.tAll.map((x) => x.replace(/^\S+\s+/, '')), w.bare].map(normText);
-          if (goods.includes(typed)) return { ok: true, answer: w.t, say: w.t };
-          const close = goods.some((g) => stripAccents(g) === stripAccents(typed));
-          return { ok: close, answer: w.t, say: w.t, note: close ? t('ex.accent', { w: w.t }) : null };
+          const m = markTyped(input.value, [...w.tAll, w.bare]);
+          return { ok: m.ok, answer: w.t, say: w.t, note: m.how === 'accent' ? t('ex.accent', { w: w.t }) : m.how === 'typo' ? t('ex.typo', { w: w.t }) : null };
         },
       };
     };
@@ -261,10 +246,15 @@ const EX = {
             return;
           }
           if (sel.w.id === w.id) {
-            sel.b.classList.remove('sel');
-            sel.b.classList.add('done');
-            b.classList.add('done');
+            // A match: both flash gold, sparks fly between them, then they pop away.
+            const a = sel.b;
+            a.classList.remove('sel');
+            a.classList.add('matched'); b.classList.add('matched');
+            const [x1, y1] = centerOf(a), [x2, y2] = centerOf(b);
+            goldBurst((x1 + x2) / 2, (y1 + y2) / 2);
             Sfx.good(words.length - remaining);
+            Haptics.buzz(20);
+            setTimeout(() => { a.classList.add('done'); b.classList.add('done'); }, 380);
             sel = null;
             if (--remaining === 0) setTimeout(() => ctl.done({ ok: true, slips }), 300);
           } else {
@@ -321,6 +311,33 @@ function genderNote(w) {
   const plural = /^(los|las|les|os|as)$/.test(a);
   const g = neu ? t('g.n') : fem.includes(a) ? t('g.f') : a === "l'" ? '' : t('g.m');
   return [w.art, g, plural ? t('g.pl') : ''].filter(Boolean).join(' · ');
+}
+
+// How many single-letter edits turn a into b.
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  }
+  return d[a.length][b.length];
+}
+// Marks a typed answer against the right ones: exact, right but for the
+// accents, or right but for a small typo (one letter in a short word, two
+// in a long one). Typing the article is optional.
+function markTyped(typed, answers) {
+  const arts = ARTICLES[Store.data.target];
+  const strip = (x) => (arts ? x.replace(new RegExp(`^(${arts})\\s+`, 'i'), '').replace(/^l['’]/i, '') : x);
+  const tt = normText(typed);
+  const goods = [...new Set(answers.flatMap((a) => [normText(a), normText(strip(a))]))];
+  if (goods.includes(tt) || goods.includes(normText(strip(tt)))) return { ok: true, how: 'exact' };
+  const plain = (x) => stripAccents(x);
+  if (goods.some((g) => plain(g) === plain(tt) || plain(g) === plain(normText(strip(tt))))) return { ok: true, how: 'accent' };
+  const near = goods.some((g) => {
+    const allowed = g.length <= 4 ? 0 : g.length <= 8 ? 1 : 2;
+    return allowed && Math.min(editDistance(plain(g), plain(tt)), editDistance(plain(g), plain(normText(strip(tt))))) <= allowed;
+  });
+  return near ? { ok: true, how: 'typo' } : { ok: false };
 }
 
 const canSpell = (w) => /^[\p{L}' -]{2,12}$/u.test(w.bare) && w.bare.split(' ').length <= 2;
@@ -446,8 +463,15 @@ function openSession(queue, meta) {
     const item = cur.item;
     if (res.ok) {
       right++; streak++;
-      Sfx.good(streak);
+      Sfx.good(streak - 1);
       Haptics.buzz(15);
+      // Gold sparks from what you picked, and the progress bar flashes gold.
+      const from = (cur.lock && cur.lock.querySelector('.opt.sel')) || body.querySelector('.tile-line, .slots, .type-in, .match, .intro') || main;
+      const [x, y] = centerOf(from);
+      goldBurst(x, y, streak >= 5);
+      from.classList.remove('win'); void from.offsetWidth; from.classList.add('win');
+      bar.classList.remove('glow'); void bar.offsetWidth; bar.classList.add('glow');
+      if ([3, 5, 10, 15, 20].includes(streak)) comboPop(streak);
     } else {
       wrong++; streak = 0;
       Sfx.bad();
@@ -491,17 +515,17 @@ function openSession(queue, meta) {
     xp = Store.addXp(xp);
     const coins = 5 + Math.round(right / 2) + (perfect ? 5 : 0);
     d.coins += coins;
-    let gems = 0;
+    let bonus = 0;
     let mountain = null;
     if (meta.lesson) {
       const c = Store.course;
       const was = c.lessons[meta.lesson.id];
       c.lessons[meta.lesson.id] = { n: (was ? was.n : 0) + 1, at: today(), perfect: perfect || !!(was && was.perfect) };
-      if (perfect && meta.lesson.kind === 'story' && !was) gems += 1;
+      if (perfect && meta.lesson.kind === 'story' && !was) bonus += 10;
       const m = meta.lesson.unit.mountain;
-      if (!c.mountains[m.id] && mountainDone(m)) { c.mountains[m.id] = today(); gems += 20; mountain = m; }
+      if (!c.mountains[m.id] && mountainDone(m)) { c.mountains[m.id] = today(); bonus += MOUNTAIN_COINS; mountain = m; }
     }
-    d.gems += gems;
+    d.coins += bonus;
     d.sessions = (d.sessions || 0) + 1;
     Store.save();
     const mins = Math.max(1, Math.round(secs / 60));
@@ -513,16 +537,18 @@ function openSession(queue, meta) {
       h('h1', {}, perfect ? t('res.perfect') : meta.lesson ? t('res.done') : t('res.practiceDone')),
       h('div', { class: 'muted' }, meta.lesson ? `${meta.lesson.unit.title} · ${meta.lesson.kind === 'story' ? t('path.story') : t('path.lesson', { n: meta.lesson.n })}` : t('practice.' + meta.practice)),
       h('div', { class: 'res-stats' },
-        stat('bolt', '+' + xp, t('res.xp'), Store.boosted() ? 'boost' : ''),
-        stat('coin', '+' + coins, t('res.coins')),
-        gems ? stat('gem', '+' + gems, t('res.gems')) : null,
+        stat('bolt', '+' + xp, t('res.xp'), Store.boosted() ? 'boost' : '', xp),
+        stat('coin', '+' + (coins + bonus), t('res.coins'), '', coins + bonus),
         stat('target', Math.round(acc * 100) + '%', t('res.accuracy')),
         stat('clock', t('res.mins', { n: mins }), t('res.time'))),
       h('div', { class: 'week-mini' },
         h('div', { class: 'wm-head' }, h('span', {}, t('home.weekGoal')), h('b', {}, t('home.minsOf', { n: Math.floor(d.week.secs / 60), goal: WEEKLY_GOAL_SECS / 60 }))),
         h('div', { class: 'bar' }, h('i', { style: { width: weekPct + '%' } }))),
       h('button', { class: 'btn primary wide', onclick: () => (mountain ? App.revealMountain(mountain) : App.closeOverlay()) }, t('ex.continue'))));
-    Sfx.win();
+    Sfx.fanfare();
+    countStats(host2);
+    const [cx, cy] = centerOf(host2.querySelector('.res-cast'));
+    goldBurst(cx, cy, true);
     if (perfect) confetti(host2);
   };
 
@@ -530,8 +556,27 @@ function openSession(queue, meta) {
   show();
 }
 
-function stat(ic, value, label, cls = '') {
-  return h('div', { class: 'stat ' + cls }, icon(ic), h('b', {}, value), h('small', {}, label));
+// A number with a label. n: count up to this number when it appears.
+function stat(ic, value, label, cls = '', n = null) {
+  return h('div', { class: 'stat ' + cls }, icon(ic), h('b', n == null ? {} : { 'data-n': n, 'data-pre': String(value).startsWith('+') ? '+' : '' }, value), h('small', {}, label));
+}
+// Counts up every stat on a results screen, one after another, with sparkle.
+function countStats(root) {
+  [...root.querySelectorAll('.stat b[data-n]')].forEach((b, k) => {
+    b.textContent = b.dataset.pre + '0';
+    setTimeout(() => {
+      countUp(b, Number(b.dataset.n), { prefix: b.dataset.pre, ms: 700 });
+      setTimeout(() => { const [x, y] = centerOf(b); goldBurst(x, y); Sfx.coin(); b.parentNode.classList.add('lit'); }, 720);
+    }, 500 + k * 450);
+  });
+}
+// "5 in a row!" — streak milestones in a lesson.
+function comboPop(n) {
+  const el = h('div', { class: 'combo-pop' }, t('ex.combo', { n }));
+  document.body.append(el);
+  setTimeout(() => el.remove(), 1400);
+  if (n >= 5) setTimeout(() => Sfx.boom(), 120);
+  Haptics.buzz([20, 40, 20]);
 }
 
 const openLesson = (lesson) => openSession(buildLessonQueue(lesson), { lesson });

@@ -63,6 +63,7 @@ const daysLeftInWeek = () => 8 - (new Date().getDay() || 7);
 
 // ------------------------------------------------------------------ saved progress
 const WEEKLY_GOAL_SECS = 20 * 60;
+const WEEK_COINS = 50, MOUNTAIN_COINS = 200;
 const Store = {
   KEY: 'lingopeak.v1',
   data: null,
@@ -128,7 +129,7 @@ const Store = {
     st.n = st.last === prevWeekId(d.week.id) ? st.n + 1 : 1;
     st.last = d.week.id;
     st.best = Math.max(st.best || 0, st.n);
-    d.gems += 5;
+    d.coins += WEEK_COINS;
     return true;
   },
   weekStreakNow() {
@@ -184,49 +185,110 @@ const Timer = {
 document.addEventListener('pointerdown', () => { Timer.lastTouch = Date.now(); }, true);
 
 // ------------------------------------------------------------------ sound
+// Every sound is synthesised (no audio files): bells for right answers that
+// climb in pitch with your streak, a soft "bwom" for wrong ones, coin chings,
+// a deep boom and a fanfare for big moments, all through a little reverb.
 const Sfx = {
-  ctx: null,
+  ctx: null, out: null, verb: null,
   ensure() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
-      this.ctx = new AC();
+      const ctx = this.ctx = new AC();
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.ratio.value = 4;
+      comp.connect(ctx.destination);
+      this.out = ctx.createGain(); this.out.gain.value = 0.9; this.out.connect(comp);
+      // A short, soft room: decaying noise as the impulse.
+      const len = Math.floor(ctx.sampleRate * 1.4);
+      const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+      const conv = ctx.createConvolver(); conv.buffer = ir;
+      this.verb = ctx.createGain(); this.verb.gain.value = 0.22;
+      this.verb.connect(conv).connect(this.out);
+      const n = Math.floor(ctx.sampleRate * 1);
+      this.noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const nd = this.noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) nd[i] = Math.random() * 2 - 1;
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     return this.ctx;
   },
-  tone(freq, dur, { type = 'sine', vol = 0.16, slide = 0, delay = 0 } = {}) {
-    if (!Store.s.sound) return;
-    const ctx = this.ensure();
-    if (!ctx) return;
-    const t = ctx.currentTime + delay;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
+  on() { return Store.s.sound && this.ensure(); },
+  // One note: type, frequency (and optional glide), volume envelope.
+  note(freq, at, dur, { type = 'sine', vol = 0.2, attack = 0.005, to = 0, wet = true } = {}) {
+    const ctx = this.ctx, t = ctx.currentTime + at;
+    const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = type;
     o.frequency.setValueAtTime(freq, t);
-    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(vol, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(ctx.destination);
-    o.start(t);
-    o.stop(t + dur + 0.02);
+    o.connect(g); g.connect(this.out); if (wet) g.connect(this.verb);
+    o.start(t); o.stop(t + dur + 0.05);
   },
-  tap() { this.tone(880, 0.04, { type: 'triangle', vol: 0.06 }); },
-  pop() { this.tone(520, 0.12, { slide: 700, vol: 0.2 }); },
-  good(n = 0) {
-    const base = 660 * Math.pow(2, Math.min(n, 8) / 12);
-    this.tone(base, 0.1, { type: 'triangle' });
-    this.tone(base * 1.5, 0.14, { type: 'triangle', delay: 0.07 });
+  // A bell: a sine with two quieter overtones.
+  bell(freq, at, vol = 0.18, dur = 0.7) {
+    this.note(freq, at, dur, { vol });
+    this.note(freq * 2.01, at, dur * 0.6, { vol: vol * 0.32 });
+    this.note(freq * 3.98, at, dur * 0.35, { vol: vol * 0.12 });
   },
-  bad() { this.tone(200, 0.2, { type: 'sawtooth', vol: 0.07, slide: -60 }); },
-  coin() { this.tone(1320, 0.07, { type: 'square', vol: 0.05 }); this.tone(1760, 0.12, { type: 'square', vol: 0.05, delay: 0.06 }); },
-  win() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.18, { type: 'triangle', delay: i * 0.1 })); },
-  lose() { [392, 330, 262].forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', delay: i * 0.14 })); },
-  flip() { this.tone(400, 0.06, { type: 'triangle', vol: 0.1, slide: 300 }); },
-  whack() { this.tone(220, 0.08, { type: 'square', vol: 0.1, slide: -100 }); },
-  tick() { this.tone(1200, 0.03, { type: 'square', vol: 0.04 }); },
-  swoosh() { this.tone(300, 0.15, { vol: 0.1, slide: 900 }); },
+  noise(at, dur, { vol = 0.2, type = 'lowpass', freq = 1200, to = 0, q = 0.7, wet = false } = {}) {
+    const ctx = this.ctx, t = ctx.currentTime + at;
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const f = ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (to) f.frequency.exponentialRampToValueAtTime(to, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g); g.connect(this.out); if (wet) g.connect(this.verb);
+    src.start(t); src.stop(t + dur + 0.05);
+  },
+  semis: (n) => Math.pow(2, n / 12),
+
+  tap() { if (!this.on()) return; this.noise(0, 0.03, { vol: 0.12, type: 'highpass', freq: 3000 }); this.note(1400, 0, 0.04, { type: 'triangle', vol: 0.04, wet: false }); },
+  select() { if (!this.on()) return; this.note(740, 0, 0.09, { type: 'triangle', vol: 0.09 }); this.note(1110, 0.02, 0.07, { vol: 0.04 }); },
+  // "da-DUN": two bells a fifth apart, higher with every answer in a row.
+  good(streak = 0) {
+    if (!this.on()) return;
+    const up = this.semis(Math.min(streak, 10));
+    const base = 698 * up;
+    this.note(150, 0, 0.16, { vol: 0.32, to: 55, wet: false }); // a soft thump underneath for weight
+    this.bell(base, 0, 0.19, 0.5);
+    this.bell(base * 1.5, 0.085, 0.24, 0.9);
+    [2, 2.5, 3].forEach((m, i) => this.note(base * m, 0.17 + i * 0.045, 0.18, { vol: 0.035 }));
+    if (streak >= 3) this.noise(0.08, 0.35, { vol: 0.05, type: 'highpass', freq: 6000, wet: true });
+  },
+  bad() { if (!this.on()) return; this.note(330, 0, 0.18, { type: 'triangle', vol: 0.16, to: 262 }); this.note(220, 0.12, 0.32, { type: 'triangle', vol: 0.14, to: 165 }); },
+  coin() { if (!this.on()) return; this.note(1976, 0, 0.06, { type: 'square', vol: 0.045 }); this.note(2637, 0.055, 0.32, { type: 'square', vol: 0.045 }); this.bell(2637, 0.055, 0.05, 0.4); },
+  tick() { if (!this.on()) return; this.note(2200, 0, 0.03, { type: 'triangle', vol: 0.05, wet: false }); },
+  // A deep thump for big moments.
+  boom() {
+    if (!this.on()) return;
+    this.note(130, 0, 0.7, { vol: 0.55, to: 38, wet: false });
+    this.noise(0, 0.45, { vol: 0.35, type: 'lowpass', freq: 900, to: 80, wet: true });
+  },
+  whoosh() { if (!this.on()) return; this.noise(0, 0.4, { vol: 0.16, type: 'bandpass', freq: 400, to: 4000, q: 1.2, wet: true }); },
+  sparkle() { if (!this.on()) return; [0, 4, 7, 12, 16].forEach((s, i) => this.bell(1568 * this.semis(s), i * 0.05, 0.05, 0.4)); },
+  // Lesson complete: boom, then a rising arpeggio into a held chord.
+  fanfare() {
+    if (!this.on()) return;
+    this.boom();
+    [523, 659, 784, 1047].forEach((f, i) => this.bell(f, 0.1 + i * 0.09, 0.15, 0.8));
+    [523, 659, 784].forEach((f) => this.note(f, 0.46, 1.2, { type: 'triangle', vol: 0.06, attack: 0.03 }));
+    this.sparkle && setTimeout(() => this.sparkle(), 450);
+  },
+  // A drum roll that lands on a boom (mountain reveal).
+  drumroll(ms = 1200) {
+    if (!this.on()) return;
+    let t = 0, gap = 0.11;
+    while (t < ms / 1000) { this.noise(t, 0.06, { vol: 0.12 + t * 0.12, type: 'bandpass', freq: 220, q: 1.5 }); t += gap; gap = Math.max(0.035, gap * 0.9); }
+  },
+  win() { this.fanfare(); },
+  lose() { if (!this.on()) return; [392, 330, 262].forEach((f, i) => this.note(f, i * 0.16, 0.3, { type: 'triangle', vol: 0.12 })); },
+  pop() { if (!this.on()) return; this.note(420, 0, 0.12, { vol: 0.25, to: 980 }); this.noise(0, 0.05, { vol: 0.1, type: 'highpass', freq: 2500 }); },
+  flip() { if (!this.on()) return; this.noise(0, 0.08, { vol: 0.1, type: 'bandpass', freq: 1800, to: 3500 }); },
+  whack() { if (!this.on()) return; this.note(180, 0, 0.12, { type: 'square', vol: 0.08, to: 90 }); this.noise(0, 0.08, { vol: 0.25, freq: 1500 }); },
+  swoosh() { this.whoosh(); },
 };
 
 const Haptics = {
@@ -353,6 +415,54 @@ function burst(x, y, color, n = 12, root = document.body) {
     setTimeout(() => p.remove(), 650);
   }
 }
+// A burst of gold sparks and a shock ring at (x, y): the reward for a right answer.
+function goldBurst(x, y, big = false) {
+  const layer = document.body;
+  const ring = h('div', { class: 'gold-ring' + (big ? ' big' : '') });
+  ring.style.left = x + 'px'; ring.style.top = y + 'px';
+  layer.append(ring);
+  setTimeout(() => ring.remove(), 700);
+  const n = big ? 26 : 16;
+  for (let i = 0; i < n; i++) {
+    const p = h('div', { class: 'spark' + (i % 3 === 0 ? ' star' : '') });
+    const ang = (Math.PI * 2 * i) / n + rand(-0.25, 0.25);
+    const dist = rand(50, big ? 160 : 110);
+    p.style.left = x + 'px'; p.style.top = y + 'px';
+    p.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    p.style.setProperty('--dy', Math.sin(ang) * dist - 20 + 'px');
+    p.style.setProperty('--s', rand(0.6, 1.3));
+    p.style.animationDuration = rand(0.55, 0.9) + 's';
+    layer.append(p);
+    setTimeout(() => p.remove(), 950);
+  }
+}
+// Gold coins that fly from (x, y) to an element (the coin counter).
+function coinFly(x, y, toEl, n = 6) {
+  if (!toEl) return;
+  const [tx, ty] = centerOf(toEl);
+  for (let i = 0; i < n; i++) {
+    const c = h('div', { class: 'fly-coin' }, artImg('icons/coin.webp') || '');
+    c.style.left = x + rand(-30, 30) + 'px'; c.style.top = y + rand(-20, 20) + 'px';
+    c.style.setProperty('--tx', tx - x + 'px'); c.style.setProperty('--ty', ty - y + 'px');
+    c.style.animationDelay = i * 0.07 + 's';
+    document.body.append(c);
+    setTimeout(() => { c.remove(); if (i % 2 === 0) Sfx.coin(); toEl.classList.remove('bump'); void toEl.offsetWidth; toEl.classList.add('bump'); }, 700 + i * 70);
+  }
+}
+// Counts a number up inside el, ticking as it goes.
+function countUp(el, to, { from = 0, ms = 900, prefix = '', suffix = '' } = {}) {
+  const start = performance.now();
+  let lastTick = 0;
+  const step = (now) => {
+    const f = Math.min(1, (now - start) / ms);
+    const v = Math.round(from + (to - from) * (1 - Math.pow(1 - f, 3)));
+    el.textContent = prefix + fmtNum(v) + suffix;
+    if (now - lastTick > 60 && f < 1) { Sfx.tick(); lastTick = now; }
+    if (f < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function floatText(x, y, text, cls = 'good', root = document.body) {
   const rect = root.getBoundingClientRect();
   const el = h('div', { class: 'float-text ' + cls }, text);
@@ -363,7 +473,7 @@ function floatText(x, y, text, cls = 'good', root = document.body) {
 }
 const centerOf = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
 function confetti(host) {
-  const colors = ['var(--blue)', 'var(--yellow)', 'var(--coral)'];
+  const colors = ['var(--blue)', 'var(--gold)', 'var(--coral)', 'var(--gold)'];
   for (let i = 0; i < 50; i++) {
     const c = h('div', { class: 'confetti' });
     c.style.left = rand(0, 100) + '%';

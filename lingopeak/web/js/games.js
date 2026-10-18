@@ -60,7 +60,7 @@ class GameSession {
     if (w) gradeWord(w, true);
     Sfx.good(this.combo);
     Haptics.buzz(15);
-    if (at) floatText(at[0], at[1], '+' + gained, 'good', this.stage);
+    if (at) { floatText(at[0], at[1], '+' + gained, 'good', this.stage); goldBurst(at[0], at[1], this.combo >= 5); }
     this.bump();
   }
   miss(w, at = null, penalty = 0) {
@@ -654,11 +654,14 @@ const Games = {
         h('h1', {}, r.newBest && r.score ? t('game.newBest') : t('game.over')),
         h('div', { class: 'muted' }, t('game.' + game.id)),
         h('div', { class: 'big-score' }, fmtNum(r.score)),
-        h('div', { class: 'res-stats' }, stat('bolt', '+' + r.xp, t('res.xp')), stat('coin', '+' + r.coins, t('res.coins')), stat('target', Math.round(r.acc * 100) + '%', t('res.accuracy'))),
+        h('div', { class: 'res-stats' }, stat('bolt', '+' + r.xp, t('res.xp'), '', r.xp), stat('coin', '+' + r.coins, t('res.coins'), '', r.coins), stat('target', Math.round(r.acc * 100) + '%', t('res.accuracy'))),
         h('div', { class: 'foot-btns' },
           h('button', { class: 'btn ghost', onclick: () => App.closeOverlay() }, t('game.done')),
           h('button', { class: 'btn primary', onclick: () => Games.start(game) }, t('game.again')))));
-      if (r.newBest && r.score) { Sfx.win(); confetti(res); }
+      countStats(res);
+      const big = res.querySelector('.big-score');
+      countUp(big, r.score, { ms: 1000 });
+      if (r.newBest && r.score) { Sfx.fanfare(); confetti(res); } else Sfx.whoosh();
     });
     try { game.play(this.session); } catch (e) { console.error(e); this.session.quit(); }
   },

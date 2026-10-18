@@ -17,15 +17,20 @@ no ads, and works offline.
 - **A big course:** 10 mountains (Snowdon up to Everest), 50 units,
   200 lessons, 600 words and 300 sentences in all five languages. That makes
   20 courses (every pair).
+- **The side of the mountain:** your lessons are stops on a ridge climbing
+  north-east, through grass, forest, rock, cliffs and snow, one mountain at a
+  time.
 - **Hidden mountains:** you don't know which mountain you're on until you reach
   the top. Then it's revealed with **Mountain complete!** and a badge goes on
   your banner, next to your username.
 - **A costume cast:** Benny the banana, Shelly the shark, Rex the dinosaur and
   seven more. They say things in your new language for you to work out.
+- **Your own character:** pick skin, hair, a hat, a top and trousers (five of
+  each free, five more of each in the shop). Usernames are unique.
 - **20 minutes a week:** a weekly goal instead of a daily one, with a weekly
   streak (1 week, 2 weeks…) and a home-screen widget on Android.
-- **Coins and gems:** earned from lessons, goals and mountains, and spent on
-  avatars, banners, double XP and streak freezes. Nothing costs real money.
+- **Coins and XP:** coins come from lessons, the weekly goal and mountains, and
+  buy clothes, double XP and streak freezes. Nothing costs real money.
 - **Leaderboards:** this week, learners of your language, all time, and
   friends (add them with a 6-letter code). See [docs/CLOUD.md](docs/CLOUD.md)
   to switch them on.

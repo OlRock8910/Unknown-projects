@@ -2,6 +2,7 @@
 // switch the language you're learning (starting at step 1).
 
 const NATIVE_NAMES = { en: 'English', es: 'Español', fr: 'Français', de: 'Deutsch', pt: 'Português' };
+const validName = (n) => /^[\p{L}\p{N}_.-]{3,16}$/u.test(n);
 
 const Onboarding = {
   active: false,
@@ -12,7 +13,7 @@ const Onboarding = {
   start(step = 0) {
     this.active = true;
     this.changing = step > 0 && !!Store.data.profile;
-    this.draft = { native: Store.data.native || guessLang(), target: Store.data.target, name: Store.data.profile?.name || '', avatar: Store.data.profile?.avatar || 'banana' };
+    this.draft = { native: Store.data.native || guessLang(), target: Store.data.target, name: Store.data.profile?.name || '', look: Store.data.profile?.look || { ...DEFAULT_LOOK, skin: randInt(0, 4), hair: randInt(0, 4), hairColor: randInt(0, 3) } };
     if (App.overlayKind) App.closeOverlay();
     $('#tabs').hidden = true;
     this.go(step);
@@ -53,24 +54,44 @@ const Onboarding = {
         h('button', { class: 'btn ghost wide', onclick: () => toast(t('onb.emailLater'), 3000) }, t('onb.haveAccount'))));
   },
 
+  // A list of languages; choosing one just moves the highlight (no reload).
+  langList(langs, selected, onPick, label) {
+    const list = h('div', { class: 'lang-list' });
+    langs.forEach((l) => {
+      const started = this.step === 2 && Store.data.courses[`${this.draft.native}>${l}`];
+      const b = h('button', { class: 'lang-opt' + (selected === l ? ' on' : '') },
+        h('span', { class: 'lang-code' }, l.toUpperCase()), h('b', {}, label(l)), started ? h('small', {}, t('onb.started')) : null);
+      b.addEventListener('click', () => {
+        list.querySelectorAll('.lang-opt').forEach((x) => x.classList.toggle('on', x === b));
+        Sfx.select();
+        onPick(l);
+      });
+      list.append(b);
+    });
+    return list;
+  },
+
   step1() {
-    const list = h('div', { class: 'lang-list' }, ...LANGS.map((l) => h('button', {
-      class: 'lang-opt' + (this.draft.native === l ? ' on' : ''),
-      onclick: () => { this.draft.native = l; if (this.draft.target === l) this.draft.target = null; this.go(1); },
-    }, h('span', { class: 'lang-code' }, l.toUpperCase()), h('b', {}, NATIVE_NAMES[l]))));
-    return this.shell(t('onb.speak'), t('onb.speakSub'), list,
-      h('button', { class: 'btn primary wide', onclick: () => this.go(2) }, t('onb.next')));
+    const next = h('button', { class: 'btn primary wide' }, t('onb.next'));
+    next.addEventListener('click', () => this.go(2));
+    let page = null;
+    const list = this.langList(LANGS, this.draft.native, (l) => {
+      this.draft.native = l;
+      if (this.draft.target === l) this.draft.target = null;
+      // Switch the words on this screen to the new language straight away.
+      UI.lang = l;
+      page.querySelector('h1').textContent = t('onb.speak');
+      page.querySelector('p.muted').textContent = t('onb.speakSub');
+      next.textContent = t('onb.next');
+    }, (l) => NATIVE_NAMES[l]);
+    page = this.shell(t('onb.speak'), t('onb.speakSub'), list, next);
+    return page;
   },
 
   step2() {
-    const list = h('div', { class: 'lang-list' }, ...LANGS.filter((l) => l !== this.draft.native).map((l) => {
-      const started = Store.data.courses[`${this.draft.native}>${l}`];
-      return h('button', {
-        class: 'lang-opt' + (this.draft.target === l ? ' on' : ''),
-        onclick: () => { this.draft.target = l; this.go(2); },
-      }, h('span', { class: 'lang-code' }, l.toUpperCase()), h('b', {}, t('lang.' + l)), started ? h('small', {}, t('onb.started')) : null);
-    }));
-    const next = h('button', { class: 'btn primary wide', disabled: !this.draft.target || null, onclick: () => (this.changing ? this.finish() : this.go(3)) }, this.changing ? t('onb.switch') : t('onb.next'));
+    const next = h('button', { class: 'btn primary wide', disabled: !this.draft.target || null }, this.changing ? t('onb.switch') : t('onb.next'));
+    next.addEventListener('click', () => (this.changing ? this.finish() : this.go(3)));
+    const list = this.langList(LANGS.filter((l) => l !== this.draft.native), this.draft.target, (l) => { this.draft.target = l; next.disabled = false; }, (l) => t('lang.' + l));
     return this.shell(t('onb.learn'), t('onb.learnSub'), list, next);
   },
 
@@ -78,37 +99,34 @@ const Onboarding = {
     const name = h('input', { class: 'field', maxlength: '16', placeholder: t('onb.namePh'), value: this.draft.name, autocomplete: 'nickname' });
     const err = h('div', { class: 'err' });
     const next = h('button', { class: 'btn primary wide' }, t('onb.next'));
-    const ok = () => /^[\p{L}\p{N}_ .-]{3,16}$/u.test(name.value.trim());
     name.addEventListener('input', () => { this.draft.name = name.value; err.textContent = ''; });
-    next.addEventListener('click', () => {
-      if (!ok()) { err.textContent = t('onb.nameErr'); return; }
-      this.draft.name = name.value.trim();
+    next.addEventListener('click', async () => {
+      const n = name.value.trim();
+      if (!validName(n)) { err.textContent = t('onb.nameErr'); Sfx.bad(); return; }
+      next.disabled = true;
+      const free = await Cloud.nameFree(n);
+      next.disabled = false;
+      if (free === false) { err.textContent = t('onb.nameTaken'); Sfx.bad(); return; }
+      this.draft.name = n;
       this.go(4);
     });
-    const avatars = h('div', { class: 'avatar-pick' }, ...AVATARS.filter((a) => !a.cost).map((a) => h('button', {
-      class: 'avatar-item' + (this.draft.avatar === a.id ? ' on' : ''),
-      onclick: (e) => {
-        this.draft.avatar = a.id;
-        e.currentTarget.parentNode.querySelectorAll('.avatar-item').forEach((x) => x.classList.toggle('on', x === e.currentTarget));
-        Sfx.tap();
-      },
-    }, avatarArt(a.id), h('span', {}, a.cast.name))));
-    return this.shell(t('onb.profile'), t('onb.profileSub'), h('div', {}, name, err, h('h2', { class: 'section' }, t('onb.pickAvatar')), avatars,
-      h('div', { class: 'card email-later' }, icon('lock'), h('div', {}, h('b', {}, t('onb.emailTitle')), h('span', {}, t('onb.emailLater'))))), next);
+    const builder = lookBuilder(this.draft.look, (look) => { this.draft.look = look; });
+    return this.shell(t('onb.profile'), t('onb.profileSub'), h('div', {}, name, err, h('h2', { class: 'section' }, t('onb.makeLook')), builder), next);
   },
 
   step4() {
+    const days = t('onb.days').split(',');
     return this.shell(t('onb.goal'), null,
       h('div', { class: 'goal-explain' },
-        h('div', { class: 'card week' }, ring(0.35, '20<small>min</small>'),
-          h('div', { class: 'week-text' }, h('b', {}, t('onb.goalTitle')), h('span', {}, t('onb.goalSub')))),
+        h('div', { class: 'goal-big' }, h('b', {}, '20'), h('span', {}, t('onb.goalUnit'))),
+        h('div', { class: 'goal-week' }, ...days.map((d, i) => h('div', { class: 'gw-day' + ([0, 2, 5].includes(i) ? ' on' : '') }, h('i'), h('small', {}, d)))),
+        h('p', { class: 'muted center' }, t('onb.goalSub')),
         h('ul', { class: 'how' },
           h('li', {}, icon('calendar'), t('onb.how1')),
           h('li', {}, icon('refresh'), t('onb.how2')),
           h('li', {}, icon('mountain'), t('onb.how3')),
           h('li', {}, icon('coin'), t('onb.how4')))),
-      h('button', { class: 'btn primary wide', onclick: () => this.finish() }, t('onb.go')),
-      { cast: castArt(this.draft.avatar, 'happy', 'onb-cast') });
+      h('button', { class: 'btn primary wide', onclick: () => this.finish() }, t('onb.go')));
   },
 
   finish() {
@@ -116,8 +134,7 @@ const Onboarding = {
     d.native = this.draft.native;
     d.target = this.draft.target;
     if (!d.profile) {
-      d.profile = { name: this.draft.name, avatar: this.draft.avatar, banner: 'blue', joined: today() };
-      if (!d.owned.includes(this.draft.avatar)) d.owned.push(this.draft.avatar);
+      d.profile = { name: this.draft.name, look: this.draft.look, banner: 'blue', joined: today() };
     }
     Store.save();
     this.active = false;

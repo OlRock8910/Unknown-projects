@@ -87,11 +87,11 @@ const stray = (page) => page.evaluate(() => {
   await page.click('.onb-foot .btn.primary');
   if (!(await page.textContent('.err'))) fail('a 2-letter name was accepted');
   await page.fill('.field', 'Mia_8');
-  await page.click('.avatar-pick .avatar-item >> nth=2');
+  await page.click('.look-grid .look-item >> nth=2');
   await page.click('.onb-foot .btn.primary');
   await page.click('.onb-foot .btn.primary');
-  const st = await page.evaluate(() => [Store.data.native, Store.data.target, Store.data.profile.name, Store.data.profile.avatar, App.tab, !document.querySelector('#tabs').hidden]);
-  if (st.join() !== 'fr,es,Mia_8,dino,learn,true') fail('sign-up saved the wrong things: ' + st);
+  const st = await page.evaluate(() => [Store.data.native, Store.data.target, Store.data.profile.name, Store.data.profile.look.top, App.tab, !document.querySelector('#tabs').hidden]);
+  if (st.join() !== 'fr,es,Mia_8,tee-yellow,learn,true') fail('sign-up saved the wrong things: ' + st);
   const s = await stray(page);
   if (s) fail('stray text on the home screen: ' + s);
   await page.close();
@@ -179,30 +179,38 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   }
   console.log(`  ok ${ids.length} games`);
 
-  // Shop: can't buy without gems; can with them.
+  // Shop: can't buy without enough coins; can with them.
   const shop = await page.evaluate(() => {
     const d = Store.data;
-    d.gems = 5; d.coins = 0; Store.save();
+    d.coins = 100; Store.save();
     App.show('shop');
-    const freezeBtn = [...document.querySelectorAll('.shop-row')][1].querySelector('button');
-    freezeBtn.click();
+    [...document.querySelectorAll('.shop-row')][1].querySelector('button').click();
     const before = Store.data.freezes || 0;
-    Store.data.gems = 50; Store.save(); App.show('shop');
+    Store.data.coins = 1000; Store.save(); App.show('shop');
     [...document.querySelectorAll('.shop-row')][1].querySelector('button').click();
     [...document.querySelectorAll('.shop-row')][0].querySelector('button').click();
-    return [before, Store.data.freezes, Store.data.gems, Store.boosted()];
+    return [before, Store.data.freezes, Store.data.coins, Store.boosted()];
   });
-  if (shop.join() !== '0,1,20,true') fail('shop misbehaves: ' + shop);
+  if (shop.join() !== '0,1,550,true') fail('shop misbehaves: ' + shop);
+  // Buying a hat in the wardrobe, and wearing it.
+  const hat = await page.evaluate(() => {
+    App.show('shop');
+    [...document.querySelectorAll('.builder-wrap .seg button')][2].click();
+    const crown = [...document.querySelectorAll('.look-grid .look-item')][5];
+    crown.click();
+    return [Store.data.coins, myLook().hat, (Store.data.wardrobe || []).join()];
+  });
+  if (hat.join('|') !== '150|crown|hat:crown') fail('wardrobe purchase wrong: ' + hat);
 
   // The weekly goal: 20 minutes completes it and starts a streak, with 5 gems.
   const week = await page.evaluate(() => {
     const d = Store.data;
-    d.week = { id: weekId(), secs: 0, xp: 0 }; d.weekStreak = { n: 2, last: prevWeekId(weekId()), best: 2 }; d.gems = 0;
+    d.week = { id: weekId(), secs: 0, xp: 0 }; d.weekStreak = { n: 2, last: prevWeekId(weekId()), best: 2 }; d.coins = 0;
     const a = Store.addTime(19 * 60);
     const b = Store.addTime(60);
-    return [a, b, Store.weekStreakNow(), d.gems];
+    return [a, b, Store.weekStreakNow(), d.coins];
   });
-  if (week.join() !== 'false,true,3,5') fail('weekly goal/streak wrong: ' + week);
+  if (week.join() !== 'false,true,3,50') fail('weekly goal/streak wrong: ' + week);
   // A missed week ends the streak unless there's a freeze.
   const roll = await page.evaluate(() => {
     const d = Store.data;
@@ -229,11 +237,17 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   const after = await page.evaluate(() => [!!Store.course.mountains.snowdon, App.tab]);
   if (!after[0]) fail('finishing Snowdon did not complete the mountain');
   await page.evaluate(() => App.revealMountain(LP_COURSE[0]));
+  if (/Snowdon/.test(await page.textContent('.reveal'))) fail('reveal gives the name away before the drum roll');
+  await page.waitForTimeout(2600); // drum roll, then the name types itself in
   if (!/Snowdon/.test(await page.textContent('.reveal'))) fail('reveal does not name the mountain');
   await page.evaluate(() => { App.closeOverlay(); App.show('me'); });
   if (!(await page.$('.banner .badge'))) fail('no badge on the banner after a mountain');
   await page.evaluate(() => App.show('learn'));
   if (!/Snowdon/.test(await page.textContent('#view')) || /Ben Nevis/.test(await page.textContent('#view'))) fail('mountain names: climbed one should show, the next should stay hidden');
+
+  // Typing: accents and a small typo are forgiven, a different word isn't.
+  const typed = await page.evaluate(() => [markTyped('por favore', ['por favor']).ok, markTyped('adios', ['adiós']).how, markTyped('favor', ['por favor']).ok, markTyped('hund', ['der Hund']).ok]);
+  if (typed.join() !== 'true,accent,false,true') fail('marking typed answers: ' + typed);
 
   // Back button.
   const back = await page.evaluate(() => { App.show('shop'); const a = appBack(); const b = appBack(); return [a, b, App.tab]; });

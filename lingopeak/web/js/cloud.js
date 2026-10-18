@@ -81,7 +81,7 @@ const Cloud = {
     const badges = LP_COURSE.filter((m) => Object.values(d.courses).some((c) => c.mountains && c.mountains[m.id])).map((m) => m.id);
     const stats = typeof courseStats === 'function' && C ? courseStats() : { words: 0 };
     return {
-      name: d.profile.name, avatar: d.profile.avatar, banner: d.profile.banner || 'blue', badges,
+      name: d.profile.name, look: myLook(), badges,
       learning: d.target, xp: d.xp, week: d.week.id, week_xp: d.week.xp, week_streak: Store.weekStreakNow(), words: stats.words,
     };
   },
@@ -108,6 +108,7 @@ const Cloud = {
       this.state = 'ok';
     } catch (e) {
       if (e.offline) this.state = 'offline';
+      else if (e.status === 409 || e.code === '23505') { this.state = 'name-taken'; toast(t('onb.nameTaken') + ' ' + t('me.renameHint'), 5000); }
       else if (this.noTable(e)) this.state = 'no-tables';
       else if (this.state !== 'no-anon') this.state = 'offline';
     } finally {
@@ -123,7 +124,7 @@ const Cloud = {
   // ---- leaderboards: 'week' | 'lang' | 'all' | 'friends'
   async board(kind) {
     const token = await this.token();
-    const cols = 'user_id,name,avatar,banner,badges,learning,xp,week_xp,week_streak,words';
+    const cols = 'user_id,name,look,badges,learning,xp,week_xp,week_streak,words';
     if (kind === 'friends') {
       const fr = await this.call(`/rest/v1/lp_friends?select=friend_id&user_id=eq.${this.session.user.id}`, { method: 'GET', token });
       const ids = [this.session.user.id, ...(fr || []).map((f) => f.friend_id)];
@@ -133,6 +134,14 @@ const Cloud = {
     const q = kind === 'all' ? 'order=xp.desc' : `week=eq.${weekId()}&order=week_xp.desc${kind === 'lang' ? '&learning=eq.' + Store.data.target : ''}`;
     return this.call(`/rest/v1/lp_profiles?select=${cols}&${q}&limit=50`, { method: 'GET', token });
   },
+  // Is a username free? true / false, or null when we can't tell (offline).
+  async nameFree(name) {
+    if (!this.enabled()) return null;
+    try {
+      const free = await this.call('/rest/v1/rpc/lp_name_free', { body: { wanted: name } });
+      return free === true ? true : free === false ? false : null;
+    } catch (e) { return null; }
+  },
   async addFriend(code) {
     return this.call('/rest/v1/rpc/lp_add_friend', { token: await this.token(), body: { friend_code: code } });
   },
@@ -141,12 +150,12 @@ const Cloud = {
   },
 };
 
-// The best of two saves of your progress: most XP, coins, gems and words
+// The best of two saves of your progress: most XP, coins and words
 // learned, every lesson finished on either phone, and this phone's settings.
 function mergeProgress(local, cloud) {
   const max = (a, b) => Math.max(Number(a) || 0, Number(b) || 0);
   const out = { ...cloud, ...local };
-  for (const k of ['xp', 'coins', 'gems', 'totalSecs', 'sessions', 'freezes', 'boostUntil']) out[k] = max(local[k], cloud[k]);
+  for (const k of ['xp', 'coins', 'totalSecs', 'sessions', 'freezes', 'boostUntil']) out[k] = max(local[k], cloud[k]);
   out.owned = [...new Set([...(cloud.owned || []), ...(local.owned || [])])];
   out.best = { ...(cloud.best || {}) };
   for (const [k, v] of Object.entries(local.best || {})) out.best[k] = max(out.best[k], v);
@@ -190,7 +199,7 @@ function leaderboardView() {
       if (!rows || !rows.length) return msg(t('ranks.empty'));
       list.replaceChildren(...rows.map((r, i) => h('div', { class: 'rank-row' + (r.user_id === me ? ' me' : '') },
         h('span', { class: 'rank-n' + (i < 3 ? ' top' + i : '') }, i < 3 ? icon(i === 0 ? 'crown' : 'trophy') : i + 1),
-        avatarArt(r.avatar, 'sm'),
+        lookAvatar(r.look, 'sm'),
         h('div', { class: 'rank-name' }, h('b', {}, r.name + (r.user_id === me ? ` (${t('ranks.you')})` : '')),
           h('small', {}, [t('lang.' + r.learning), r.week_streak ? t('ranks.wk', { n: r.week_streak }) : ''].filter(Boolean).join(' · '))),
         h('div', { class: 'rank-badges' }, ...(r.badges || []).slice(-3).map((id) => { const m = LP_COURSE.find((x) => x.id === id); return m ? badgeArt(m, 'xs') : null; })),

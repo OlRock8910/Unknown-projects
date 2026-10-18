@@ -13,6 +13,7 @@
 //  - Comprehensible input: the cast say whole sentences for you to decode.
 
 const LANGS = ['en', 'es', 'fr', 'de', 'pt'];
+const ARTICLES = { es: 'el|la|los|las', fr: 'le|la|les', de: 'der|die|das', pt: 'o|a|os|as' };
 const BOX_DAYS = [0, 1, 3, 7, 16, 35];
 const MASTERED_BOX = 4;
 
@@ -38,7 +39,10 @@ function buildCourse() {
           raw,
         };
         // Spelling and typing work on the word without its article.
-        w.bare = w.t.replace(/^(el|la|los|las|le|la|les|l'|der|die|das|o|a|os|as)\s*(?=\S)/i, '').replace(/^l'/i, '');
+        // Only the language's own articles, followed by a space (or French l'):
+        // "adiós" is not "a" + "diós", and Spanish "a la derecha" keeps its "a".
+        const arts = ARTICLES[tgt];
+        w.bare = arts ? w.t.replace(new RegExp(`^(${arts})\\s+(?=\\S)`, 'i'), '').replace(tgt === 'fr' ? /^l['’]/i : /^$/, '') : w.t;
         w.art = w.t === w.bare ? null : w.t.slice(0, w.t.length - w.bare.length).trim();
         if (byId[w.id]) w.id = `${unit.key}.${w.id}`; // keep ids unique even if two units share a word
         byId[w.id] = w;

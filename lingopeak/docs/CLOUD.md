@@ -16,13 +16,12 @@ Supabase → **SQL Editor** → **New query**. Paste all of this and tap **Run**
 (on a phone, delete the stray `)` the editor sometimes adds at the end):
 
 ```sql
--- What other players see: name, look, badges and XP. Never an email.
+-- What other players see: name, character, badges and XP. Never an email.
 create table public.lp_profiles (
   user_id uuid primary key default auth.uid() references auth.users on delete cascade,
   code text not null unique default upper(substr(md5(random()::text || clock_timestamp()::text), 1, 6)),
-  name text not null default 'Climber' check (char_length(name) <= 20),
-  avatar text not null default 'banana' check (char_length(avatar) <= 20),
-  banner text not null default 'blue' check (char_length(banner) <= 12),
+  name text not null check (char_length(name) between 3 and 16),
+  look jsonb not null default '{}',
   badges text[] not null default '{}',
   learning text not null default 'es' check (char_length(learning) <= 5),
   xp int not null default 0,
@@ -37,6 +36,15 @@ create policy "anyone signed in can see the leaderboard" on public.lp_profiles f
 create policy "add own profile" on public.lp_profiles for insert with check (auth.uid() = user_id);
 create policy "update own profile" on public.lp_profiles for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create index lp_profiles_week on public.lp_profiles (week, week_xp desc);
+-- No two players can have the same username (ignoring capitals).
+create unique index lp_profiles_name on public.lp_profiles (lower(name));
+
+-- Lets the app check a username is free before you pick it.
+create function public.lp_name_free(wanted text) returns boolean
+language sql security definer set search_path = public stable as $$
+  select not exists (select 1 from public.lp_profiles where lower(name) = lower(trim(wanted)) and user_id is distinct from auth.uid());
+$$;
+grant execute on function public.lp_name_free(text) to anon, authenticated;
 create index lp_profiles_xp on public.lp_profiles (xp desc);
 
 -- Each player's saved progress (only they can see it).
