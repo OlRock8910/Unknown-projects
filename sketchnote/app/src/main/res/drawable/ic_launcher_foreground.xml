@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A lined note sheet with a folded corner, and a pencil writing on it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Kept inside the circle that round-icon launchers cut out. -->
+    <group android:scaleX="0.88" android:scaleY="0.88" android:pivotX="54" android:pivotY="54">
+        <group android:rotation="-7" android:pivotX="54" android:pivotY="54">
+            <!-- shadow -->
+            <path android:fillColor="#33000000"
+                android:pathData="M37,29 H65 L77,41 V81 a4,4 0 0 1 -4,4 H37 a4,4 0 0 1 -4,-4 V33 a4,4 0 0 1 4,-4 Z" />
+            <!-- sheet -->
+            <path android:fillColor="#FFFFFFFF"
+                android:pathData="M36,26 H64 L76,38 V78 a4,4 0 0 1 -4,4 H36 a4,4 0 0 1 -4,-4 V30 a4,4 0 0 1 4,-4 Z" />
+            <!-- folded corner -->
+            <path android:fillColor="#FFDCD0FF"
+                android:pathData="M64,26 V34 a4,4 0 0 0 4,4 H76 Z" />
+            <!-- ruled lines -->
+            <path android:strokeColor="#FFD4CBF2" android:strokeWidth="2.2" android:strokeLineCap="round"
+                android:pathData="M39,46 H69 M39,54 H69 M39,62 H69 M39,70 H58" />
+            <!-- handwriting on the first lines -->
+            <path android:strokeColor="#FF3A2E5C" android:strokeWidth="2.2" android:strokeLineCap="round"
+                android:strokeLineJoin="round" android:fillColor="#00000000"
+                android:pathData="M39.5,44 q2.5,-4.5 5,0 t5,0 t5,0 M39.5,52 q2.5,-4.5 5,0 t5,0" />
+        </group>
+        <!-- pencil, leaning in from the lower right -->
+        <group android:rotation="45" android:pivotX="66" android:pivotY="64">
+            <path android:fillColor="#FFFF8FB1" android:pathData="M61.5,47 a3,3 0 0 1 3,-3 h3 a3,3 0 0 1 3,3 V48.5 H61.5 Z" />
+            <path android:fillColor="#FFC9CAD6" android:pathData="M61.5,48.5 H70.5 V52 H61.5 Z" />
+            <path android:fillColor="#FFFFC53D" android:pathData="M61.5,52 H70.5 V74 H61.5 Z" />
+            <path android:fillColor="#FFF0A92B" android:pathData="M66,52 H70.5 V74 H66 Z" />
+            <path android:fillColor="#FFF6DDB4" android:pathData="M61.5,74 H70.5 L66,84 Z" />
+            <path android:fillColor="#FF3A2E5C" android:pathData="M64.2,80 H67.8 L66,84 Z" />
+        </group>
+    </group>
+</vector>
