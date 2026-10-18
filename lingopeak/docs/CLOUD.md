@@ -13,11 +13,13 @@ turn on **Allow anonymous sign-ins** → **Save**.
 ## 2. Make the tables
 
 Supabase → **SQL Editor** → **New query**. Paste all of this and tap **Run**
-(on a phone, delete the stray `)` the editor sometimes adds at the end):
+(on a phone, delete the stray `)` the editor sometimes adds at the end).
+It's safe to run again. The same SQL is in [`lingopeak.sql`](lingopeak.sql);
+on a phone, open that file's **Raw** view to copy it all in one go:
 
 ```sql
 -- What other players see: name, character, badges and XP. Never an email.
-create table public.lp_profiles (
+create table if not exists public.lp_profiles (
   user_id uuid primary key default auth.uid() references auth.users on delete cascade,
   code text not null unique default upper(substr(md5(random()::text || clock_timestamp()::text), 1, 6)),
   name text not null check (char_length(name) between 3 and 16),
@@ -31,43 +33,51 @@ create table public.lp_profiles (
   words int not null default 0,
   updated_at timestamptz not null default now()
 );
+alter table public.lp_profiles add column if not exists look jsonb not null default '{}';
 alter table public.lp_profiles enable row level security;
+drop policy if exists "anyone signed in can see the leaderboard" on public.lp_profiles;
 create policy "anyone signed in can see the leaderboard" on public.lp_profiles for select using (auth.uid() is not null);
+drop policy if exists "add own profile" on public.lp_profiles;
 create policy "add own profile" on public.lp_profiles for insert with check (auth.uid() = user_id);
+drop policy if exists "update own profile" on public.lp_profiles;
 create policy "update own profile" on public.lp_profiles for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create index lp_profiles_week on public.lp_profiles (week, week_xp desc);
+create index if not exists lp_profiles_week on public.lp_profiles (week, week_xp desc);
 -- No two players can have the same username (ignoring capitals).
-create unique index lp_profiles_name on public.lp_profiles (lower(name));
+create unique index if not exists lp_profiles_name on public.lp_profiles (lower(name));
 
 -- Lets the app check a username is free before you pick it.
-create function public.lp_name_free(wanted text) returns boolean
+create or replace function public.lp_name_free(wanted text) returns boolean
 language sql security definer set search_path = public stable as $$
   select not exists (select 1 from public.lp_profiles where lower(name) = lower(trim(wanted)) and user_id is distinct from auth.uid());
 $$;
 grant execute on function public.lp_name_free(text) to anon, authenticated;
-create index lp_profiles_xp on public.lp_profiles (xp desc);
+create index if not exists lp_profiles_xp on public.lp_profiles (xp desc);
 
 -- Each player's saved progress (only they can see it).
-create table public.lp_progress (
+create table if not exists public.lp_progress (
   user_id uuid primary key default auth.uid() references auth.users on delete cascade,
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
 alter table public.lp_progress enable row level security;
+drop policy if exists "read own progress" on public.lp_progress;
 create policy "read own progress" on public.lp_progress for select using (auth.uid() = user_id);
+drop policy if exists "add own progress" on public.lp_progress;
 create policy "add own progress" on public.lp_progress for insert with check (auth.uid() = user_id);
+drop policy if exists "update own progress" on public.lp_progress;
 create policy "update own progress" on public.lp_progress for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Friends (both ways round).
-create table public.lp_friends (
+create table if not exists public.lp_friends (
   user_id uuid references auth.users on delete cascade,
   friend_id uuid references auth.users on delete cascade,
   primary key (user_id, friend_id)
 );
 alter table public.lp_friends enable row level security;
+drop policy if exists "read own friends" on public.lp_friends;
 create policy "read own friends" on public.lp_friends for select using (auth.uid() = user_id);
 
-create function public.lp_add_friend(friend_code text) returns text
+create or replace function public.lp_add_friend(friend_code text) returns text
 language plpgsql security definer set search_path = public as $$
 declare f public.lp_profiles;
 begin
@@ -79,7 +89,7 @@ begin
   return f.name;
 end $$;
 
-create function public.lp_remove_friend(friend uuid) returns void
+create or replace function public.lp_remove_friend(friend uuid) returns void
 language sql security definer set search_path = public as $$
   delete from public.lp_friends
   where (user_id = auth.uid() and friend_id = friend) or (user_id = friend and friend_id = auth.uid());
