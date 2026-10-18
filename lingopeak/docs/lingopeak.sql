@@ -78,3 +78,6 @@ language sql security definer set search_path = public as $$
   delete from public.lp_friends
   where (user_id = auth.uid() and friend_id = friend) or (user_id = friend and friend_id = auth.uid());
 $$;
+
+-- The end. (If your phone added a ) after this line, it doesn't matter.)
+--

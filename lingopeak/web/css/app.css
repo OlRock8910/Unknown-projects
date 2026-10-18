@@ -649,7 +649,7 @@ p { margin: 0; line-height: 1.45; }
 .avatar.look { background: var(--blue-l); display: block; }
 .avatar.look svg { width: 100%; height: 100%; display: block; }
 .builder-wrap { display: flex; flex-direction: column; gap: 12px; }
-.look-preview { height: 190px; display: grid; place-items: center; background: var(--surface); border: 2px solid var(--line); border-radius: 20px; padding: 10px; }
+.look-preview { height: 230px; display: grid; place-items: center; background: var(--surface); border: 2px solid var(--line); border-radius: 20px; padding: 10px; }
 .look-preview svg { height: 100%; width: auto; display: block; }
 .look-preview.bounce svg { animation: lookBounce 0.45s cubic-bezier(.3,1.6,.5,1); }
 @keyframes lookBounce { 0% { transform: scale(1); } 35% { transform: scale(1.08) rotate(-3deg); } 100% { transform: scale(1); } }
@@ -667,6 +667,7 @@ p { margin: 0; line-height: 1.45; }
 .shop-row.poor .price { opacity: 0.45; filter: grayscale(0.6); box-shadow: none; }
 .look-thumb { width: 100%; height: 100%; display: grid; place-items: center; }
 .look-thumb svg { width: 100%; height: 100%; display: block; }
+.look-thumb img { max-width: 78%; max-height: 78%; object-fit: contain; display: block; }
 .swatch { width: 70%; height: 70%; border-radius: 50%; border: 3px solid var(--ink); }
 .look-price { position: absolute; left: 3px; right: 3px; bottom: 3px; display: flex; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 900; background: var(--ink); color: var(--bg); border-radius: 8px; padding: 1px 2px; }
 .look-price .ic { width: 12px; height: 12px; color: var(--gold); }

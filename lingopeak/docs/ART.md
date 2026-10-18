@@ -24,8 +24,8 @@ every prompt with the **style block**, then add the sheet's own text.
 | 6. Icons A: menu and rewards (5 × 3) | `art/sheets/icons-a.jpg` | ✅ done |
 | 7. Icons B: practice and games (5 × 3) | `art/sheets/icons-b.jpg` | ✅ done |
 | 8. Icons C: shop, settings and extras (5 × 3) | `art/sheets/icons-c.jpg` | ✅ done |
-| 9. Avatar A: tops and trousers (5 × 4) | `art/sheets/avatar-a.jpg` | still to make |
-| 10. Avatar B: hats and hair (5 × 3) | `art/sheets/avatar-b.jpg` | still to make |
+| 9. Avatar A: tops and trousers (5 × 4) | `art/sheets/avatar-a.jpg` | ✅ done |
+| 10. Avatar B: hats and hair (5 × 3) | `art/sheets/avatar-b.jpg` | ✅ done |
 
 The cast order is banana, shark, dinosaur, astronaut, penguin, bee, pizza,
 knight, avocado and croissant. The mountain order is Snowdon, Ben Nevis,
@@ -43,8 +43,8 @@ python3 tools/cut-sheet.py art/sheets/mountains.jpg web/img/mountains snowdon be
 python3 tools/cut-sheet.py art/sheets/icons-a.jpg web/img/icons --cols=5 --rows=3 --size=160 --gap=60 mountain dumbbell trophy bag user coin bolt calendar lock check speaker turtle book star crown
 python3 tools/cut-sheet.py art/sheets/icons-b.jpg web/img/icons --cols=5 --rows=3 --size=160 --gap=60 refresh target headphones cards bubble raindrop mallet memory truefalse quiz heart oddone scramble hearts swords
 python3 tools/cut-sheet.py art/sheets/icons-c.jpg web/img/icons --cols=5 --rows=3 --size=160 --gap=60 potion snowflake chest gift gear share sun moon music vibrate globe users cloud sparkle flag
-python3 tools/cut-sheet.py art/sheets/avatar-a.jpg web/img/look --cols=5 --rows=4 --size=240 --gap=60 top-tee-blue top-tee-coral top-tee-yellow top-tee-white top-hoodie top-stripes top-star top-football top-bolt top-gold pants-jeans pants-navy pants-khaki pants-shorts pants-joggers pants-yellow pants-check pants-track pants-green pants-goldpants
-python3 tools/cut-sheet.py art/sheets/avatar-b.jpg web/img/look --cols=5 --rows=3 --size=240 --gap=60 hat-cap hat-beanie hat-bucket hat-headphones hat-crown hat-cowboy hat-party hat-chef hat-viking hat-wizard hair-short hair-long hair-curly hair-bun hair-spiky
+python3 tools/cut-sheet.py art/sheets/avatar-a.jpg web/img/look --cols=5 --rows=4 top-tee-blue top-tee-coral top-tee-yellow top-tee-white top-hoodie top-stripes top-star top-football top-bolt top-gold pants-jeans pants-navy pants-khaki pants-shorts pants-joggers pants-yellow pants-check pants-track pants-green pants-goldpants
+python3 tools/cut-sheet.py art/sheets/avatar-b.jpg web/img/look --cols=5 --rows=3 hat-cap hat-beanie hat-bucket hat-headphones hat-crown hat-cowboy hat-party hat-chef hat-viking hat-wizard hair-short hair-long hair-curly hair-bun hair-spiky
 python3 tools/list-art.py
 ```
 
@@ -63,6 +63,10 @@ python3 tools/list-art.py
 > One image: a neat grid of 5 columns × 3 rows of icons, 15 icons in total, each centred in its own equal square cell with plenty of empty space around it. The background is one solid flat magenta colour #FF00FF everywhere — no gradient, no shadows on the background, no borders, no grid lines, no text, letters or numbers anywhere. Style: chunky, friendly mobile-game icons with slightly thick dark navy outlines (#1B1D2A), flat colours with one soft highlight, slightly rounded shapes, drawn front-on, each filling about 70% of its cell. Colours: mainly cobalt blue #2F5BEA, sunflower yellow / gold #FFC531 and coral #FF5A4E, plus white and a little navy. All 15 icons in exactly the same style, line weight and size, like one icon set. Not 3D, not clay, not emoji, not photo-realistic. The 15 icons, in reading order: 1) a small potion bottle with a lightning bolt on the label, 2) an ice-blue snowflake, 3) a treasure chest overflowing with gold coins, 4) a wrapped gift box with a bow, 5) a gear cog, 6) a share arrow coming up out of a box, 7) a sun, 8) a crescent moon, 9) a musical note, 10) a phone with little vibration lines either side, 11) a globe, 12) two people side by side, 13) a fluffy white cloud, 14) a gold sparkle burst, 15) a flag on a pole.
 
 ## The two avatar prompts (copy each one whole into Gemini)
+
+The avatar sheets are cut at full size (no `--size`) so every piece keeps the
+sheet's scale; `ART_SCALE` and `ART_FIT` in `web/js/avatar.js` place them on
+the body. Hair is drawn grey and tinted to the chosen hair colour.
 
 The clothes go on the character you build, so every top has to be the same
 shape, every pair of trousers the same shape, and every hat sized for the same

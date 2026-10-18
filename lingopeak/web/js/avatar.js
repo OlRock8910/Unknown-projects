@@ -14,6 +14,7 @@ const WARDROBE = {
   hat: [
     { id: 'none' }, { id: 'cap', c: '#2F5BEA' }, { id: 'beanie', c: '#FF5A4E' }, { id: 'bucket', c: '#FFC531' }, { id: 'headphones', c: '#1B1D2A' },
     { id: 'crown', c: '#FFC531', cost: 400 }, { id: 'cowboy', c: '#B9772F', cost: 250 }, { id: 'party', c: '#FF5A4E', cost: 150 }, { id: 'chef', c: '#FFFFFF', cost: 200 }, { id: 'viking', c: '#9A9DAB', cost: 350 },
+    { id: 'wizard', c: '#2A2E44', cost: 300 },
   ],
   top: [
     { id: 'tee-blue', c: '#2F5BEA' }, { id: 'tee-coral', c: '#FF5A4E' }, { id: 'tee-yellow', c: '#FFC531' }, { id: 'tee-white', c: '#F2F1EC', stripe: '#2F5BEA' }, { id: 'hoodie', c: '#2A2E44', hood: true },
@@ -30,6 +31,26 @@ const DEFAULT_LOOK = { skin: 1, hair: 0, hairColor: 1, hat: 'none', top: 'tee-bl
 const itemOf = (slot, id) => WARDROBE[slot].find((x) => x.id === id) || WARDROBE[slot][0];
 const ownsItem = (slot, it) => !it.cost || (Store.data.wardrobe || []).includes(`${slot}:${it.id}`);
 const myLook = () => ({ ...DEFAULT_LOOK, ...((Store.data.profile && Store.data.profile.look) || {}) });
+
+// Drawn clothes, hats and hair (img/look, from the Gemini sheets). Each sheet
+// was cut at its own scale, so one number per sheet turns pixels into SVG
+// units and everything on a sheet stays the same size relative to the body.
+const lookArt = (slot, id) => {
+  const f = `look/${slot}-${id}.webp`;
+  return typeof ART_FILES !== 'undefined' && ART_FILES.has(f) ? { src: 'img/' + f, w: ART_SIZES[f][0], h: ART_SIZES[f][1] } : null;
+};
+const ART_SCALE = { top: 0.18, pants: 0.15, hat: 0.118, hair: 0.118 };
+// Where each piece sits: its top edge (y) and any nudge sideways (dx) or extra scale (k).
+const ART_FIT = {
+  hat: { cap: { y: 4, dx: 6 }, beanie: { y: -8, k: 0.92 }, bucket: { y: 0, k: 0.95 }, headphones: { y: 9, k: 1.36 }, crown: { y: -4 }, cowboy: { y: -2 }, party: { y: -18, k: 0.8 }, chef: { y: -14 }, viking: { y: -3 }, wizard: { y: -12 } },
+  hair: { short: { y: 15 }, long: { y: 16 }, curly: { y: 11 }, bun: { y: 5 }, spiky: { y: 9 } },
+};
+// An <image> of a piece, centred on the body at top edge y.
+function artImage(a, slot, y, extra = '') {
+  const k = ART_SCALE[slot] * (extra.k || 1);
+  const w = a.w * k, ht = a.h * k;
+  return { svg: `<image href="${a.src}" x="${(60 - w / 2 + (extra.dx || 0)).toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${ht.toFixed(1)}" ${extra.filter ? `filter="url(#${extra.filter})"` : ''}/>`, w, h: ht };
+}
 
 let avatarSeq = 0;
 // The character as SVG markup. crop: 'full' | 'head'.
@@ -65,8 +86,19 @@ function lookSvg(look, crop = 'full') {
     cowboy: `<path d="M44 30 L46 12 Q60 6 74 12 L76 30Z" fill="${hat.c}" ${o}/><path d="M24 30 Q30 38 60 34 Q90 38 96 30 Q88 26 60 28 Q32 26 24 30Z" fill="${hat.c}" ${o}/><rect x="45" y="24" width="30" height="5" fill="${INK}"/>`,
     party: `<path d="M46 30 L60 0 L74 30Z" fill="${hat.c}" ${o}/><path d="M50 22 L70 22 M54 13 L66 13" stroke="#FFC531" stroke-width="3"/><circle cx="60" cy="1" r="4" fill="#FFC531" ${o}/>`,
     chef: `<rect x="44" y="20" width="32" height="14" fill="#FFFFFF" ${o}/><circle cx="48" cy="16" r="9" fill="#FFFFFF" ${o}/><circle cx="60" cy="11" r="11" fill="#FFFFFF" ${o}/><circle cx="72" cy="16" r="9" fill="#FFFFFF" ${o}/><rect x="45" y="18" width="30" height="10" fill="#FFFFFF"/>`,
+    wizard: `<path d="M42 30 L66 -4 L64 8 L80 30Z" fill="${hat.c}" ${o}/><path d="M28 32 Q60 22 92 32 Q60 40 28 32Z" fill="${hat.c}" ${o}/><circle cx="60" cy="18" r="3" fill="#FFC531"/><circle cx="68" cy="24" r="2" fill="#FFC531"/>`,
     viking: `<path d="M38 34 Q38 12 60 12 Q82 12 82 34Z" fill="${hat.c}" ${o}/><path d="M38 28 Q24 24 26 8 Q32 20 42 22Z M82 28 Q96 24 94 8 Q88 20 78 22Z" fill="#F2F1EC" ${o}/><rect x="36" y="30" width="48" height="6" rx="3" fill="#B9772F" ${o}/>`,
   }[hat.id] || '';
+
+  // Drawn art where there is some (hair is grey in the art and tinted here).
+  const hairArt = lookArt('hair', style), hatArt = hat.id !== 'none' && lookArt('hat', hat.id);
+  const topArt = lookArt('top', top.id), pantsArt = lookArt('pants', pants.id);
+  const hairFilter = hairArt ? `<filter id="${id}h" color-interpolation-filters="sRGB"><feComponentTransfer in="SourceGraphic" result="b"><feFuncR type="linear" slope="1.2"/><feFuncG type="linear" slope="1.2"/><feFuncB type="linear" slope="1.2"/></feComponentTransfer><feFlood flood-color="${hairC}"/><feBlend in2="b" mode="multiply"/><feComposite in2="SourceGraphic" operator="in"/></filter>` : '';
+  // Drawn hair goes behind the head, with just the fringe over the forehead.
+  const hairImg = hairArt && artImage(hairArt, 'hair', ART_FIT.hair[style].y, { filter: id + 'h' }).svg;
+  const hairBackOut = hairArt ? hairImg : hairBack;
+  const hairTopOut = hairArt ? `<clipPath id="${id}f"><path d="M0 -20 H120 V52 Q60 22 0 52Z"/></clipPath><g clip-path="url(#${id}f)">${hairImg}</g>` : hairTop;
+  const hatOut = hatArt ? artImage(hatArt, 'hat', (ART_FIT.hat[hat.id] || { y: 4 }).y, ART_FIT.hat[hat.id] || {}).svg : hats;
 
   // Clothes.
   const tf = top.c;
@@ -84,30 +116,53 @@ function lookSvg(look, crop = 'full') {
     + (pants.shine ? `<path d="M44 124 L48 120" stroke="#FFF3D1" stroke-width="3"/>` : '');
 
   const clip = `<clipPath id="${id}t"><path d="M36 72 Q60 66 84 72 L86 118 L34 118Z"/></clipPath><clipPath id="${id}p"><path d="M38 114 H82 L82 ${legBottom} H62 L60 124 L58 ${legBottom} H38Z"/></clipPath>`;
-  const vb = crop === 'head' ? '22 2 76 76' : '0 0 120 170';
-  return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg"><defs>${clip}</defs>
-    ${hairBack}
-    <!-- legs and shoes -->
-    ${pants.short ? `<rect x="42" y="128" width="12" height="22" fill="${skin}" ${o}/><rect x="66" y="128" width="12" height="22" fill="${skin}" ${o}/>` : ''}
+
+  // Trousers (and bare legs under shorts), then where the shoes go.
+  let legs, shoeY;
+  if (pantsArt) {
+    const im = artImage(pantsArt, 'pants', 112, pants.short ? { k: 0.85 } : {});
+    const end = 112 + im.h;
+    shoeY = pants.short ? end + 14 : end + 2;
+    legs = (pants.short ? `<rect x="43" y="${end - 6}" width="11" height="${shoeY - end + 4}" fill="${skin}" ${o}/><rect x="66" y="${end - 6}" width="11" height="${shoeY - end + 4}" fill="${skin}" ${o}/>` : '') + im.svg;
+  } else {
+    shoeY = 155;
+    legs = `${pants.short ? `<rect x="42" y="128" width="12" height="22" fill="${skin}" ${o}/><rect x="66" y="128" width="12" height="22" fill="${skin}" ${o}/>` : ''}
     <path d="M38 114 H82 L82 ${legBottom} H62 L60 124 L58 ${legBottom} H38Z" fill="${pf}" ${o}/>
-    <g clip-path="url(#${id}p)">${pantsExtra}</g>
-    <ellipse cx="48" cy="155" rx="12" ry="6" fill="${INK}"/><ellipse cx="72" cy="155" rx="12" ry="6" fill="${INK}"/>
-    <!-- arms -->
-    <path d="M38 76 L28 108" stroke="${INK}" stroke-width="14" stroke-linecap="round"/><path d="M38 76 L28 108" stroke="${tf}" stroke-width="9" stroke-linecap="round"/>
+    <g clip-path="url(#${id}p)">${pantsExtra}</g>`;
+  }
+  const shoes = `<ellipse cx="48" cy="${shoeY}" rx="12" ry="6" fill="${INK}"/><ellipse cx="72" cy="${shoeY}" rx="12" ry="6" fill="${INK}"/>`;
+
+  // Top and arms: drawn tops have their own sleeves, so the arms are bare.
+  let body;
+  if (topArt) {
+    const fit = (ART_FIT.top || {})[top.id] || {};
+    const im = artImage(topArt, 'top', fit.y || 63);
+    const sx = im.w / 2 - 6, sy = (fit.y || 63) + im.h * 0.36;
+    const arm = (d) => `<path d="M${60 + d * sx} ${sy.toFixed(1)} L${60 + d * (sx + 2)} 108" stroke="${INK}" stroke-width="13" stroke-linecap="round"/><path d="M${60 + d * sx} ${sy.toFixed(1)} L${60 + d * (sx + 2)} 108" stroke="${skin}" stroke-width="8" stroke-linecap="round"/><circle cx="${60 + d * (sx + 2)}" cy="111" r="6" fill="${skin}" ${o}/>`;
+    body = arm(-1) + arm(1) + im.svg;
+  } else {
+    body = `<path d="M38 76 L28 108" stroke="${INK}" stroke-width="14" stroke-linecap="round"/><path d="M38 76 L28 108" stroke="${tf}" stroke-width="9" stroke-linecap="round"/>
     <path d="M82 76 L92 108" stroke="${INK}" stroke-width="14" stroke-linecap="round"/><path d="M82 76 L92 108" stroke="${tf}" stroke-width="9" stroke-linecap="round"/>
     <circle cx="27" cy="112" r="6" fill="${skin}" ${o}/><circle cx="93" cy="112" r="6" fill="${skin}" ${o}/>
-    <!-- body -->
     <path d="M36 72 Q60 66 84 72 L86 118 L34 118Z" fill="${tf}" ${o}/>
     <g clip-path="url(#${id}t)">${topExtra}</g>
-    <path d="M36 72 Q60 66 84 72 L86 118 L34 118Z" fill="none" ${o}/>
+    <path d="M36 72 Q60 66 84 72 L86 118 L34 118Z" fill="none" ${o}/>`;
+  }
+
+  const vb = crop === 'head' ? (hat.id === 'none' ? '22 2 76 76' : '19 -6 82 82') : (hatArt ? `0 -22 120 ${Math.max(192, shoeY + 30)}` : `0 -6 120 ${Math.max(176, shoeY + 14)}`);
+  return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg"><defs>${clip}${hairFilter}</defs>
+    ${hairBackOut}
+    ${legs}
+    ${shoes}
+    ${body}
     <!-- head -->
     <rect x="54" y="60" width="12" height="10" fill="${skin}" ${o}/>
     <circle cx="60" cy="44" r="22" fill="${skin}" ${o}/>
     <circle cx="51" cy="45" r="2.8" fill="${INK}"/><circle cx="69" cy="45" r="2.8" fill="${INK}"/>
     <circle cx="46" cy="52" r="3.5" fill="#FF8A80" opacity=".45"/><circle cx="74" cy="52" r="3.5" fill="#FF8A80" opacity=".45"/>
     <path d="M53 53 Q60 59 67 53" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>
-    ${hairTop}
-    ${hats}
+    ${hairTopOut}
+    ${hatOut}
   </svg>`;
 }
 
@@ -141,6 +196,7 @@ function lookBuilder(look, onChange, { shop = false } = {}) {
         const owned = ownsItem(tab, it);
         return {
           sel: L[tab] === it.id, owned, cost: it.cost,
+          art: lookArt(tab, it.id),
           svg: lookSvg({ ...L, [tab]: it.id }, tab === 'hat' ? 'head' : 'full'),
           pick: () => {
             if (!owned) {
@@ -158,7 +214,9 @@ function lookBuilder(look, onChange, { shop = false } = {}) {
     }
     grid.replaceChildren(...items.map((it) => {
       const b = h('button', { class: 'look-item' + (it.sel ? ' on' : '') + (it.owned === false ? ' locked' + (Store.data.coins < it.cost ? ' poor' : ' can-buy') : '') },
-        it.swatch ? h('span', { class: 'swatch', style: { background: it.swatch } }) : h('span', { class: 'look-thumb', html: it.svg }),
+        it.swatch ? h('span', { class: 'swatch', style: { background: it.swatch } })
+          : it.art ? h('span', { class: 'look-thumb' }, h('img', { src: it.art.src, alt: '', draggable: 'false' }))
+          : h('span', { class: 'look-thumb', html: it.svg }),
         it.owned === false ? h('span', { class: 'look-price' }, icon('coin'), fmtNum(it.cost)) : null);
       b.addEventListener('click', () => {
         if (it.pick() === false) return;
