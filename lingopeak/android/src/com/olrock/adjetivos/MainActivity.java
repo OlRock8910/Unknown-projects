@@ -11,16 +11,30 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Vibrator;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -41,6 +55,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private static final String[][] LOCALES = { {"en", "GB"}, {"es", "ES"}, {"fr", "FR"}, {"de", "DE"}, {"pt", "BR"} };
 
     private WebView web;
+    private FrameLayout frame;
     private TextToSpeech tts;
     private volatile boolean ttsReady;
     private volatile boolean ttsFailed;
@@ -48,6 +63,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private final Map<String, Voice> voices = new HashMap<String, Voice>();
     private final Map<String, Boolean> hasLang = new HashMap<String, Boolean>();
     private int utterance;
+    // Speaking exercises: the phone's speech recogniser.
+    private SpeechRecognizer recognizer;
+    private String pendingLocale;
+    private static final int MIC_REQUEST = 7;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,7 +96,24 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         web.setWebViewClient(new WebViewClient());
         web.addJavascriptInterface(new Bridge(), "Native");
         web.loadUrl("file:///android_asset/index.html");
-        setContentView(web);
+
+        // From Android 15 the app is drawn behind the status and navigation
+        // bars; pad it so nothing sits under them (or under the keyboard).
+        frame = new FrameLayout(this);
+        frame.setBackgroundColor(LIGHT);
+        frame.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        if (Build.VERSION.SDK_INT >= 35) {
+            frame.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+                @Override
+                public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+                    v.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                        insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+                    return insets.consumeSystemWindowInsets();
+                }
+            });
+        }
+        setContentView(frame);
+        listenForBack();
 
         tts = new TextToSpeech(this, this, GOOGLE_TTS);
     }
@@ -96,6 +132,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             w.getDecorView().setSystemUiVisibility(flags);
         }
         if (web != null) web.setBackgroundColor(c);
+        if (frame != null) frame.setBackgroundColor(c); // shows behind the bars from Android 15
     }
 
     @Override
@@ -227,6 +264,33 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             });
         }
 
+        /** Can the phone turn speech into text? */
+        @JavascriptInterface
+        public boolean canListen() {
+            return SpeechRecognizer.isRecognitionAvailable(MainActivity.this);
+        }
+
+        /** Listens once in a language like "es-ES"; results go to window.onNativeSpeech. */
+        @JavascriptInterface
+        public void listen(final String locale) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    startListening(locale);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void stopListening() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (recognizer != null) recognizer.cancel();
+                }
+            });
+        }
+
         /** New numbers for the home-screen widget (JSON from the app). */
         @JavascriptInterface
         public void updateWidget(String json) {
@@ -240,6 +304,37 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     @Override
     public void onBackPressed() {
+        goBack();
+    }
+
+    /**
+     * Android 13+ sends the back gesture to an OnBackInvokedCallback instead
+     * (from Android 16, onBackPressed is no longer called at all). Registered
+     * through reflection so it builds against older SDKs.
+     */
+    private void listenForBack() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        try {
+            Object dispatcher = Activity.class.getMethod("getOnBackInvokedDispatcher").invoke(this);
+            Class<?> cb = Class.forName("android.window.OnBackInvokedCallback");
+            Object callback = Proxy.newProxyInstance(cb.getClassLoader(), new Class<?>[] { cb }, new InvocationHandler() {
+                @Override
+                public Object invoke(Object proxy, Method m, Object[] args) {
+                    String name = m.getName();
+                    if ("onBackInvoked".equals(name)) { goBack(); return null; }
+                    if ("hashCode".equals(name)) return System.identityHashCode(proxy);
+                    if ("equals".equals(name)) return proxy == args[0];
+                    if ("toString".equals(name)) return "LingoPeakBack";
+                    return null;
+                }
+            });
+            dispatcher.getClass().getMethod("registerOnBackInvokedCallback", int.class, cb).invoke(dispatcher, 0, callback);
+        } catch (Exception e) {
+            // Older behaviour: onBackPressed.
+        }
+    }
+
+    private void goBack() {
         // Let the app close whatever is open first; leave only from the home screen.
         web.evaluateJavascript("(window.appBack && window.appBack()) ? 'y' : 'n'", new ValueCallback<String>() {
             @Override
@@ -247,6 +342,58 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 if (!"\"y\"".equals(value)) finish();
             }
         });
+    }
+
+    // ---------------------------------------------------------------- speaking
+    private void startListening(String locale) {
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingLocale = locale;
+            requestPermissions(new String[] { Manifest.permission.RECORD_AUDIO }, MIC_REQUEST);
+            return;
+        }
+        if (recognizer == null) {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer.setRecognitionListener(new RecognitionListener() {
+                @Override public void onReadyForSpeech(Bundle b) { speech("ready", null, 0); }
+                @Override public void onBeginningOfSpeech() { }
+                @Override public void onRmsChanged(float v) { }
+                @Override public void onBufferReceived(byte[] b) { }
+                @Override public void onEndOfSpeech() { speech("end", null, 0); }
+                @Override public void onError(int code) { speech("error", null, code); }
+                @Override public void onResults(Bundle b) { speech("results", b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION), 0); }
+                @Override public void onPartialResults(Bundle b) { speech("partial", b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION), 0); }
+                @Override public void onEvent(int t, Bundle b) { }
+            });
+        }
+        Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale);
+        i.putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", new String[] {});
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+        i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        recognizer.cancel();
+        recognizer.startListening(i);
+    }
+
+    /** Tells the app what the recogniser heard: window.onNativeSpeech({type, texts, code}). */
+    private void speech(String type, ArrayList<String> texts, int code) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("type", type);
+            if (texts != null) o.put("texts", new JSONArray(texts));
+            if (code != 0) o.put("code", code);
+            web.evaluateJavascript("window.onNativeSpeech && window.onNativeSpeech(" + o.toString() + ")", null);
+        } catch (Exception e) {
+            // nothing to tell
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        if (requestCode != MIC_REQUEST) return;
+        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED && pendingLocale != null) startListening(pendingLocale);
+        else speech("error", null, 9); // SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS
+        pendingLocale = null;
     }
 
     @Override
@@ -270,6 +417,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     @Override
     protected void onDestroy() {
         if (tts != null) tts.shutdown();
+        if (recognizer != null) recognizer.destroy();
         web.destroy();
         super.onDestroy();
     }

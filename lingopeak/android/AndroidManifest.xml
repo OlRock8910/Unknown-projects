@@ -5,11 +5,16 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Leaderboards and the online backup; everything else works offline. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Speaking exercises: asked for the first time you tap the microphone. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Android 11+ only lets apps see the text-to-speech engine if they say they use it. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 

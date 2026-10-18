@@ -6,6 +6,9 @@ const speakable = () => Store.s.voice && Voice.available() && !['missing', 'none
 // Listening and typing exercises can each be turned off in Settings.
 const canListen = () => speakable() && Store.s.listen !== false;
 const canType = () => Store.s.typing !== false;
+// Speaking exercises: on unless turned off, paused ("can't speak now") or there's no microphone.
+const canSpeak = () => Store.s.speak !== false && Date.now() > (Store.data.speakPausedUntil || 0) && Mic.available();
+const speakable_word = (w) => w.k !== 'num' && !/\d/.test(w.t);
 
 function sayBtn(text, opts = {}) {
   const b = h('button', { class: 'say-btn ' + (opts.cls || ''), 'aria-label': t('ex.hear') }, icon('speaker'));
@@ -327,6 +330,97 @@ const EX = {
     };
   },
 
+  // Hear it, then say it out loud. what: a word or a sentence.
+  speak(what) {
+    const isWord = !!what.unit && !!what.k;
+    const text = isWord ? what.t : what.t, meaning = what.n;
+    return (ctl) => {
+      let tries = 0;
+      const heard = h('div', { class: 'heard' });
+      const mic = h('button', { class: 'mic-btn', 'aria-label': t('ex.speakTap') }, icon('mic'));
+      const label = h('div', { class: 'mic-label' }, t('ex.speakTap'));
+      const go = async () => {
+        if (ctl.locked()) return;
+        if (Mic.busy) { Mic.stop(); return; }
+        Voice.stop();
+        mic.classList.add('on'); label.textContent = t('ex.listening'); heard.textContent = '';
+        try {
+          const said = await Mic.listen(I18N_LOCALE[Store.data.target], (p) => { heard.textContent = p; });
+          heard.textContent = said[0] || '';
+          if (markSpoken(said, isWord ? what.tAll : [text])) return ctl.done({ ok: true, answer: text, say: null });
+          tries++;
+          if (tries >= 2) return ctl.done({ ok: false, answer: text, say: text, note: t('ex.heard', { t: said[0] || '' }) });
+          Sfx.oops();
+          label.textContent = t('ex.tryAgain');
+        } catch (e) {
+          if (e === 'stopped') { label.textContent = t('ex.speakTap'); return; }
+          if (e === 'denied') return ctl.skip('ex.micDenied');
+          label.textContent = t('ex.noHear');
+        } finally { mic.classList.remove('on'); }
+      };
+      mic.addEventListener('click', go);
+      return {
+        title: t('ex.speak'), word: isWord ? what : null, auto: true,
+        node: h('div', { class: 'speak-ex' },
+          h('div', { class: 'card speak-card' },
+            h('div', { class: 'speak-row' }, sayBtn(text), slowBtn(text)),
+            h('div', { class: 'speak-text' }, isWord ? text : tappable(text)),
+            h('div', { class: 'speak-mean' }, meaning)),
+          mic, label, heard),
+        onShow: () => Voice.say(text, { force: true }),
+        check: () => ({ ok: false, answer: text }),
+      };
+    };
+  },
+
+  // A sentence with a word (or short phrase) from the course missing: pick what fits.
+  gap(s) {
+    const parts = s.t.split(' ');
+    const core = (p) => p.replace(/^[¿¡"“«(]+|[.,;:!?"”»)]+$/g, '');
+    const lessonIds = new Set(s.unit.words.map((w) => w.id));
+    // The best span: a word from this unit beats one from elsewhere, longer beats shorter.
+    let best = null;
+    for (let len = 3; len >= 1; len--) {
+      for (let a = 0; a + len <= parts.length; a++) {
+        const text = parts.slice(a, a + len).map(core).join(' ');
+        const w = C.forms.get(normText(text));
+        if (!w || text.length < 2 || w.k === 'num') continue;
+        const score = (lessonIds.has(w.id) ? 10 : 0) + len;
+        if (!best || score > best.score) best = { a, len, w, score };
+      }
+    }
+    if (!best) return Object.assign(EX.decode(s), { fallback: true }); // nothing to blank: decode it instead
+    const first = parts[best.a], last = parts[best.a + best.len - 1];
+    const pre = first.slice(0, first.indexOf(core(first)));
+    const post = last.slice(last.indexOf(core(last)) + core(last).length);
+    const gone = parts.slice(best.a, best.a + best.len).map(core).join(' ');
+    const cap = gone[0] !== gone[0].toLowerCase() && best.a === 0;
+    const fit = (x) => (cap ? x[0].toUpperCase() + x.slice(1) : x);
+    const inSentence = normText(s.t);
+    const words = best.len > 1 ? (w) => w.bare.includes(' ') : (w) => !w.bare.includes(' ');
+    const others = shuffle([...s.unit.words, ...C.words.filter((w) => w.unit.mountain === s.unit.mountain)])
+      .filter((w) => words(w) && w.k !== 'num' && w.bare.length >= 2 && !inSentence.includes(normText(w.bare)))
+      .sort((a, b) => (b.k === best.w.k) - (a.k === best.w.k)) // the same kind of word first
+      .map((w) => fit(w.bare));
+    const opts = shuffle([gone, ...[...new Set(others)].filter((o) => normText(o) !== normText(gone)).slice(0, 3)]);
+    if (opts.length < 4) return Object.assign(EX.decode(s), { fallback: true });
+    return (ctl) => {
+      let pick = null;
+      const blank = h('span', { class: 'gap-blank' }, ' ');
+      const list = pickList(opts, (o) => o, (o) => { pick = o; blank.textContent = o; blank.classList.add('filled'); ctl.ready(true); });
+      const before = parts.slice(0, best.a).join(' '), after = parts.slice(best.a + best.len).join(' ');
+      return {
+        title: t('ex.gap'), word: best.w, lock: list,
+        node: h('div', {},
+          h('div', { class: 'card gap-card' },
+            h('div', { class: 'gap-sentence' }, before ? before + ' ' : '', pre, blank, post, after ? ' ' + after : ''),
+            h('div', { class: 'gap-mean' }, s.n)),
+          list),
+        check: () => ({ ok: pick === gone, right: gone, answer: s.t, say: s.t }),
+      };
+    };
+  },
+
   // Say it in the new language: build the sentence from tiles.
   build(s) {
     return (ctl) => {
@@ -378,6 +472,27 @@ function markTyped(typed, answers) {
   return near ? { ok: true, how: 'typo' } : { ok: false };
 }
 
+// Did what was heard match? Recognisers drop accents and punctuation, add
+// or miss an article, and mishear a sound or two, so it's marked on letters.
+function markSpoken(heard, answers) {
+  const flat = (x) => stripAccents(normText(x)).replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
+  const arts = ARTICLES[Store.data.target];
+  const strip = (x) => (arts ? x.replace(new RegExp(`^(${arts}) `), '') : x);
+  const goods = answers.flatMap((a) => [flat(a), strip(flat(a))]).filter(Boolean);
+  for (const h0 of heard) {
+    const h = flat(h0);
+    if (!h) continue;
+    for (const g of goods) {
+      if (h === g || strip(h) === g) return true;
+      const near = 1 - editDistance(h, g) / Math.max(h.length, g.length);
+      if (near >= (g.length <= 4 ? 0.75 : 0.8)) return true;
+      // A word said inside a few extra words ("hola" → "hola hola") still counts.
+      if (!g.includes(' ') && h.split(' ').includes(g) && h.split(' ').length <= 3) return true;
+    }
+  }
+  return false;
+}
+
 const canSpell = (w) => /^[\p{L}' -]{2,12}$/u.test(w.bare) && w.bare.split(' ').length <= 2;
 
 // One exercise for w that fits how well you know it.
@@ -385,6 +500,7 @@ function reviewExercise(w, L) {
   const box = wordState(w.id) ? wordState(w.id).box : 0;
   let kinds = box <= 1 ? ['meaning', 'recall', 'listen'] : box <= 3 ? ['recall', 'listen', 'spell', 'type'] : ['type', 'dictation', 'spell'];
   if (w.art && Store.data.target !== 'en' && box >= 1) kinds.push('article');
+  if (box >= 1 && canSpeak() && speakable_word(w)) kinds.push('speak');
   kinds = kinds.filter((k) => (k !== 'listen' && k !== 'dictation') || canListen()).filter((k) => k !== 'spell' || canSpell(w)).filter((k) => !['spell', 'type', 'dictation'].includes(k) || canType());
   const kind = pickOne(kinds.length ? kinds : ['meaning']);
   return kind === 'dictation' ? { kind, word: w, gen: () => EX.type(w, L, { dictation: true }) } : { kind, word: w, gen: () => EX[kind](w, L) };
@@ -409,18 +525,24 @@ function buildLessonQueue(lesson) {
     tail.push({ kind: 'recall', word: ws.at(-1), gen: () => EX.recall(ws.at(-1), L) });
     shuffle(ws).slice(0, 2).forEach((w) => tail.push(!canType() ? reviewExercise(w, L) : canSpell(w) && Math.random() < 0.5 ? { kind: 'spell', word: w, gen: () => EX.spell(w) } : { kind: 'type', word: w, gen: () => EX.type(w, L) }));
     reviews.forEach((w) => tail.push(reviewExercise(w, L)));
+    // Say one of the new words out loud.
+    const sayIt = ws.filter(speakable_word);
+    if (canSpeak() && sayIt.length) { const w = pickOne(sayIt); tail.push({ kind: 'speak', word: w, gen: () => EX.speak(w) }); }
     // A sentence from the unit that uses one of these words, if there is one.
     const s = lesson.unit.sentences.find((x) => ws.some((w) => normText(x.t).includes(normText(w.bare)))) || pickOne(lesson.unit.sentences);
     tail.push({ kind: 'decode', sentence: s, gen: () => EX.decode(s) });
     if (lesson.n === 3) { const s2 = pickOne(lesson.unit.sentences.filter((x) => x !== s)); tail.push({ kind: 'build', sentence: s2, gen: () => EX.build(s2) }); }
+    else { const s3 = pickOne(lesson.unit.sentences.filter((x) => x !== s)); tail.push({ kind: 'gap', sentence: s3, gen: () => EX.gap(s3) }); }
     q.push(...shuffle(tail));
     return q;
   }
   // The story: the host says each of the unit's sentences.
   lesson.unit.sentences.forEach((s, i) => {
-    const kind = i % 3 === 2 ? 'build' : 'decode';
-    q.push({ kind, sentence: s, gen: kind === 'build' ? () => EX.build(s) : () => EX.decode(s, { listenOnly: i === 4 && canListen() }) });
+    const kind = ['decode', 'gap', 'build'][i % 3];
+    q.push({ kind, sentence: s, gen: kind === 'build' ? () => EX.build(s) : kind === 'gap' ? () => EX.gap(s) : () => EX.decode(s, { listenOnly: i === 3 && canListen() }) });
   });
+  // Say the shortest sentence out loud.
+  if (canSpeak()) { const s = [...lesson.unit.sentences].sort((a, b) => a.t.length - b.t.length)[0]; q.push({ kind: 'speak', sentence: s, gen: () => EX.speak(s) }); }
   q.splice(3, 0, { kind: 'match', gen: () => EX.match(shuffle(lesson.unit.words).slice(0, 5)) });
   shuffle(lesson.unit.words).slice(0, 3).forEach((w) => q.push(reviewExercise(w, L)));
   return q;
@@ -449,7 +571,7 @@ function openSession(queue, meta) {
   let i = 0, done = 0, right = 0, wrong = 0, streak = 0, state = 'answer', cur = null;
   const seen = new Set();
   Timer.start();
-  App.overlayCleanup = () => { Timer.stop(); Voice.stop(); };
+  App.overlayCleanup = () => { Timer.stop(); Voice.stop(); Mic.stop(); };
 
   const bar = h('div', { class: 'progress' }, h('i'));
   const streakEl = h('div', { class: 'run' });
@@ -467,10 +589,13 @@ function openSession(queue, meta) {
     locked: () => state !== 'answer',
     submit: () => { if (state === 'answer' && !main.disabled) result(cur.check()); },
     done: (res) => { if (state === 'answer') result(res); },
+    // Moves on without marking it (e.g. no microphone); msg: what to tell you.
+    skip: (msg) => { if (state === 'answer') skipNow(msg); },
   };
 
   const show = () => {
     if (i >= queue.length) return finish();
+    Mic.stop();
     const item = queue[i];
     state = 'answer';
     const made = item.gen();
@@ -481,7 +606,9 @@ function openSession(queue, meta) {
     msg.replaceChildren();
     body.replaceChildren(h('div', { class: 'ex pop-in' }, h('h2', { class: 'ex-title' }, cur.title), cur.node));
     body.scrollTop = 0;
-    skip.style.display = ['listen', 'dictation'].includes(item.kind) || (item.kind === 'decode' && /listen/i.test(cur.title)) ? '' : 'none';
+    const speaking = item.kind === 'speak';
+    skip.textContent = speaking ? t('ex.cantSpeak') : t('ex.cantListen');
+    skip.style.display = speaking || ['listen', 'dictation'].includes(item.kind) || (item.kind === 'decode' && /listen/i.test(cur.title)) ? '' : 'none';
     main.style.display = cur.auto ? 'none' : '';
     if (cur.free) { main.disabled = false; main.textContent = t('ex.continue'); state = 'free'; }
     else { main.disabled = true; main.textContent = t('ex.check'); }
@@ -534,7 +661,18 @@ function openSession(queue, meta) {
     if (state === 'answer') return result(cur.check());
     if (state === 'result' || state === 'free') { done++; i++; show(); }
   });
+  // "Can't speak now" (or no microphone): no speaking for 15 minutes, and
+  // this one doesn't count against you.
+  const skipNow = (msg) => {
+    Mic.stop();
+    Store.data.speakPausedUntil = Date.now() + 15 * 60e3;
+    Store.save();
+    toast(t(msg || 'ex.speakOff'), 3500);
+    queue.splice(i + 1, queue.length, ...queue.slice(i + 1).filter((x) => x.kind !== 'speak'));
+    done++; i++; show();
+  };
   skip.addEventListener('click', () => {
+    if (cur && cur.item.kind === 'speak') return skipNow();
     Store.s.voice = false;
     Store.save();
     toast(t('ex.listenOff'), 3000);

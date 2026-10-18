@@ -43,7 +43,7 @@ aapt2 link \
   --manifest "$HERE/android/AndroidManifest.xml" \
   -A "$OUT/assets" \
   --min-sdk-version 21 \
-  --target-sdk-version 34 \
+  --target-sdk-version 36 \
   --version-code "$VERSION_CODE" \
   --version-name "$VERSION_NAME" \
   --java "$OUT/gen" \

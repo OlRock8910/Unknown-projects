@@ -21,6 +21,8 @@ async function newPage(state) {
   page.on('console', (m) => { if (m.type() === 'error') fail('console: ' + m.text()); });
   await page.addInitScript((s) => {
     window.CLOUD_OVERRIDE = { url: '', anonKey: '' };
+    // A pretend microphone that "hears" what's on screen (or window.__say when set).
+    window.__fakeMic = () => new Promise((r) => setTimeout(() => r(window.__say != null ? window.__say : (document.querySelector('.speak-text') || {}).textContent || ''), 30));
     // Seeded once per page, so a reload after deleting the account stays empty.
     // The marker is window.name, which survives reloads (a file:// page's
     // storage can come back empty after one in the test browser).
@@ -116,6 +118,8 @@ async function playSession(page, start, label) {
       if (inp && !inp.value) { inp.value = Math.random() < 0.5 ? 'x' : (C.words[0].t); inp.dispatchEvent(new Event('input')); }
       const L = [...document.querySelectorAll('.match-item.t:not(.done)')], R = [...document.querySelectorAll('.match-item.n:not(.done)')];
       if (L.length) { L[0].click(); pickOne(R).click(); }
+      const mic = document.querySelector('.mic-btn:not(.on)');
+      if (mic && !document.querySelector('.ses-foot.show')) mic.click();
       const m = document.querySelector('.ses-foot .btn.primary');
       if (m && !m.disabled && m.offsetParent) m.click();
       return 'ok';
@@ -249,6 +253,50 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   if (await page.evaluate(() => localStorage.getItem('lingopeak.v1'))) fail('deleting the account left a save behind');
   await page.close();
   console.log('  ok fresh start, log-in checks, settings, delete account');
+}
+
+// ---------------------------------------------------------------- speaking and gap fill
+{
+  const page = await newPage({ profile: { name: 'Talky' }, native: 'en', target: 'es', settings: { sound: false } });
+  await page.waitForSelector('#tabs:not([hidden])');
+  const marks = await page.evaluate(() => [
+    markSpoken(['Hola'], ['hola']), markSpoken(['ola'], ['hola']), markSpoken(['adiós'], ['hola']),
+    markSpoken(['creo que es una buena idea'], ['Creo que es una buena idea.']), markSpoken(['el perro'], ['perro']), markSpoken(['gato'], ['perro']),
+  ]);
+  if (marks.join() !== 'true,true,false,true,true,false') fail('marking what was said: ' + marks);
+  // Gap fill: pick the missing word.
+  const gap = await page.evaluate(() => {
+    const s = C.units[0].sentences.find((x) => !EX.gap(x).fallback && x.t.split(' ').length > 2);
+    openSession([{ kind: 'gap', sentence: s, gen: () => EX.gap(s) }], { practice: 'review' });
+    const blank = document.querySelector('.gap-blank');
+    const opts = [...document.querySelectorAll('.opt')];
+    const sentence = document.querySelector('.gap-sentence').textContent;
+    const right = opts.find((b) => sentence.replace(' ', b.textContent) === s.t);
+    if (!right) return 'no option completes the sentence: ' + sentence;
+    right.click();
+    document.querySelector('.ses-foot .btn.primary').click();
+    return [!!blank, opts.length, document.querySelector('.ses-foot').classList.contains('ok')].join();
+  });
+  if (gap !== 'true,4,true') fail('gap fill: ' + gap);
+  await page.evaluate(() => App.closeOverlay());
+  // Speaking: a wrong try, then the right one.
+  const w = await page.evaluate(() => { const w = C.units[0].words[0]; openSession([{ kind: 'speak', word: w, gen: () => EX.speak(w) }], { practice: 'review' }); window.__say = 'zapato'; return w.t; });
+  await page.click('.mic-btn');
+  await page.waitForFunction(() => /another go/i.test(document.querySelector('.mic-label').textContent));
+  await page.evaluate(() => { window.__say = null; });
+  await page.click('.mic-btn');
+  await page.waitForSelector('.ses-foot.show.ok');
+  // "Can't speak now" skips it and turns speaking off for a while.
+  const skipped = await page.evaluate(() => {
+    App.closeOverlay();
+    const w = C.units[0].words[1];
+    openSession([{ kind: 'speak', word: w, gen: () => EX.speak(w) }, { kind: 'meaning', word: w, gen: () => EX.meaning(w, { words: C.units[0].words }) }], { practice: 'review' });
+    document.querySelector('.ses-foot .btn.ghost').click();
+    return [canSpeak(), !!document.querySelector('.opt')];
+  });
+  if (skipped.join() !== 'false,true') fail("can't speak now: " + skipped);
+  await page.close();
+  console.log('  ok speaking and gap fill (' + w + ')');
 }
 
 // ---------------------------------------------------------------- daily chest, achievements, streak rewards

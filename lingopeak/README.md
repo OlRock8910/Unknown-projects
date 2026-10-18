@@ -67,7 +67,15 @@ exist. Anything not drawn yet gets a simple placeholder.
 ```sh
 npm install && node tests/smoke.mjs   # browser test: course data, all languages, lessons, games
 ./build-apk.sh                        # → build/LingoPeak.apk (needs aapt2, javac, dx, zipalign, apksigner)
+UPLOAD_KS=… UPLOAD_KS_PASS=… ./build-aab.sh   # → build-aab/LingoPeak.aab for Google Play (needs bundletool too)
+node tools/store-assets.mjs           # → docs/play/: Play icon, feature graphic, screenshots
+node tools/promo.mjs promo            # → tall TikTok/Reels clips of the app
 ```
+
+Google Play: the bundle uses the package name `com.olrock.lingopeak` (the
+sideload APK keeps `com.olrock.adjetivos`) and is signed with a private
+upload key that is **not** in this repository. Store text, data-safety answers
+and the privacy policy are in [`docs/play/`](docs/play/LISTING.md).
 
 The app is plain HTML/CSS/JS in `web/`, wrapped in a tiny Android app in
 `android/` that provides speech, vibration, sharing and the widget.
@@ -76,7 +84,8 @@ The app is plain HTML/CSS/JS in `web/`, wrapped in a tiny Android app in
 |---|---|
 | `web/js/course/*.js` | The course content, one file per mountain |
 | `web/js/course.js` | Builds the course for a language pair; spaced repetition; progress |
-| `web/js/lesson.js` | Exercises, lessons and practice sessions |
+| `web/js/lesson.js` | Exercises (including speaking and gap fill), lessons and practice |
+| `web/js/rewards.js` | Daily chest, streak rewards and achievements |
 | `web/js/games.js` | The mini games |
 | `web/js/app.js`, `onboarding.js` | Screens |
 | `web/js/cloud.js` | Leaderboards, friends and online backup (Supabase) |

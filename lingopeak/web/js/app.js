@@ -651,7 +651,8 @@ function renderSettings() {
       h('div', { class: 'setting col' }, h('span', {}, t('set.goal'), h('small', {}, t('set.goalSub'))),
         seg('goal', [10, 20, 30, 45].map((n) => [n, t('set.goalMins', { n })]), () => Widget.update())),
       toggle('listen', t('set.listen'), t('set.listenSub')),
-      toggle('typing', t('set.typing'), t('set.typingSub'))),
+      toggle('typing', t('set.typing'), t('set.typingSub')),
+      toggle('speak', t('set.speak'), t('set.speakSub'))),
 
     h('h2', { class: 'section' }, t('set.soundVoice')),
     h('div', { class: 'card settings' },

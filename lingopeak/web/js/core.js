@@ -84,7 +84,7 @@ const Store = {
       owned: ['banana', 'shark', 'dino', 'astro'],
       totalSecs: 0, sessions: 0,
       epoch: DATA_EPOCH,
-      settings: { theme: 'system', sound: true, vibrate: true, voice: true, rate: 0.9, voiceName: '', goal: 20, listen: true, typing: true, effects: true, text: 'normal' },
+      settings: { theme: 'system', sound: true, vibrate: true, voice: true, rate: 0.9, voiceName: '', goal: 20, listen: true, typing: true, speak: true, effects: true, text: 'normal' },
     };
   },
   load() {
@@ -390,6 +390,58 @@ const Voice = {
 
 // ------------------------------------------------------------------ home-screen widget
 // Hands the numbers the Android widget shows to the app, which redraws it.
+// ------------------------------------------------------------------ microphone
+// Speech to text for speaking exercises: the phone's recogniser (through
+// Native), or the browser's own where there is one. window.__fakeMic(lang)
+// stands in for both in tests.
+const Mic = {
+  busy: null,
+  native: () => !!(window.Native && window.Native.listen),
+  available() {
+    if (window.__fakeMic) return true;
+    if (this.native()) { try { return !!window.Native.canListen(); } catch (e) { return false; } }
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  },
+  // Listens once. Resolves with what was heard (best guesses first), or
+  // rejects with 'nothing' (didn't catch it), 'denied' (no microphone) or 'failed'.
+  listen(locale, onPartial) {
+    this.stop();
+    return new Promise((resolve, reject) => {
+      const done = (fn, v) => { if (this.busy) { this.busy = null; fn(v); } };
+      this.busy = { reject };
+      if (window.__fakeMic) { Promise.resolve(window.__fakeMic(locale)).then((r) => done(resolve, [].concat(r)), () => done(reject, 'nothing')); return; }
+      if (this.native()) {
+        window.onNativeSpeech = (ev) => {
+          if (ev.type === 'partial' && ev.texts && onPartial) onPartial(ev.texts[0] || '');
+          else if (ev.type === 'results') done(resolve, ev.texts || []);
+          else if (ev.type === 'error') done(reject, ev.code === 9 ? 'denied' : [6, 7].includes(ev.code) ? 'nothing' : 'failed');
+        };
+        window.Native.listen(locale);
+        return;
+      }
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const r = new SR();
+      r.lang = locale; r.interimResults = true; r.maxAlternatives = 5;
+      r.onresult = (e) => {
+        const res = e.results[e.results.length - 1];
+        if (!res.isFinal) { if (onPartial) onPartial(res[0].transcript); return; }
+        done(resolve, [...res].map((a) => a.transcript));
+      };
+      r.onerror = (e) => done(reject, e.error === 'not-allowed' ? 'denied' : e.error === 'no-speech' ? 'nothing' : 'failed');
+      r.onend = () => done(reject, 'nothing');
+      this.busy.rec = r;
+      r.start();
+    });
+  },
+  stop() {
+    const b = this.busy;
+    if (!b) return;
+    this.busy = null;
+    try { if (b.rec) b.rec.abort(); else if (this.native()) window.Native.stopListening(); } catch (e) { /* already stopped */ }
+    b.reject('stopped');
+  },
+};
+
 const Widget = {
   last: '',
   update() {
