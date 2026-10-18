@@ -29,6 +29,7 @@ const App = {
     }));
     this.show('learn');
     Widget.update();
+    Pro.monthly();
   },
 
   // keep: redraw in place, staying where you've scrolled to.
@@ -181,8 +182,9 @@ function guessLang() {
 function topBar() {
   const d = Store.data;
   return h('header', { class: 'topbar' },
-    h('button', { class: 'tb-me', onclick: () => App.show('me') }, lookAvatar(myLook(), 'sm'), h('span', { class: 'flag-chip' }, d.target.toUpperCase())),
+    h('button', { class: 'tb-me', onclick: () => App.show('me') }, lookAvatar(myLook(), 'sm' + (Pro.is() ? ' pro' : '')), h('span', { class: 'flag-chip' }, d.target.toUpperCase())),
     h('div', { class: 'tb-chips' },
+      Hearts.chip(),
       h('div', { class: 'chip streak' + (Store.weekStreakNow() ? ' on' : '') }, icon('calendar'), Store.weekStreakNow()),
       h('div', { class: 'chip coins' }, icon('coin'), fmtNum(d.coins))));
 }
@@ -480,6 +482,11 @@ function renderShop() {
   return h('div', { class: 'page' }, topBar(),
     h('h1', { class: 'page-title' }, t('tab.shop')),
     h('p', { class: 'muted' }, t('shop.intro')),
+    // Lingo Peak Pro.
+    h('button', { class: 'card pro-banner', onclick: () => openPro() },
+      h('div', { class: 'pro-banner-ic' }, icon('crown')),
+      h('div', { class: 'pc-text' }, h('b', {}, 'Lingo Peak ', Pro.tag()), h('span', {}, Pro.is() ? t('pro.youArePro') : t('pro.bannerSub'))),
+      icon('right')),
     wallet,
     h('h2', { class: 'section' }, t('shop.getCoins')),
     coinPacks(),
@@ -513,10 +520,11 @@ async function renameMe() {
 
 function profileBanner(p, opts = {}) {
   const badges = (opts.badges || LP_COURSE.filter((m) => Object.values(Store.data.courses).some((c) => c.mountains && c.mountains[m.id])));
+  const pro = p === Store.data.profile && Pro.is();
   return h('div', { class: 'banner b-' + (p.banner || 'blue') },
-    lookAvatar(p.look, 'lg'),
+    lookAvatar(p.look, 'lg' + (pro ? ' pro' : '')),
     h('div', { class: 'banner-text' },
-      h('button', { class: 'banner-name', onclick: () => renameMe() }, p.name),
+      h('button', { class: 'banner-name', onclick: () => renameMe() }, p.name, pro ? Pro.tag() : null),
       p.joined ? h('small', { class: 'banner-since' }, t('me.since', { date: fmtDate(p.joined) })) : null,
       h('div', { class: 'banner-badges' }, badges.length ? badges.map((m) => badgeArt(m, 'xs')) : h('small', {}, t('me.noBadges')))),
     opts.gear ? h('button', { class: 'banner-gear', 'aria-label': t('set.title'), onclick: () => App.show('settings') }, icon('gear')) : null);
@@ -601,6 +609,23 @@ function openDeleteAccount() {
       h('button', { class: 'btn ghost wide', onclick: () => App.closeOverlay() }, t('set.cancel')))));
 }
 
+// The version line; tapping it 7 times turns Pro preview on or off, so the
+// app's owner can try Pro before it's on sale (remove when it is).
+function versionRow() {
+  let taps = 0;
+  const el = h('div', { class: 'setting' }, h('span', {}, 'Lingo Peak', h('small', {}, t('set.version', { v: APP_VERSION }))));
+  el.addEventListener('click', () => {
+    if (++taps < 7) return;
+    taps = 0;
+    Store.data.proPreview = !Store.data.proPreview;
+    Store.save({ quiet: true });
+    toast(Store.data.proPreview ? t('pro.previewOn') : t('pro.previewOff'), 3000);
+    Pro.monthly();
+    App.refresh();
+  });
+  return el;
+}
+
 // ------------------------------------------------------------------ Settings
 function renderSettings() {
   const d = Store.data;
@@ -642,6 +667,7 @@ function renderSettings() {
 
     h('h2', { class: 'section' }, t('set.account')),
     h('div', { class: 'card settings' },
+      row(h('span', {}, 'Lingo Peak ', Pro.tag()), Pro.is() ? t('pro.youArePro') : t('pro.bannerSub'), h('button', { class: 'btn small ' + (Pro.is() ? 'ghost' : 'gold'), onclick: () => openPro() }, Pro.is() ? t('pro.see') : t('pro.get'))),
       row(t('set.username'), d.profile.name, h('button', { class: 'btn ghost small', onclick: () => renameMe() }, t('me.change'))),
       Cloud.enabled() ? row(t('auth.email'), email || t('set.noEmail'),
         email ? h('span', { class: 'ok-tag' }, icon('check'), t('set.saved')) : h('button', { class: 'btn primary small', onclick: () => openSaveAccount() }, t('set.addEmail'))) : null,
@@ -680,7 +706,7 @@ function renderSettings() {
           h('li', {}, icon('speaker'), t('set.how3')),
           h('li', {}, icon('cards'), t('set.how4')))),
       row(t('me.invite'), null, h('button', { class: 'btn ghost small', onclick: () => Share.send(t('share.invite')) }, icon('share'))),
-      row('Lingo Peak', t('set.version', { v: APP_VERSION }))),
+      versionRow()),
 
     h('h2', { class: 'section danger-head' }, t('set.danger')),
     h('div', { class: 'card settings danger-card' },

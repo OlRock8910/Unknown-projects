@@ -6,7 +6,7 @@ Learn **English, Spanish, French, German or Portuguese**, from any one of the
 others. The whole app talks to you in the language you speak. It's free, with
 no ads, and works offline.
 
-[⬇ Download LingoPeak.apk](https://github.com/OlRock8910/Unknown-projects/raw/main/lingopeak/apk/LingoPeak.apk)
+Coming to Google Play.
 
 | Learn | Lesson | Mountain complete | Practice | Me |
 |:---:|:---:|:---:|:---:|:---:|
@@ -74,8 +74,9 @@ node tools/promo.mjs promo            # → tall TikTok/Reels clips of the app
 
 Google Play: the bundle uses the package name `com.olrock.lingopeak` (the
 sideload APK keeps `com.olrock.adjetivos`) and is signed with a private
-upload key that is **not** in this repository. Store text, data-safety answers
-and the privacy policy are in [`docs/play/`](docs/play/LISTING.md).
+upload key that is **not** in this repository. The built app files, the store
+listing and promo material are made locally (`apk/`, `docs/play/`, `promo/`)
+and are not kept in this repository.
 
 The app is plain HTML/CSS/JS in `web/`, wrapped in a tiny Android app in
 `android/` that provides speech, vibration, sharing and the widget.

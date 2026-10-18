@@ -599,13 +599,17 @@ function openSession(queue, meta) {
 
   const bar = h('div', { class: 'progress' }, h('i'));
   const streakEl = h('div', { class: 'run' });
+  // Hearts: a wrong answer in a lesson costs one (not for Pro, not in practice).
+  const hearty = !!meta.lesson && !Pro.is();
+  const heartsEl = hearty ? h('div', { class: 'ses-hearts' }, icon('heart'), h('b', {}, Hearts.label())) : null;
+  let outOfHearts = false;
   const body = h('div', { class: 'ses-body' });
   const msg = h('div', { class: 'foot-msg' });
   const main = h('button', { class: 'btn primary wide' }, t('ex.check'));
   const skip = h('button', { class: 'btn ghost' }, t('ex.cantListen'));
   const foot = h('div', { class: 'ses-foot' }, msg, h('div', { class: 'foot-btns' }, skip, main));
   host.replaceChildren(h('div', { class: 'session' },
-    h('div', { class: 'ses-top' }, h('button', { class: 'icon-btn', 'aria-label': t('ex.quit'), onclick: () => App.closeOverlay() }, icon('x')), bar, streakEl),
+    h('div', { class: 'ses-top' }, h('button', { class: 'icon-btn', 'aria-label': t('ex.quit'), onclick: () => App.closeOverlay() }, icon('x')), bar, streakEl, heartsEl),
     body, foot));
 
   const ctl = {
@@ -664,6 +668,13 @@ function openSession(queue, meta) {
     } else {
       wrong++; streak = 0;
       Sfx.bad();
+      if (hearty) {
+        const left = Hearts.lose();
+        Store.save({ quiet: true });
+        heartsEl.lastChild.textContent = left;
+        heartsEl.classList.remove('hurt'); void heartsEl.offsetWidth; heartsEl.classList.add('hurt');
+        if (left <= 0) outOfHearts = true;
+      }
       Haptics.buzz([40, 30, 40]);
       if (!seen.has(item)) { seen.add(item); queue.push(item); } // try it again at the end, once
     }
@@ -684,6 +695,14 @@ function openSession(queue, meta) {
 
   main.addEventListener('click', () => {
     if (state === 'answer') return result(cur.check());
+    if (outOfHearts && state === 'result') {
+      // Out of hearts: refill (and carry on), practise, go Pro or stop here.
+      outOfHearts = false;
+      const host2 = $('#overlay');
+      const saved = [...host2.childNodes];
+      Hearts.sheet({ inLesson: true, onRefill: () => { App.overlayKind = 'lesson'; host2.replaceChildren(...saved); Timer.start(); App.overlayCleanup = () => { Timer.stop(); Voice.stop(); Mic.stop(); }; heartsEl.lastChild.textContent = Hearts.label(); done++; i++; show(); } });
+      return;
+    }
     if (state === 'result' || state === 'free') { done++; i++; show(); }
   });
   // "Can't speak now" (or no microphone): no speaking for 15 minutes, and
@@ -727,6 +746,8 @@ function openSession(queue, meta) {
     }
     // A whole mountain: a big pile of coins and XP, handed out on the reveal screen.
     const prize = mountain ? { coins: MOUNTAIN_COINS, xp: Store.addXp(MOUNTAIN_XP) } : null;
+    // Finishing a practice earns a heart back.
+    const heartBack = meta.practice ? Hearts.earn(1) : 0;
     if (prize) d.coins += prize.coins;
     d.sessions = (d.sessions || 0) + 1;
     Store.save();
@@ -742,11 +763,12 @@ function openSession(queue, meta) {
         stat('bolt', '+' + xp, t('res.xp'), Store.boosted() ? 'boost' : '', xp),
         stat('coin', '+' + coins, t('res.coins'), '', coins),
         stat('target', Math.round(acc * 100) + '%', t('res.accuracy')),
-        stat('clock', t('res.mins', { n: mins }), t('res.time'))),
+        stat('clock', t('res.mins', { n: mins }), t('res.time')),
+        heartBack ? stat('heart', '+' + heartBack, t('hearts.word'), 'gold', heartBack) : null),
       h('div', { class: 'week-mini' },
         h('div', { class: 'wm-head' }, h('span', {}, t('home.weekGoal')), h('b', {}, t('home.minsOf', { n: Math.floor(d.week.secs / 60), goal: goalSecs() / 60 }))),
         h('div', { class: 'bar' }, h('i', { style: { width: weekPct + '%' } }))),
-      h('button', { class: 'btn primary wide', onclick: () => (mountain ? App.revealMountain(mountain, { prize }) : App.closeOverlay()) }, t('ex.continue'))));
+      h('button', { class: 'btn primary wide', onclick: () => proBreak(() => (mountain ? App.revealMountain(mountain, { prize }) : App.closeOverlay())) }, t('ex.continue'))));
     Sfx.fanfare();
     countStats(host2);
     const [cx, cy] = centerOf(host2.querySelector('.res-cast'));
@@ -781,5 +803,6 @@ function comboPop(n) {
   Haptics.buzz([20, 40, 20]);
 }
 
-const openLesson = (lesson) => openSession(buildLessonQueue(lesson), { lesson });
+// Lessons need a heart to start (free players get 5 a day).
+const openLesson = (lesson) => (Hearts.left() > 0 ? openSession(buildLessonQueue(lesson), { lesson }) : Hearts.sheet({ onRefill: () => openLesson(lesson) }));
 const openPractice = (kind) => openSession(buildPracticeQueue(kind), { practice: kind });

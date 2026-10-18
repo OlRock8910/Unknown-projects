@@ -41,7 +41,8 @@ const Chest = {
       if (opened) { App.closeOverlay(); return; }
       opened = true;
       btn.disabled = true;
-      const coins = this.roll();
+      // Pro: double the chest.
+      const coins = this.roll() * (Pro.is() ? 2 : 1);
       const d = Store.data;
       d.chestDay = today();
       d.coins += coins;

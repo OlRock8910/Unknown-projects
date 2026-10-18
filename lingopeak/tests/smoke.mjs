@@ -106,6 +106,8 @@ const stray = (page) => page.evaluate(() => {
 
 // ---------------------------------------------------------------- lessons, in several pairs
 async function playSession(page, start, label) {
+  // Random answers get plenty wrong: lots of hearts so lessons can finish.
+  await page.evaluate(() => { if (Store.data) Store.data.hearts = { n: 99, day: today() }; });
   await page.evaluate(start);
   for (let step = 0; step < 400; step++) {
     const st = await page.evaluate(() => {
@@ -351,6 +353,83 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   await playSession(page, "openPractice('sentences')", 'sentence practice');
   await page.close();
   console.log('  ok coach: weak spots, tips, targeted practice');
+}
+
+// ---------------------------------------------------------------- hearts and Pro
+{
+  const page = await newPage({ profile: { name: 'Hearty' }, native: 'en', target: 'es', coins: 400, sessions: 5, settings: { sound: false } });
+  await page.waitForSelector('#tabs:not([hidden])');
+  if ((await page.textContent('.chip.hearts')).trim() !== '5') fail('free players should start the day with 5 hearts');
+  // Five wrong answers in a lesson: out of hearts.
+  await page.evaluate(() => {
+    const u = C.units[0];
+    const q = u.words.slice(0, 7).map((w) => ({ kind: 'meaning', word: w, gen: () => EX.meaning(w, { words: u.words }) }));
+    window.__q = q; window.__i = 0;
+    openSession(q, { lesson: C.lessons[0] });
+  });
+  for (let k = 0; k < 5; k++) {
+    await page.evaluate(() => {
+      const w = window.__q[Math.min(window.__i, 6)].word;
+      const cur = document.querySelector('.prompt-word').textContent;
+      const wrongBtn = [...document.querySelectorAll('.opt')].find((b) => !cur.includes(b.opt.t) && b.opt !== w && b.opt.t !== cur.replace(/\s/g, ''));
+      wrongBtn.click();
+      document.querySelector('.ses-foot .btn.primary').click();
+    });
+    await page.click('.ses-foot .btn.primary');
+    await page.evaluate(() => { window.__i++; });
+  }
+  const out = await page.evaluate(() => [Hearts.left(), App.overlayKind, !!document.querySelector('.hearts-sheet')]);
+  if (out.join() !== '0,ask,true') fail('running out of hearts in a lesson: ' + out);
+  // Refill with coins and carry on with the lesson.
+  await page.click('.hearts-sheet .refill');
+  const refilled = await page.evaluate(() => [Hearts.left(), Store.data.coins, App.overlayKind, !!document.querySelector('.opt')]);
+  if (refilled.join() !== '5,100,lesson,true') fail('refilling hearts: ' + refilled);
+  // No hearts: a lesson won't start, but practice gives one back.
+  await page.evaluate(() => { App.closeOverlay(); Store.data.hearts = { n: 0, day: today() }; openLesson(C.lessons[0]); });
+  if (!(await page.$('.hearts-sheet'))) fail('a lesson started with no hearts');
+  await page.evaluate(() => App.closeOverlay());
+  await page.evaluate(() => { C.lessons.slice(0, 2).forEach((l) => l.words.forEach((w) => { seeWord(w); gradeWord(w, true); })); });
+  await page.evaluate(() => openPractice('review'));
+  for (let step = 0; step < 300 && (await page.evaluate(() => App.overlayKind)) === 'lesson'; step++) {
+    await page.evaluate(() => {
+      const opts = [...document.querySelectorAll('.opt')];
+      if (opts.length && !document.querySelector('.opt.sel')) pickOne(opts).click();
+      for (const x of [...document.querySelectorAll('.tile-bank .wtile:not(.used)')].slice(0, 5)) x.click();
+      for (const x of document.querySelectorAll('.ltiles .ltile:not(.used)')) x.click();
+      const inp = document.querySelector('.type-in'); if (inp && !inp.value) { inp.value = 'x'; inp.dispatchEvent(new Event('input')); }
+      const L = [...document.querySelectorAll('.match-item.t:not(.done)')], R = [...document.querySelectorAll('.match-item.n:not(.done)')]; if (L.length) { L[0].click(); pickOne(R).click(); }
+      const mic = document.querySelector('.mic-btn:not(.on)'); if (mic && !document.querySelector('.ses-foot.show')) mic.click();
+      const m = document.querySelector('.ses-foot .btn.primary'); if (m && !m.disabled && m.offsetParent) m.click();
+    });
+    await page.waitForTimeout(25);
+  }
+  if ((await page.evaluate(() => Hearts.left())) !== 1) fail('finishing a practice should give a heart back');
+  // Leaving the results: a skippable "Go Pro" break for free players.
+  await page.click('.results .btn.primary');
+  await page.waitForSelector('.promo');
+  if (!(await page.isDisabled('.promo .btn.ghost'))) fail('the Go Pro break can be skipped straight away');
+  await page.waitForTimeout(3300);
+  await page.click('.promo .btn.ghost');
+  if (await page.evaluate(() => App.overlayKind)) fail('skipping the Go Pro break did not carry on');
+  // Mini games pay 3 coins.
+  const gameCoins = await page.evaluate(() => { const before = Store.data.coins; Games.start(GAMES.find((g) => g.id === 'quiz')); Games.session.right = 6; Games.session.finish(); const c = Store.data.coins - before; App.closeOverlay(); return c; });
+  if (gameCoins !== 3) fail('a mini game should give 3 coins, gave ' + gameCoins);
+  // Pro: unlimited hearts, monthly bonus, PRO tag, no breaks.
+  const pro = await page.evaluate(() => {
+    App.show('settings');
+    const v = [...document.querySelectorAll('.setting')].find((x) => /Version/.test(x.textContent));
+    for (let k = 0; k < 7; k++) v.click();
+    const coinsAfter = Store.data.coins;
+    App.show('me');
+    return [Pro.is(), Hearts.label(), !!document.querySelector('.banner .pro-tag'), Store.data.proMonth === today().slice(0, 7), coinsAfter];
+  });
+  if (pro.slice(0, 4).join() !== 'true,∞,true,true') fail('Pro preview: ' + pro);
+  await page.evaluate(() => { Store.data.hearts = { n: 0, day: today() }; openLesson(C.lessons[0]); });
+  if ((await page.evaluate(() => App.overlayKind)) !== 'lesson' || (await page.$('.ses-hearts'))) fail('Pro lessons should need no hearts');
+  await page.evaluate(() => { App.closeOverlay(); openPro(); });
+  if (!/You’re Pro/.test(await page.textContent('.pro-page'))) fail('Pro page should say you are Pro');
+  await page.close();
+  console.log('  ok hearts, Pro, Go Pro breaks, game coins');
 }
 
 // ---------------------------------------------------------------- daily chest, achievements, streak rewards

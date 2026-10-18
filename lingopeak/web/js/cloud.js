@@ -167,7 +167,7 @@ const Cloud = {
     const badges = LP_COURSE.filter((m) => Object.values(d.courses).some((c) => c.mountains && c.mountains[m.id])).map((m) => m.id);
     const stats = typeof courseStats === 'function' && C ? courseStats() : { words: 0 };
     return {
-      name: d.profile.name, look: myLook(), badges,
+      name: d.profile.name, look: { ...myLook(), pro: Pro.is() }, badges,
       learning: d.target, xp: d.xp, week: d.week.id, week_xp: d.week.xp, week_streak: Store.weekStreakNow(), words: stats.words,
     };
   },
@@ -287,8 +287,8 @@ function leaderboardView() {
       if (!rows || !rows.length) return msg(t('ranks.empty'));
       list.replaceChildren(...rows.map((r, i) => h('div', { class: 'rank-row' + (r.user_id === me ? ' me' : '') },
         h('span', { class: 'rank-n' + (i < 3 ? ' top' + i : '') }, i < 3 ? icon(i === 0 ? 'crown' : 'trophy') : i + 1),
-        lookAvatar(r.look, 'sm'),
-        h('div', { class: 'rank-name' }, h('b', {}, r.name + (r.user_id === me ? ` (${t('ranks.you')})` : '')),
+        lookAvatar(r.look, 'sm' + (r.look && r.look.pro ? ' pro' : '')),
+        h('div', { class: 'rank-name' }, h('b', {}, r.name + (r.user_id === me ? ` (${t('ranks.you')})` : ''), r.look && r.look.pro ? Pro.tag() : null),
           h('small', {}, [t('lang.' + r.learning), r.week_streak ? t('ranks.wk', { n: r.week_streak }) : ''].filter(Boolean).join(' · '))),
         h('div', { class: 'rank-badges' }, ...(r.badges || []).slice(-3).map((id) => { const m = LP_COURSE.find((x) => x.id === id); return m ? badgeArt(m, 'xs') : null; })),
         h('b', { class: 'rank-val' }, val(r)))));

@@ -1,7 +1,8 @@
 /build/
 /screenshots/
 node_modules
-# The ready-to-install APK is committed on purpose so it can be downloaded
-# straight from GitHub on a phone.
-!apk/LingoPeak.apk
 build-aab/
+# App files and store/promo material stay off GitHub.
+apk/
+docs/play/
+promo/

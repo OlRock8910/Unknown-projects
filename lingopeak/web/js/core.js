@@ -66,9 +66,9 @@ const daysLeftInWeek = () => 8 - (new Date().getDay() || 7);
 const goalSecs = () => (Number(Store.data && Store.s.goal) || 20) * 60;
 // Bumped to start everyone afresh: older saves are cleared on the next launch.
 const DATA_EPOCH = 2;
-// Coins are slow to earn on purpose: a flat 20 for each lesson, practice,
-// game or flashcard deck, plus the weekly goal and each mountain.
-const ACTIVITY_COINS = 20, WEEK_COINS = 50, MOUNTAIN_COINS = 300, MOUNTAIN_XP = 500;
+// Coins are slow to earn on purpose: a flat 20 for each lesson, practice or
+// flashcard deck, 3 for a mini game, plus the weekly goal and each mountain.
+const ACTIVITY_COINS = 20, GAME_COINS = 3, WEEK_COINS = 50, MOUNTAIN_COINS = 300, MOUNTAIN_XP = 500;
 const Store = {
   KEY: 'lingopeak.v1',
   data: null,
@@ -467,7 +467,8 @@ const Widget = {
 };
 
 // ------------------------------------------------------------------ sharing
-const APK_URL = 'https://github.com/OlRock8910/Unknown-projects/raw/main/lingopeak/apk/LingoPeak.apk';
+// Where friends get the app: its Google Play page.
+const APK_URL = 'https://play.google.com/store/apps/details?id=com.olrock.lingopeak';
 const Share = {
   async send(text) {
     const full = `${text}\n\n${t('share.get')} ${APK_URL}`;
