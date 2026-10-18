@@ -6,7 +6,8 @@ separate pictures with see-through backgrounds.
         banana shark dino astro penguin bee pizza knight avocado croissant
 
 Writes web/img/cast/banana.webp etc. Add a suffix with --suffix=-happy.
-Other grids: --cols=5 --rows=3 (then give 15 names).
+Other grids: --cols=5 --rows=3 (then give 15 names). Icons made of
+separate parts (three hearts, a tick and a cross) need --gap=60.
 """
 import sys
 import numpy as np
@@ -44,12 +45,12 @@ def main_run(counts, gap=8):
     return max(runs, key=lambda r: counts[r[0]:r[1] + 1].sum())
 
 
-def crop_box(alpha, pad=6):
+def crop_box(alpha, pad=6, gap=8):
     solid = alpha > 40
-    cols = main_run(solid.sum(0))
+    cols = main_run(solid.sum(0), gap)
     if cols is None:
         return None
-    rows = main_run(solid[:, cols[0]:cols[1] + 1].sum(1))
+    rows = main_run(solid[:, cols[0]:cols[1] + 1].sum(1), gap)
     x0, x1 = cols
     y0, y1 = rows
     return max(0, x0 - pad), max(0, y0 - pad), min(alpha.shape[1], x1 + pad + 1), min(alpha.shape[0], y1 + pad + 1)
@@ -61,6 +62,7 @@ def main():
     src, out_dir, names = args[0], args[1], args[2:]
     suffix = opts.get('suffix', '')
     size = int(opts.get('size', '0'))
+    gap = int(opts.get('gap', '8'))
     global COLS, ROWS
     COLS, ROWS = int(opts.get('cols', COLS)), int(opts.get('rows', ROWS))
     assert len(names) == COLS * ROWS, f'need {COLS * ROWS} names'
@@ -76,7 +78,7 @@ def main():
         a = alpha[y0:y1, x0:x1].copy()
         # Ignore anything touching the cell edge (bits of the neighbours).
         a[:3, :] = 0; a[-3:, :] = 0; a[:, :3] = 0; a[:, -3:] = 0
-        box = crop_box(a)
+        box = crop_box(a, gap=gap)
         if box is None:
             print('empty cell', name)
             continue

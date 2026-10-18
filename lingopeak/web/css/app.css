@@ -296,7 +296,8 @@ p { margin: 0; line-height: 1.45; }
 .prompt-word { display: flex; align-items: center; gap: 12px; font-size: 30px; font-weight: 900; line-height: 1.15; flex-wrap: wrap; }
 .card.center .prompt-word { justify-content: center; }
 .prompt-sentence { font-size: 21px; font-weight: 800; line-height: 1.35; }
-.say-btn { width: 44px; height: 44px; border-radius: 14px; background: var(--blue); color: #fff; display: inline-grid; place-items: center; border-bottom: 4px solid var(--blue-d); flex-shrink: 0; }
+.say-btn { width: 44px; height: 44px; border-radius: 14px; background: var(--blue-l); color: var(--blue); display: inline-grid; place-items: center; border-bottom: 4px solid var(--blue); flex-shrink: 0; }
+.say-btn img.ic { width: 28px; height: 28px; }
 .say-btn.slow { background: var(--surface2); color: var(--blue); border-bottom-color: var(--line); }
 .say-btn:active { transform: translateY(2px); border-bottom-width: 2px; }
 .listen-row { display: flex; justify-content: center; align-items: flex-end; gap: 14px; margin: 6px 0 4px; }
@@ -757,7 +758,7 @@ p { margin: 0; line-height: 1.45; }
 /* drawn icons (from the art sheets) */
 img.ic { object-fit: contain; stroke: none; }
 .gc-icon img.ic, .pc-icon img.ic { width: 34px; height: 34px; }
-#tabs button img.ic { width: 28px; height: 28px; filter: grayscale(0.6); opacity: 0.75; }
-#tabs button.active img.ic { filter: none; opacity: 1; }
+#tabs button img.ic { width: 28px; height: 28px; opacity: 0.85; transform: scale(0.92); transition: transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1), opacity 0.2s; }
+#tabs button.active img.ic { opacity: 1; transform: scale(1.12); }
 .chip img.ic { width: 20px; height: 20px; }
 .stat img.ic { width: 30px; height: 30px; }

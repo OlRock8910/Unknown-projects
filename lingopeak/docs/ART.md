@@ -21,9 +21,9 @@ every prompt with the **style block**, then add the sheet's own text.
 | 3. The cast, confused (upload sheet 1 and ask for them scratching their heads) | `art/sheets/cast-confused.jpg` | ✅ done |
 | 4. Mountain badges | `art/sheets/badges.jpg` | ✅ done |
 | 5. The ten mountains | `art/sheets/mountains.jpg` | ✅ done |
-| 6. Icons A: menu and rewards (5 × 3) | `art/sheets/icons-a.jpg` | still to make |
-| 7. Icons B: practice and games (5 × 3) | `art/sheets/icons-b.jpg` | still to make |
-| 8. Icons C: shop, settings and extras (5 × 3) | `art/sheets/icons-c.jpg` | still to make |
+| 6. Icons A: menu and rewards (5 × 3) | `art/sheets/icons-a.jpg` | ✅ done |
+| 7. Icons B: practice and games (5 × 3) | `art/sheets/icons-b.jpg` | ✅ done |
+| 8. Icons C: shop, settings and extras (5 × 3) | `art/sheets/icons-c.jpg` | ✅ done |
 
 The cast order is banana, shark, dinosaur, astronaut, penguin, bee, pizza,
 knight, avocado and croissant. The mountain order is Snowdon, Ben Nevis,
@@ -38,9 +38,9 @@ python3 tools/cut-sheet.py art/sheets/cast-happy.jpg web/img/cast banana shark d
 python3 tools/cut-sheet.py art/sheets/cast-confused.jpg web/img/cast banana shark dino astro penguin bee pizza knight avocado croissant --suffix=-sad
 python3 tools/cut-sheet.py art/sheets/badges.jpg web/img/badges snowdon bennevis mulhacen teide matterhorn montblanc kilimanjaro denali aconcagua everest --size=200
 python3 tools/cut-sheet.py art/sheets/mountains.jpg web/img/mountains snowdon bennevis mulhacen teide matterhorn montblanc kilimanjaro denali aconcagua everest
-python3 tools/cut-sheet.py art/sheets/icons-a.jpg web/img/icons --cols=5 --rows=3 --size=160 mountain dumbbell trophy bag user coin bolt calendar lock check speaker turtle book star crown
-python3 tools/cut-sheet.py art/sheets/icons-b.jpg web/img/icons --cols=5 --rows=3 --size=160 refresh target headphones cards bubble raindrop mallet memory truefalse quiz heart oddone scramble hearts swords
-python3 tools/cut-sheet.py art/sheets/icons-c.jpg web/img/icons --cols=5 --rows=3 --size=160 potion snowflake chest gift gear share sun moon music vibrate globe users cloud sparkle flag
+python3 tools/cut-sheet.py art/sheets/icons-a.jpg web/img/icons --cols=5 --rows=3 --size=160 --gap=60 mountain dumbbell trophy bag user coin bolt calendar lock check speaker turtle book star crown
+python3 tools/cut-sheet.py art/sheets/icons-b.jpg web/img/icons --cols=5 --rows=3 --size=160 --gap=60 refresh target headphones cards bubble raindrop mallet memory truefalse quiz heart oddone scramble hearts swords
+python3 tools/cut-sheet.py art/sheets/icons-c.jpg web/img/icons --cols=5 --rows=3 --size=160 --gap=60 potion snowflake chest gift gear share sun moon music vibrate globe users cloud sparkle flag
 python3 tools/list-art.py
 ```
 
