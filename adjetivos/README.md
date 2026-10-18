@@ -91,8 +91,17 @@ where there is one, ser/estar, and tips for false friends (*sensible* means
 Every right answer flashes the word big in the middle of the screen,
 Spanish over English (**AMABLE · KIND**), and says it out loud.
 
-After every game, **📤 Challenge a friend** sends your score (with a link
-to play) through WhatsApp, Snapchat, TikTok or anything else on your phone.
+**👥 Play with friends**
+
+- **Duel on one phone** — put the phone flat between two players; each gets
+  half the screen. First to tap the right Spanish word wins the point, first
+  to 7 wins.
+- **Challenge codes** — after any game, **📤 Challenge a friend** sends your
+  score, a code like `QUIZ-4F7K2-230` and a link to the app through WhatsApp,
+  Snapchat or anything else. Your friend types the code into
+  **👥 Play with friends**, plays the same game with the same words, and sees
+  who won — then sends their score back the same way. No accounts or
+  internet needed.
 
 Also: flashcards, eight short grammar lessons, a searchable word list with
 pronunciation, XP and levels, a daily goal and streak, combo multipliers,

@@ -381,7 +381,7 @@ async function main() {
     check((await page.locator('#lib-grid .card', { hasText: 'Birthday party' }).count()) === 0, 'Hide takes a video out of the library');
     await page.locator('.gear').click();
     await page.locator('.settings h1').waitFor();
-    check((await page.locator('.set-version').textContent()) === 'ReelBox 1.6.4', 'Settings shows the version');
+    check((await page.locator('.set-version').textContent()) === 'ReelBox 1.6.5', 'Settings shows the version');
     await shot(page, '16-settings');
     await page.locator('.set-row', { hasText: 'Birthday party' }).locator('[data-a="unhide"]').click();
     await page.locator('.toast', { hasText: 'Back in your lists' }).waitFor();

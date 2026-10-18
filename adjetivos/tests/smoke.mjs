@@ -10,7 +10,7 @@ import fs from 'node:fs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const url = pathToFileURL(path.join(here, '..', 'web', 'index.html')).href;
 const shots = process.argv.includes('--shots');
-const PLAY_URL_FOR_TEST = 'https://olrock8910.github.io/Unknown-projects/adjetivos/';
+const APK_URL_FOR_TEST = 'https://github.com/OlRock8910/Unknown-projects/raw/main/adjetivos/apk/Adjetivos.apk';
 const shotDir = path.join(here, '..', 'screenshots');
 if (shots) fs.mkdirSync(shotDir, { recursive: true });
 
@@ -113,6 +113,52 @@ const flash = await page.evaluate(() => {
 });
 if (!flash || flash[0] !== 'AMABLE' || flash[1] !== 'KIND') errors.push('right answer did not flash the word: ' + JSON.stringify(flash));
 
+// ---- playing with friends
+const friends = await page.evaluate(async () => {
+  const out = [];
+  const code = Challenge.encode('quiz', 123456, 230);
+  const d = Challenge.decode(' ' + code.toLowerCase() + ' ');
+  if (code !== 'QUIZ-2N9C-230' || !d || d.game.id !== 'quiz' || d.seed !== 123456 || d.target !== 230) out.push('code round trip: ' + code + ' ' + JSON.stringify(d && { g: d.game.id, s: d.seed, t: d.target }));
+  if (Challenge.decode('hello') || Challenge.decode('nogame-12-3')) out.push('bad codes accepted');
+  // The same code deals the same questions on every phone.
+  const realRandom = Math.random;
+  const deal = () => {
+    App.startGame(GAMES.find((g) => g.id === 'quiz'), { seed: 99, target: 100 });
+    const text = document.querySelector('.q-card').textContent + '|' + [...document.querySelectorAll('.choice')].map((c) => c.textContent).join(',');
+    App.session.quit();
+    return text;
+  };
+  Store.data.mastery = { molesto: 5 };
+  const a = deal();
+  Store.data.mastery = {};
+  const b = deal();
+  if (a !== b) out.push('same code dealt different questions');
+  if (Math.random !== realRandom || Challenge.active) out.push('Math.random not restored after a challenge');
+  // Friends screen → code → game → results with the comparison.
+  openFriends();
+  document.querySelector('.code-input').value = 'emoji-1a2b-5';
+  [...document.querySelectorAll('.friends .btn.primary')].find((x) => /challenge/i.test(x.textContent)).click();
+  if (App.overlayKind !== 'game' || !Challenge.active || Challenge.active.target !== 5) out.push('challenge code did not start the game');
+  App.session.hit(WORDS[0], 10);
+  App.session.finish();
+  const v = document.querySelector('.versus');
+  if (!v || !/You win/.test(v.textContent)) out.push('no win/lose comparison after a challenge: ' + (v && v.textContent));
+  if (!/Send my score back/.test(document.querySelector('.results').textContent)) out.push('no "send my score back"');
+  App.closeOverlay();
+  // Duel: a right tap scores, the back button returns to the friends screen.
+  openDuel();
+  const p0 = document.querySelector('.duel-half.p0');
+  const answer = WORDS.find((w) => w.short === p0.querySelector('.duel-prompt').textContent.replace(/^\S+\s*/, '').trim() || p0.querySelector('.duel-prompt span:last-child').textContent === w.short);
+  const right = [...p0.querySelectorAll('.duel-opt')].find((b) => b.textContent === answer.m);
+  right.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+  if (p0.querySelector('.duel-score').textContent !== '1') out.push('duel point not scored');
+  appBack();
+  if (App.overlayKind !== 'friends') out.push('back from duel did not return to friends: ' + App.overlayKind);
+  App.closeOverlay();
+  return out;
+});
+errors.push(...friends);
+
 // Back button behaviour the Android wrapper relies on.
 const back = await page.evaluate(() => {
   App.show('words');
@@ -209,7 +255,7 @@ for (const state of ['missing', 'ok']) {
       document.querySelector('.btn.share').click();
       return window.__shared;
     });
-    if (!shared || !shared.includes(PLAY_URL_FOR_TEST) || !/scored/.test(shared)) errors.push('sharing a score failed: ' + shared);
+    if (!shared || !shared.includes(APK_URL_FOR_TEST) || !/scored/.test(shared) || !/Challenge code: TF-[0-9A-Z]+-\d+/.test(shared)) errors.push('sharing a score failed: ' + shared);
     await p.evaluate(() => App.closeOverlay());
   }
   if (shots && state === 'missing') await p.screenshot({ path: path.join(shotDir, 'voice-banner.png') });

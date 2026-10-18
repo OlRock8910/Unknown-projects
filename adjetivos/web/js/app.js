@@ -3,7 +3,8 @@
 const App = {
   tab: 'play',
   session: null,
-  overlayKind: null, // 'game' | 'results' | 'cards' | null
+  overlayKind: null, // 'game' | 'results' | 'cards' | 'friends' | 'duel' | null
+  overlayCleanup: null,
   lastGame: null,
 
   init() {
@@ -41,12 +42,14 @@ const App = {
   refresh() { this.show(this.tab); },
 
   openOverlay(kind) {
+    if (this.overlayCleanup) { this.overlayCleanup(); this.overlayCleanup = null; }
     this.overlayKind = kind;
     const o = $('#overlay');
     o.classList.add('open');
     return o;
   },
   closeOverlay() {
+    if (this.overlayCleanup) { this.overlayCleanup(); this.overlayCleanup = null; }
     this.overlayKind = null;
     const o = $('#overlay');
     o.classList.remove('open');
@@ -54,14 +57,18 @@ const App = {
     this.refresh();
   },
 
-  startGame(game) {
+  // challenge: { seed, target } to play a friend's challenge code.
+  startGame(game, challenge = null) {
     this.lastGame = game;
     const levelBefore = Store.level().lvl;
     const host = this.openOverlay('game');
+    if (challenge) Challenge.begin({ game, ...challenge });
     this.session = new Session(game, host, (result) => {
       this.session = null;
+      Challenge.end();
       if (!result) return this.closeOverlay();
       result.levelUp = Store.level().lvl > levelBefore ? Store.level().lvl : null;
+      result.challenge = challenge;
       this.showResults(result);
     });
     try {
@@ -97,7 +104,10 @@ const App = {
         h('div', { class: 'chip' }, h('b', {}, total ? Math.round(r.acc * 100) + '%' : '—'), ' accuracy'),
         h('div', { class: 'chip' }, h('b', {}, '×' + r.bestCombo), ' best streak')),
       missed,
-      h('button', { class: 'btn share wide-ish', onclick: () => Share.send(shareText(r)) }, '📤 Challenge a friend'),
+      r.challenge ? versusBox(r) : null,
+      r.challenge
+        ? h('button', { class: 'btn share', onclick: () => Share.send(challengeText(r, r.challenge.seed, true)) }, '📤 Send my score back')
+        : h('button', { class: 'btn share', onclick: () => Share.send(challengeText(r, Challenge.newSeed(), false)) }, '📤 Challenge a friend'),
       h('div', { class: 'res-btns' },
         h('button', { class: 'btn ghost', onclick: () => this.closeOverlay() }, 'Menu'),
         h('button', { class: 'btn primary', onclick: () => this.startGame(r.game) }, '↻ Play again')),
@@ -123,6 +133,7 @@ const App = {
   // Android back button. Returns true when handled, false to leave the app.
   back() {
     if (this.overlayKind === 'game' && this.session) { this.session.quit(); return true; }
+    if (this.overlayKind === 'duel') { openFriends(); return true; }
     if (this.overlayKind) { this.closeOverlay(); return true; }
     if (this.tab !== 'play') { this.show('play'); return true; }
     return false;
@@ -134,9 +145,27 @@ const SHARE_LINES = [
   'Mi hermano es muy molesto 😤', 'Mi jefa es un poco mandona 👑', 'Mi primo es demasiado dormilón 🛌',
   'Mi vecino es muy chismoso 🗣️', 'Mi amiga es súper graciosa 😂', 'Mi gato es bastante perezoso 🦥',
 ];
-function shareText(r) {
+// The message sent with a challenge code. reply: answering a friend's challenge.
+function challengeText(r, seed, reply) {
+  const code = Challenge.encode(r.game.id, seed, r.score);
   const stars = r.stars ? '⭐'.repeat(r.stars) + ' ' : '';
-  return `${stars}I scored ${r.score} in ${r.game.emoji} ${r.game.name} on Adjetivos — the game that teaches you Spanish describing words.\n“${pickOne(SHARE_LINES)}”\nBet you can't beat me 👀🇪🇸`;
+  const head = reply
+    ? `${stars}I played your challenge and got ${r.score} in ${r.game.emoji} ${r.game.name}! Same words, your turn 😏`
+    : `${stars}I scored ${r.score} in ${r.game.emoji} ${r.game.name} on Adjetivos 🇪🇸\n“${pickOne(SHARE_LINES)}”\nBet you can't beat me 👀`;
+  return `${head}\n\n🎯 Challenge code: ${code}\nOpen Adjetivos → 👥 Play with friends → type the code.`;
+}
+
+// Who won a challenge, shown on the results screen.
+function versusBox(r) {
+  const them = r.challenge.target;
+  if (them == null) return h('div', { class: 'versus' }, h('b', {}, 'Challenge played!'), h('span', {}, 'Send your score back so they can try to beat it.'));
+  const verdict = r.score > them ? '🏆 You win!' : r.score < them ? '😅 They win this time' : '🤝 It\'s a draw!';
+  return h('div', { class: 'versus' },
+    h('div', { class: 'vs-row' },
+      h('div', {}, h('small', {}, 'Friend'), h('b', {}, them)),
+      h('span', { class: 'vs-mid' }, 'VS'),
+      h('div', {}, h('small', {}, 'You'), h('b', {}, r.score))),
+    h('div', { class: 'vs-verdict' }, verdict));
 }
 const INVITE_TEXT = '🇪🇸 Learning Spanish adjectives with 19 mini games — bubble popping, word ninja, whack-a-word… Free, no ads. Try it:';
 
@@ -243,6 +272,10 @@ function renderPlay() {
     h('div', { class: 'section-title' }, 'Word pack'),
     packs,
     h('button', { class: 'btn primary wide shuffle', onclick: () => App.startGame(pickOne(GAMES)) }, '🎲 Surprise me — random game'),
+    h('button', { class: 'card friends-card', onclick: () => openFriends() },
+      h('span', { class: 'inv-emoji' }, '👥'),
+      h('div', {}, h('b', {}, 'Play with friends'), h('span', {}, 'Duel on one phone, or send a challenge code')),
+      h('span', { class: 'chev' }, '›')),
     ...groups,
     h('button', { class: 'card invite', onclick: () => Share.send(INVITE_TEXT) },
       h('span', { class: 'inv-emoji' }, '📤'),
@@ -254,6 +287,113 @@ function renderPlay() {
       h('span', { class: 'chev' }, '›')),
     h('div', { class: 'foot-note' }, `${GAMES.length} mini games · ${WORDS.length} adjectives`),
   );
+}
+
+// ------------------------------------------------------------------ Play with friends
+function openFriends() {
+  const host = App.openOverlay('friends');
+  const input = h('input', { class: 'search code-input', placeholder: 'e.g. QUIZ-4F7K2-230', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false' });
+  const play = () => {
+    const c = Challenge.decode(input.value);
+    if (!c) { toast('That code doesn\'t look right — check it and try again'); return; }
+    App.startGame(c.game, { seed: c.seed, target: c.target });
+  };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') play(); });
+  host.replaceChildren(h('div', { class: 'flash friends' },
+    h('div', { class: 'flash-top' },
+      h('button', { class: 'icon-btn', onclick: () => App.closeOverlay() }, '✕'),
+      h('div', { class: 'flash-count' }, '👥 Play with friends'),
+      h('span', {})),
+    h('button', { class: 'card friends-option duel-option', onclick: () => openDuel() },
+      h('div', { class: 'fo-emoji' }, '⚔️'),
+      h('div', {}, h('b', {}, 'Duel on one phone'), h('span', {}, 'Put the phone flat between you. First to tap the right Spanish word wins the point. First to 7 wins!'))),
+    h('div', { class: 'card friends-option' },
+      h('div', { class: 'fo-emoji' }, '🎯'),
+      h('div', { class: 'fo-body' },
+        h('b', {}, 'Play a challenge code'),
+        h('span', {}, 'Got a code from a friend? Type it here to play the same game and see who wins.'),
+        input,
+        h('button', { class: 'btn primary', onclick: play }, '▶ Play challenge'))),
+    h('div', { class: 'card friends-option' },
+      h('div', { class: 'fo-emoji' }, '📤'),
+      h('div', {}, h('b', {}, 'Challenge someone'), h('span', {}, 'Finish any game and tap “Challenge a friend”. They get your score and a code — and the app if they don\'t have it yet.'))),
+  ));
+}
+
+// Two players, one phone: the top half is turned round to face the other player.
+function openDuel() {
+  const host = App.openOverlay('duel');
+  const TARGET = 7;
+  const timers = new Set();
+  const later = (ms, fn) => { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); };
+  App.overlayCleanup = () => { timers.forEach(clearTimeout); timers.clear(); };
+  const players = [0, 1].map((i) => {
+    const score = h('div', { class: 'duel-score' }, '0');
+    const prompt = h('div', { class: 'duel-prompt' });
+    const opts = h('div', { class: 'duel-opts' });
+    const half = h('div', { class: 'duel-half p' + i }, h('div', { class: 'duel-head' }, h('span', {}, i ? '🩷 Player 2' : '🩵 Player 1'), score), prompt, opts);
+    return { i, half, score, prompt, opts, points: 0, locked: false };
+  });
+  const mid = h('div', { class: 'duel-mid' }, h('button', { class: 'icon-btn', onclick: () => App.closeOverlay() }, '✕'), h('b', {}, 'VS'), h('span', { class: 'duel-goal' }, `first to ${TARGET}`));
+  host.replaceChildren(h('div', { class: 'duel' }, players[1].half, mid, players[0].half));
+
+  let word = null, open = false, last = null;
+  const round = () => {
+    let w;
+    do { w = pickWords(1)[0]; } while (last && w.id === last.id);
+    last = word = w;
+    const options = [w, ...distractors(w, 3)];
+    open = true;
+    players.forEach((p) => {
+      p.locked = false;
+      p.half.classList.remove('won-round', 'lost-round');
+      p.prompt.replaceChildren(h('span', { class: 'dp-emoji' }, w.e), h('span', {}, w.short));
+      p.opts.replaceChildren(...shuffle(options).map((o) => {
+        const b = h('button', { class: 'duel-opt' }, o.m);
+        b.addEventListener('pointerdown', (e) => { e.preventDefault(); tap(p, o, b); });
+        return b;
+      }));
+    });
+  };
+  const tap = (p, o, b) => {
+    if (!open || p.locked) return;
+    if (o.id === word.id) {
+      open = false;
+      p.points++;
+      p.score.textContent = p.points;
+      b.classList.add('right');
+      p.half.classList.add('won-round');
+      players[1 - p.i].half.classList.add('lost-round');
+      Sfx.good(p.points);
+      Haptics.buzz(30);
+      Voice.say(word.m);
+      if (p.points >= TARGET) return later(900, () => finish(p));
+      later(1300, round);
+    } else {
+      p.locked = true;
+      b.classList.add('wrong');
+      Sfx.bad();
+      Haptics.buzz([40, 30, 40]);
+      if (players.every((x) => x.locked)) {
+        open = false;
+        players.forEach((x) => [...x.opts.children].forEach((c) => { if (c.textContent === word.m) c.classList.add('right'); }));
+        Voice.say(word.m);
+        later(1600, round);
+      }
+    }
+  };
+  const finish = (winner) => {
+    Sfx.win();
+    players.forEach((p) => {
+      const won = p === winner;
+      p.prompt.replaceChildren(h('span', { class: 'dp-emoji' }, won ? '🏆' : '😅'), h('span', {}, won ? '¡Ganaste! You win!' : 'So close!'));
+      p.opts.replaceChildren(
+        h('button', { class: 'btn primary', onclick: () => openDuel() }, '↻ Rematch'),
+        h('button', { class: 'btn ghost', onclick: () => App.closeOverlay() }, 'Done'));
+    });
+    App.confetti(host);
+  };
+  round();
 }
 
 // ------------------------------------------------------------------ Learn tab

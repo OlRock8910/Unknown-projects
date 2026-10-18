@@ -28,9 +28,6 @@ import androidx.core.app.NotificationManagerCompat;
 import androidx.core.app.PendingIntentCompat;
 import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
-import androidx.media.AudioAttributesCompat;
-import androidx.media.AudioFocusRequestCompat;
-import androidx.media.AudioManagerCompat;
 import androidx.media.app.NotificationCompat.MediaStyle;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
@@ -60,6 +57,8 @@ public class MediaPlaybackService extends Service {
         long durationMs;
         long positionMs;
         boolean playing;
+        /** Paused by another app's sound; the WebView plays again once it stops. */
+        boolean interrupted;
         boolean canPrev = true;
         boolean canNext;
         boolean canLike;
@@ -90,22 +89,29 @@ public class MediaPlaybackService extends Service {
     private boolean foreground;
 
     /*
-     * Taking turns with other apps' sound (audio focus). When another app
-     * starts playing, ReelBox pauses instead of playing over it. For a short
-     * interruption (a voice note, a call, navigation) it resumes by itself.
+     * Taking turns with other apps' sound (audio focus) is left to the
+     * WebView: it asks Android for the sound whenever a song or video starts,
+     * pauses when another app starts playing, and after a short interruption
+     * (a voice note, a call, directions) plays again by itself. This service
+     * must not ask for the sound as well: the two would take it from each
+     * other, and whichever lost would pause the song just started.
      */
-    private AudioManager audioManager;
-    private AudioFocusRequestCompat focusRequest;
-    private boolean hasFocus;
-    /** Paused because of a short interruption, so play again once it ends. */
-    private boolean resumeOnGain;
+
+    /** How long to stay running while paused by an interruption, waiting to play again. */
+    private static final long INTERRUPTION_WAIT_MS = 10 * 60 * 1000;
+    /** Ends the wait: still paused, so it is no longer worth keeping the app running. */
+    private final Runnable interruptionOver = () -> {
+        if (info != null && !info.playing && foreground) {
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH);
+            foreground = false;
+        }
+    };
 
     /** Headphones unplugged or Bluetooth dropped: pause rather than play out loud. */
     private final BroadcastReceiver noisy = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction()) && info != null && info.playing) {
-                resumeOnGain = false;
                 GalleryPlugin.emitMediaAction("pause", -1);
             }
         }
@@ -197,17 +203,6 @@ public class MediaPlaybackService extends Service {
         );
         session.setActive(true);
 
-        audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
-        focusRequest = new AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(
-                new AudioAttributesCompat.Builder()
-                    .setUsage(AudioAttributesCompat.USAGE_MEDIA)
-                    .setContentType(AudioAttributesCompat.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
-            .setWillPauseWhenDucked(true)
-            .setOnAudioFocusChangeListener(this::onFocusChange, main)
-            .build();
         ContextCompat.registerReceiver(
             this,
             noisy,
@@ -242,7 +237,7 @@ public class MediaPlaybackService extends Service {
     @Override
     public void onDestroy() {
         instance = null;
-        releaseFocus();
+        main.removeCallbacks(interruptionOver);
         try {
             unregisterReceiver(noisy);
         } catch (IllegalArgumentException ignored) {}
@@ -256,44 +251,6 @@ public class MediaPlaybackService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
-    }
-
-    private void onFocusChange(int change) {
-        switch (change) {
-            case AudioManager.AUDIOFOCUS_LOSS:
-                // Another app is playing for real: pause and stay paused.
-                hasFocus = false;
-                resumeOnGain = false;
-                if (info != null && info.playing) GalleryPlugin.emitMediaAction("pause", -1);
-                break;
-            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                // A short sound (voice note, call, directions): pause, come back after.
-                hasFocus = false;
-                if (info != null && info.playing) {
-                    resumeOnGain = true;
-                    GalleryPlugin.emitMediaAction("pause", -1);
-                }
-                break;
-            case AudioManager.AUDIOFOCUS_GAIN:
-                hasFocus = true;
-                if (resumeOnGain) {
-                    resumeOnGain = false;
-                    GalleryPlugin.emitMediaAction("play", -1);
-                }
-                break;
-        }
-    }
-
-    private void requestFocus() {
-        if (hasFocus) return;
-        hasFocus = AudioManagerCompat.requestAudioFocus(audioManager, focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
-    }
-
-    private void releaseFocus() {
-        if (audioManager != null && focusRequest != null) AudioManagerCompat.abandonAudioFocusRequest(audioManager, focusRequest);
-        hasFocus = false;
-        resumeOnGain = false;
     }
 
     private void handle(String action) {
@@ -361,16 +318,16 @@ public class MediaPlaybackService extends Service {
         session.setMetadata(meta.build());
 
         Notification n = build();
+        main.removeCallbacks(interruptionOver);
         if (i.playing) {
-            // Playing again (by the user or after an interruption): take the sound back.
-            resumeOnGain = false;
-            requestFocus();
             goForeground(n);
             if (!wakeLock.isHeld()) wakeLock.acquire();
-        } else if (resumeOnGain) {
-            // Paused only for an interruption: stay alive so it can resume afterwards.
+        } else if (i.interrupted && foreground) {
+            // A voice note, call or directions paused it: keep the app running
+            // (so Android does not freeze it) to play again when that ends.
             goForeground(n);
             if (wakeLock.isHeld()) wakeLock.release();
+            main.postDelayed(interruptionOver, INTERRUPTION_WAIT_MS);
         } else {
             // Paused: the notification stays (and can be swiped away), but the
             // app no longer needs to be kept running.
@@ -400,7 +357,6 @@ public class MediaPlaybackService extends Service {
     }
 
     private void shutDown() {
-        releaseFocus();
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
         foreground = false;
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);

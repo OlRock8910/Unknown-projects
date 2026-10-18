@@ -1,6 +1,6 @@
 {
   "name": "reelbox",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "private": true,
   "description": "ReelBox: watch the videos in your phone's gallery in a streaming-app style library.",
   "type": "module",

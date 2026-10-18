@@ -55,6 +55,8 @@ export class MusicPlayer implements Playable {
   private shuffle = false;
   private repeat: Repeat = 'off';
   private lastSave = 0;
+  /** The user wants it playing (pressed play), so a pause they did not ask for is an interruption. */
+  private intent = false;
   private scrubbing = false;
   private mini = document.querySelector<HTMLElement>('.mini')!;
   private np: HTMLElement;
@@ -134,6 +136,7 @@ export class MusicPlayer implements Playable {
       duration: Number.isFinite(this.audio.duration) ? this.audio.duration : s.duration,
       position: this.audio.currentTime || 0,
       playing: !this.audio.paused,
+      interrupted: this.audio.paused && this.intent && !this.audio.ended,
       canPrev: true,
       // Never a dead end: past the last song comes another one.
       canNext: true,
@@ -145,10 +148,12 @@ export class MusicPlayer implements Playable {
 
   play() {
     if (!this.current) return;
+    this.intent = true;
     this.audio.play().catch(() => {});
   }
 
   pause() {
+    this.intent = false;
     this.audio.pause();
   }
 
@@ -211,6 +216,7 @@ export class MusicPlayer implements Playable {
 
   /** Close the player completely: no mini bar, nothing on the lock screen. */
   stop() {
+    this.intent = false;
     this.audio.pause();
     this.audio.removeAttribute('src');
     this.audio.load();
@@ -271,7 +277,7 @@ export class MusicPlayer implements Playable {
     const s = this.current;
     if (!s) return;
     this.audio.src = s.src;
-    if (autoplay) this.audio.play().catch(() => {});
+    if (autoplay) this.play();
     this.save();
     this.render();
     this.hooks.changed();

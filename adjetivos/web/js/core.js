@@ -265,16 +265,15 @@ const Voice = {
 };
 
 // ------------------------------------------------------------------ sharing
-const PLAY_URL = 'https://olrock8910.github.io/Unknown-projects/adjetivos/';
 const APK_URL = 'https://github.com/OlRock8910/Unknown-projects/raw/main/adjetivos/apk/Adjetivos.apk';
 const Share = {
   // Android share sheet in the APK, the browser's share sheet on phones,
-  // otherwise copy to the clipboard.
+  // otherwise copy to the clipboard. Always ends with where to get the app.
   async send(text) {
-    const full = `${text}\n${PLAY_URL}`;
+    const full = `${text}\n\n📲 Get Adjetivos (free, Android): ${APK_URL}`;
     try {
       if (window.Native && window.Native.share) { window.Native.share(full); return; }
-      if (navigator.share) { await navigator.share({ title: 'Adjetivos', text, url: PLAY_URL }); return; }
+      if (navigator.share) { await navigator.share({ title: 'Adjetivos', text: full }); return; }
     } catch (e) {
       if (e && e.name === 'AbortError') return; // closed the share sheet
     }
@@ -305,8 +304,47 @@ const Haptics = {
   },
 };
 
+// ------------------------------------------------------------------ challenges
+// A challenge code like QUIZ-4F7K2-230 names a game, a random seed and the
+// sender's score. While a challenge is being played, Math.random runs from
+// that seed and words are picked from every pack without favouring the ones
+// you know least, so two phones deal out the same words.
+const Challenge = {
+  active: null, // { game, seed, target } while a challenge game runs
+  newSeed: () => Math.floor(Math.random() * 36 ** 5),
+  encode: (gameId, seed, score) => `${gameId}-${seed.toString(36)}-${score}`.toUpperCase(),
+  decode(code) {
+    const m = String(code || '').toLowerCase().match(/([a-z]+)\s*-\s*([0-9a-z]{1,6})(?:\s*-\s*(\d+))?/);
+    const game = m && GAMES.find((g) => g.id === m[1]);
+    if (!game) return null;
+    return { game, seed: parseInt(m[2], 36), target: m[3] != null ? Number(m[3]) : null };
+  },
+  // mulberry32: small, fast and the same on every phone.
+  rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  },
+  begin(info) {
+    this.active = info;
+    this.realRandom = Math.random;
+    Math.random = this.rng(info.seed);
+  },
+  end() {
+    if (this.realRandom) Math.random = this.realRandom;
+    this.realRandom = null;
+    this.active = null;
+  },
+};
+
 // ------------------------------------------------------------------ word choice
 function currentPool(min = 8) {
+  if (Challenge.active) return WORDS;
   const pack = PACKS.find((p) => p.id === Store.s.pack) || PACKS[0];
   const words = WORDS.filter(pack.test);
   return words.length >= min ? words : WORDS;
@@ -319,7 +357,7 @@ function pickWords(n, filter = () => true, pool = currentPool()) {
   const out = [];
   const bag = cands.slice();
   while (out.length < n && bag.length) {
-    const weights = bag.map((w) => 6 - Store.mastery(w.id));
+    const weights = bag.map((w) => (Challenge.active ? 1 : 6 - Store.mastery(w.id)));
     let r = Math.random() * weights.reduce((a, b) => a + b, 0);
     let i = 0;
     while (r > weights[i]) { r -= weights[i]; i++; }

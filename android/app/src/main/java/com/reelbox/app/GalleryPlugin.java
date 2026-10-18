@@ -525,6 +525,7 @@ public class GalleryPlugin extends Plugin {
         info.durationMs = (long) (call.getDouble("duration", 0.0) * 1000);
         info.positionMs = (long) (call.getDouble("position", 0.0) * 1000);
         info.playing = Boolean.TRUE.equals(call.getBoolean("playing", false));
+        info.interrupted = Boolean.TRUE.equals(call.getBoolean("interrupted", false));
         info.canPrev = Boolean.TRUE.equals(call.getBoolean("canPrev", true));
         info.canNext = Boolean.TRUE.equals(call.getBoolean("canNext", false));
         info.canLike = Boolean.TRUE.equals(call.getBoolean("canLike", false));

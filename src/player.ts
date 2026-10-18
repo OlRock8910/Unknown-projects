@@ -202,6 +202,7 @@ export class Player implements Playable {
       duration: Number.isFinite(m.duration) ? m.duration : v.duration,
       position: m.currentTime || 0,
       playing: !m.paused,
+      interrupted: m.paused && this.intent && !m.ended,
       canPrev: true,
       canNext: this.index < this.queue.length - 1,
       canLike: false,
