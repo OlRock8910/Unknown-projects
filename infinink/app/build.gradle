@@ -1,0 +1,52 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.infinink.app'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.infinink.app'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        // A fixed, deliberately public key so every build shares one signature and a newer APK
+        // installs over an older one. Sideload builds only; a store release would need a private
+        // key kept out of the repo.
+        sideload {
+            storeFile file('infinink-sideload.jks')
+            storePassword 'infinink'
+            keyAlias 'infinink'
+            keyPassword 'infinink'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.sideload
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.sideload
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
