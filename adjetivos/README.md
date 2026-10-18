@@ -93,13 +93,15 @@ Spanish over English (**AMABLE · KIND**), and says it out loud.
 
 **👥 Play with friends**
 
-- **Play online** — on two phones, anywhere. One player taps **Make a room**
-  and sends the 5-letter code; the other taps **Join**. Both see the same
-  word at the same time, and the faster right tap wins the point (each phone
-  times its own tap, so a slow connection doesn't cost you). First to 7 wins,
-  then rematch. It uses [PeerJS](https://peerjs.com): their free server only
-  introduces the two phones, which then talk directly. Nothing is stored and
-  no account is needed.
+- **Play online** — open the **👥 Friends** tab (or the big *Play with
+  friends* button on the home screen) and your phone shows a 5-letter code.
+  Send it to a friend; they type it into their Friends tab and the game
+  starts on both phones. Both see the same word at the same time and the
+  faster right tap wins the point (each phone times its own tap, so a slow
+  connection doesn't cost you). First to 7 wins, then rematch. It uses
+  [PeerJS](https://peerjs.com): their free server only introduces the two
+  phones, which then talk directly. Nothing is stored and no account is
+  needed.
 - **Duel on one phone** — put the phone flat between two players; each gets
   half the screen. First to tap the right Spanish word wins the point, first
   to 7 wins.

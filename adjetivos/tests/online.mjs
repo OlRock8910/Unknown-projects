@@ -56,14 +56,20 @@ try {
   const ana = await phone('Ana');
   const ben = await phone('Ben');
 
-  // Ana makes a room, Ben joins with the code.
-  await ana.evaluate(() => openOnline());
-  await ana.click('button:has-text("Make a room")');
-  await until(ana, () => /^[A-Z0-9]{5}$/.test(document.querySelector('.room-code')?.textContent || ''), null, 'room code');
-  const code = await ana.textContent('.room-code');
-  await ben.evaluate(() => openOnline());
-  await ben.fill('.code-input', code.toLowerCase());
-  await ben.click('button:has-text("Join")');
+  // Both open the Friends tab and get a code; Ben types Ana's.
+  const myCode = async (page) => {
+    await page.evaluate(() => App.show('friends'));
+    await until(page, () => /^[A-Z0-9]{5}$/.test(document.querySelector('.online-hero .room-code')?.textContent || ''), null, 'a code');
+    return page.textContent('.online-hero .room-code');
+  };
+  const typeCode = async (page, code) => {
+    await page.fill('input[placeholder="Friend’s code"]', code.toLowerCase());
+    await page.click('.oh-join button');
+  };
+  const anaCode = await myCode(ana);
+  const benCode = await myCode(ben);
+  if (anaCode === benCode) fail('both phones got the same code');
+  await typeCode(ben, anaCode);
 
   // Both see each other's names, a countdown, then the same first word.
   await until(ana, () => /Ben/.test(document.querySelector('.online-scores')?.textContent || ''), null, 'Ana to see Ben');
@@ -102,15 +108,30 @@ try {
   await until(ana, () => [...document.querySelectorAll('.online-scores b')].every((b) => b.textContent === '0') && document.querySelector('.countdown'), null, 'rematch on Ana');
   await until(ben, () => [...document.querySelectorAll('.online-scores b')].every((b) => b.textContent === '0'), null, 'rematch on Ben');
 
-  // Ben leaves → Ana is told.
+  // Ben leaves → Ana is told; both are back with the same codes.
   await ben.evaluate(() => appBack());
-  await until(ana, () => /Ben left the game/.test(document.querySelector('.online').textContent), null, 'Ana being told Ben left');
+  await until(ana, () => /Ben left the game/.test(document.querySelector('#overlay').textContent), null, 'Ana being told Ben left');
+  await ana.click('button:has-text("Back")');
+  if ((await myCode(ana)) !== anaCode) fail('Ana’s code changed after a game');
+
+  // Both type each other's code at the same moment → still one game.
+  await Promise.all([ana.evaluate((c) => Online.join(c), benCode), ben.evaluate((c) => Online.join(c), anaCode)]);
+  await until(ana, () => /Ben/.test(document.querySelector('.online-scores')?.textContent || '') && document.querySelector('.countdown, .duel-opt'), null, 'crossed codes connecting Ana');
+  await until(ben, () => /Ana/.test(document.querySelector('.online-scores')?.textContent || '') && document.querySelector('.countdown, .duel-opt'), null, 'crossed codes connecting Ben');
+  await ana.evaluate(() => appBack());
+  await until(ben, () => /Ana left the game/.test(document.querySelector('#overlay').textContent), null, 'Ben being told Ana left');
+  await ben.click('button:has-text("Back")');
+
+  // Ana is in a solo game: Ben is told she's busy.
+  await ana.evaluate(() => App.startGame(GAMES.find((g) => g.id === 'quiz')));
+  await typeCode(ben, anaCode);
+  await until(ben, () => /Ana is busy/.test(document.querySelector('#overlay').textContent), null, 'busy message');
+  if (await ana.evaluate(() => App.overlayKind) !== 'game') fail('Ana’s game was interrupted');
+  await ben.click('button:has-text("Back")');
 
   // A code nobody is using.
-  await ben.evaluate(() => openOnline());
-  await ben.fill('.code-input', 'ZZZZZ');
-  await ben.click('button:has-text("Join")');
-  await until(ben, () => /No room with that code/.test(document.querySelector('.online').textContent), null, 'unknown room message');
+  await typeCode(ben, 'ZZZZZ');
+  await until(ben, () => /Nobody is using that code/.test(document.querySelector('#overlay').textContent), null, 'unknown code message');
 } catch (e) {
   fail(e.message);
 }

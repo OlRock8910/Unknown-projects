@@ -18,7 +18,9 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 const page = await browser.newPage({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2, hasTouch: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+// The Friends tab tries to go online; there is no game server in this test.
+const offlineNoise = (t) => /peerjs|WebSocket|ERR_(NAME|CONNECTION|INTERNET|TUNNEL|PROXY)/i.test(t);
+page.on('console', (m) => { if (m.type() === 'error' && !offlineNoise(m.text())) errors.push(m.text()); });
 await page.goto(url);
 await page.waitForSelector('.game-card');
 
@@ -45,7 +47,7 @@ const problems = await page.evaluate(() => {
 if (problems.length) { console.error('Data problems:\n  ' + problems.join('\n  ')); process.exit(1); }
 
 if (shots) await page.screenshot({ path: path.join(shotDir, 'home.png') });
-for (const tab of ['learn', 'words', 'me']) {
+for (const tab of ['friends', 'learn', 'words', 'me']) {
   await page.click(`#tabs button[data-tab=${tab}]`);
   await page.waitForTimeout(400);
   if (shots) await page.screenshot({ path: path.join(shotDir, `tab-${tab}.png`) });
@@ -134,10 +136,11 @@ const friends = await page.evaluate(async () => {
   const b = deal();
   if (a !== b) out.push('same code dealt different questions');
   if (Math.random !== realRandom || Challenge.active) out.push('Math.random not restored after a challenge');
-  // Friends screen → code → game → results with the comparison.
+  // Friends tab → challenge code → game → results with the comparison.
   openFriends();
-  document.querySelector('.code-input').value = 'emoji-1a2b-5';
-  [...document.querySelectorAll('.friends .btn.primary')].find((x) => /challenge/i.test(x.textContent)).click();
+  if (App.tab !== 'friends' || !document.querySelector('.online-hero')) out.push('friends tab did not open');
+  document.querySelector('input[placeholder^="e.g. QUIZ"]').value = 'emoji-1a2b-5';
+  [...document.querySelectorAll('.page .btn.primary')].find((x) => /challenge/i.test(x.textContent)).click();
   if (App.overlayKind !== 'game' || !Challenge.active || Challenge.active.target !== 5) out.push('challenge code did not start the game');
   App.session.hit(WORDS[0], 10);
   App.session.finish();
@@ -153,8 +156,12 @@ const friends = await page.evaluate(async () => {
   right.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
   if (p0.querySelector('.duel-score').textContent !== '1') out.push('duel point not scored');
   appBack();
-  if (App.overlayKind !== 'friends') out.push('back from duel did not return to friends: ' + App.overlayKind);
-  App.closeOverlay();
+  if (App.overlayKind || App.tab !== 'friends') out.push('back from duel did not return to the friends tab: ' + App.overlayKind + ' ' + App.tab);
+  // The home screen has a big way in.
+  App.show('play');
+  document.querySelector('.friends-hero').click();
+  if (App.tab !== 'friends') out.push('home "Play with friends" did not open the friends tab');
+  App.show('play');
   return out;
 });
 errors.push(...friends);

@@ -582,3 +582,34 @@ input { font: inherit; }
 .online-status { text-align: center; color: var(--muted); font-weight: 800; min-height: 24px; }
 .countdown { font-size: 72px; font-weight: 900; color: var(--gold); animation: popIn 0.35s; }
 .duel-opt.chosen { border-color: #facc15; box-shadow: 0 0 0 2px #facc15 inset; }
+
+/* ------------------------------------------------------------ friends tab */
+.friends-hero { width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; padding: 18px 16px; margin-bottom: 14px; border-radius: var(--radius);
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6 55%, #ec4899); box-shadow: 0 12px 30px -8px rgba(139, 92, 246, 0.6); animation: heroGlow 3s ease-in-out infinite alternate; }
+.friends-hero:active { transform: scale(0.98); }
+.friends-hero > div { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.friends-hero b { font-size: 19px; font-weight: 900; }
+.friends-hero span { font-size: 14px; opacity: 0.92; }
+.fh-emoji { font-size: 36px; }
+.fh-go { font-size: 30px; font-weight: 900; }
+@keyframes heroGlow { to { box-shadow: 0 12px 40px -4px rgba(236, 72, 153, 0.7); } }
+.online-hero { display: flex; flex-direction: column; gap: 10px; align-items: stretch; text-align: center;
+  background: linear-gradient(160deg, rgba(6, 182, 212, 0.22), rgba(139, 92, 246, 0.22) 60%, rgba(236, 72, 153, 0.2)); border-color: rgba(255,255,255,0.18); }
+.oh-title { font-size: 22px; font-weight: 900; }
+.oh-steps { color: #d4d4e8; font-size: 13.5px; line-height: 1.45; }
+.oh-label { color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; font-size: 12px; margin-top: 4px; }
+.my-code { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 80px; justify-content: center; }
+.room-code.loading { color: var(--muted); letter-spacing: 6px; border-color: rgba(255,255,255,0.2); }
+.code-msg { color: #fda4af; font-weight: 700; }
+.oh-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 700; margin-top: 4px; }
+.oh-or::before, .oh-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.oh-join { display: flex; gap: 8px; }
+.oh-join .code-input { margin: 0; flex: 1; text-align: center; font-size: 20px; letter-spacing: 4px; }
+.oh-name { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.oh-name > span { color: var(--muted); font-weight: 700; font-size: 14px; white-space: nowrap; }
+.oh-name .name-input { margin: 0; padding: 10px 14px; }
+.online-hero .room-code { font-size: 46px; padding: 8px 14px 8px 24px; }
+#tabs button span { font-size: 21px; }
+.friends-hero .fh-emoji { font-size: 36px; opacity: 1; }
+.friends-hero .fh-go { font-size: 30px; opacity: 1; }
+.oh-join .code-input::placeholder { letter-spacing: 0; font-size: 15px; text-transform: none; font-weight: 700; }

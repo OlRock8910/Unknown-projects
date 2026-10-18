@@ -3,7 +3,7 @@
 const App = {
   tab: 'play',
   session: null,
-  overlayKind: null, // 'game' | 'results' | 'cards' | 'friends' | 'duel' | 'online' | null
+  overlayKind: null, // 'game' | 'results' | 'cards' | 'duel' | 'online' | null
   overlayCleanup: null,
   lastGame: null,
 
@@ -35,7 +35,7 @@ const App = {
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
     const view = $('#view');
     view.scrollTop = 0;
-    const render = { play: renderPlay, learn: renderLearn, words: renderWords, me: renderMe }[tab];
+    const render = { play: renderPlay, friends: renderFriends, learn: renderLearn, words: renderWords, me: renderMe }[tab];
     view.replaceChildren(render());
   },
 
@@ -257,6 +257,10 @@ function renderPlay() {
         h('div', { class: 'pill fire' + (streak ? ' lit' : '') }, '🔥 ' + streak),
         h('div', { class: 'pill' }, '⭐ Lv ' + lv.lvl))),
     voiceBanner(),
+    h('button', { class: 'friends-hero', onclick: () => openFriends() },
+      h('span', { class: 'fh-emoji' }, '⚔️'),
+      h('div', {}, h('b', {}, 'Play with friends'), h('span', {}, 'Get your code — your friend types it in and you battle online')),
+      h('span', { class: 'fh-go' }, '›')),
     h('div', { class: 'card goal-card' }, ring,
       h('div', { class: 'goal-text' }, h('b', {}, 'Daily goal'), h('span', {}, `${Math.min(d.daily.xp, DAILY_GOAL)} / ${DAILY_GOAL} XP today`),
         h('div', { class: 'xp-bar' }, h('i', { style: { width: (lv.into / lv.need) * 100 + '%' } })),
@@ -272,10 +276,6 @@ function renderPlay() {
     h('div', { class: 'section-title' }, 'Word pack'),
     packs,
     h('button', { class: 'btn primary wide shuffle', onclick: () => App.startGame(pickOne(GAMES)) }, '🎲 Surprise me — random game'),
-    h('button', { class: 'card friends-card', onclick: () => openFriends() },
-      h('span', { class: 'inv-emoji' }, '👥'),
-      h('div', {}, h('b', {}, 'Play with friends'), h('span', {}, 'Online, on one phone, or with a challenge code')),
-      h('span', { class: 'chev' }, '›')),
     ...groups,
     h('button', { class: 'card invite', onclick: () => Share.send(INVITE_TEXT) },
       h('span', { class: 'inv-emoji' }, '📤'),
@@ -289,38 +289,76 @@ function renderPlay() {
   );
 }
 
-// ------------------------------------------------------------------ Play with friends
+// ------------------------------------------------------------------ Friends tab
+// Shows the Friends tab, closing whatever game or duel is on top of it.
 function openFriends() {
-  const host = App.openOverlay('friends');
-  const input = h('input', { class: 'search code-input', placeholder: 'e.g. QUIZ-4F7K2-230', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false' });
-  const play = () => {
-    const c = Challenge.decode(input.value);
+  if (App.overlayKind) App.closeOverlay();
+  App.show('friends');
+}
+
+function renderFriends() {
+  Online.start();
+
+  // Your name, so your friend knows who they're playing.
+  const name = h('input', { class: 'search name-input', placeholder: 'Your name', maxlength: '14', value: Store.s.playerName || '' });
+  name.addEventListener('input', () => { Store.s.playerName = name.value.trim(); Store.save(); });
+
+  // Your code: kept up to date as the phone comes online.
+  const codeBox = h('div', { class: 'my-code' });
+  const sendBtn = h('button', { class: 'btn share' }, '📤 Send my code');
+  const drawCode = () => {
+    if (!codeBox.isConnected && Online.ui === drawCode && App.tab !== 'friends') { Online.ui = null; return; }
+    const st = Online.state;
+    sendBtn.disabled = st !== 'ready';
+    if (st === 'ready') codeBox.replaceChildren(h('div', { class: 'room-code' }, Online.code));
+    else if (st === 'error') codeBox.replaceChildren(h('div', { class: 'code-msg' }, '📵 You’re offline. Online play needs internet.'), h('button', { class: 'btn ghost small', onclick: () => Online.start() }, '↻ Try again'));
+    else if (st === 'unsupported') codeBox.replaceChildren(h('div', { class: 'code-msg' }, 'This phone can’t play online — try a duel on one phone instead.'));
+    else codeBox.replaceChildren(h('div', { class: 'room-code loading' }, '• • • • •'));
+  };
+  Online.ui = drawCode;
+  drawCode();
+  sendBtn.addEventListener('click', () => {
+    if (Online.state !== 'ready') return;
+    Share.send(`⚔️ Play Adjetivos with me! My code: ${Online.code}\nOpen Adjetivos → 👥 Friends → type my code → Play.`);
+  });
+
+  // Their code.
+  const theirs = h('input', { class: 'search code-input', placeholder: 'Friend’s code', maxlength: '5', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false' });
+  const go = () => Online.join(theirs.value);
+  theirs.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+
+  // Offline challenge codes (from "Challenge a friend" after a game).
+  const chal = h('input', { class: 'search code-input', placeholder: 'e.g. QUIZ-4F7K2-230', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false' });
+  const playChal = () => {
+    const c = Challenge.decode(chal.value);
     if (!c) { toast('That code doesn\'t look right — check it and try again'); return; }
     App.startGame(c.game, { seed: c.seed, target: c.target });
   };
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') play(); });
-  host.replaceChildren(h('div', { class: 'flash friends' },
-    h('div', { class: 'flash-top' },
-      h('button', { class: 'icon-btn', onclick: () => App.closeOverlay() }, '✕'),
-      h('div', { class: 'flash-count' }, '👥 Play with friends'),
-      h('span', {})),
-    h('button', { class: 'card friends-option online-option', onclick: () => openOnline() },
-      h('div', { class: 'fo-emoji' }, '🌐'),
-      h('div', {}, h('b', {}, 'Play online'), h('span', {}, 'Play a friend on their own phone, anywhere. Make a room, send them the code, and race to tap the right word.'))),
+  chal.addEventListener('keydown', (e) => { if (e.key === 'Enter') playChal(); });
+
+  return h('div', { class: 'page' },
+    h('header', { class: 'top' }, h('div', {}, h('div', { class: 'hello' }, 'Amigos'), h('div', { class: 'brand' }, 'Friends'))),
+    h('div', { class: 'card online-hero' },
+      h('div', { class: 'oh-title' }, '🌐 Play a friend online'),
+      h('div', { class: 'oh-steps' }, '1. Send your friend your code  ·  2. They type it in  ·  3. Race to tap the right Spanish word!'),
+      h('div', { class: 'oh-label' }, 'Your code'),
+      codeBox,
+      sendBtn,
+      h('div', { class: 'oh-or' }, h('span', {}, 'or type your friend’s code')),
+      h('div', { class: 'oh-join' }, theirs, h('button', { class: 'btn primary', onclick: go }, '▶ Play')),
+      h('div', { class: 'oh-name' }, h('span', {}, 'Your name'), name),
+      h('div', { class: 'online-note' }, 'Both phones need internet, with Adjetivos open on this tab. First to 7 points wins.')),
     h('button', { class: 'card friends-option duel-option', onclick: () => openDuel() },
       h('div', { class: 'fo-emoji' }, '⚔️'),
-      h('div', {}, h('b', {}, 'Duel on one phone'), h('span', {}, 'Put the phone flat between you. First to tap the right Spanish word wins the point. First to 7 wins!'))),
+      h('div', {}, h('b', {}, 'Duel on one phone'), h('span', {}, 'Same room? Put the phone flat between you — each gets half the screen. No internet needed.'))),
     h('div', { class: 'card friends-option' },
       h('div', { class: 'fo-emoji' }, '🎯'),
       h('div', { class: 'fo-body' },
-        h('b', {}, 'Play a challenge code'),
-        h('span', {}, 'Got a code from a friend? Type it here to play the same game and see who wins.'),
-        input,
-        h('button', { class: 'btn primary', onclick: play }, '▶ Play challenge'))),
-    h('div', { class: 'card friends-option' },
-      h('div', { class: 'fo-emoji' }, '📤'),
-      h('div', {}, h('b', {}, 'Challenge someone'), h('span', {}, 'Finish any game and tap “Challenge a friend”. They get your score and a code — and the app if they don\'t have it yet.'))),
-  ));
+        h('b', {}, 'Challenge codes'),
+        h('span', {}, 'Finish any game and tap “Challenge a friend” to send your score. Got a challenge code? Type it here to play the same words and see who wins.'),
+        chal,
+        h('button', { class: 'btn primary', onclick: playChal }, '▶ Play challenge'))),
+  );
 }
 
 // Two players, one phone: the top half is turned round to face the other player.
