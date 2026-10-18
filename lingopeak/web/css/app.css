@@ -933,3 +933,4 @@ html[data-text="big"] #view .page, html[data-text="big"] #overlay .session { zoo
 .streak-step .ic { width: 16px; height: 16px; }
 .streak-step.got { background: var(--yellow-l); box-shadow: inset 0 0 0 2px var(--yellow); }
 .streak-step.got span { color: var(--blue); }
+.results > *, .reveal > * { flex-shrink: 0; }
