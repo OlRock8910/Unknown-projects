@@ -309,6 +309,11 @@ const STRINGS = {
     'set.checkEmail': 'To check it’s you, we’ll email a code to {email}.',
     'set.sendCode': 'Email me a code',
     'set.typeName': 'To check it’s you, type your username: {name}',
+    'widget.goalTodo': 'Hit your {n}-minute goal',
+    'widget.goalToGo': '{n} min to go this week',
+    'widget.goalDone': 'Goal hit! Nice climbing',
+    'widget.daysLeft': '{n} days left',
+    'widget.lastDay': 'Last day this week',
   },
 
   es: {
@@ -615,6 +620,11 @@ const STRINGS = {
     'set.checkEmail': 'Para comprobar que eres tú, te enviaremos un código a {email}.',
     'set.sendCode': 'Envíame un código',
     'set.typeName': 'Para comprobar que eres tú, escribe tu nombre de usuario: {name}',
+    'widget.goalTodo': 'Llega a tu meta de {n} minutos',
+    'widget.goalToGo': 'Faltan {n} min esta semana',
+    'widget.goalDone': '¡Meta cumplida! Buena escalada',
+    'widget.daysLeft': 'Quedan {n} días',
+    'widget.lastDay': 'Último día de la semana',
   },
 
   fr: {
@@ -921,6 +931,11 @@ const STRINGS = {
     'set.checkEmail': 'Pour vérifier que c’est bien toi, on va envoyer un code à {email}.',
     'set.sendCode': 'M’envoyer un code',
     'set.typeName': 'Pour vérifier que c’est bien toi, tape ton nom d’utilisateur : {name}',
+    'widget.goalTodo': 'Atteins ton objectif de {n} minutes',
+    'widget.goalToGo': 'Encore {n} min cette semaine',
+    'widget.goalDone': 'Objectif atteint ! Belle ascension',
+    'widget.daysLeft': 'Encore {n} jours',
+    'widget.lastDay': 'Dernier jour de la semaine',
   },
 
   de: {
@@ -1227,6 +1242,11 @@ const STRINGS = {
     'set.checkEmail': 'Um zu prüfen, dass du es bist, schicken wir einen Code an {email}.',
     'set.sendCode': 'Code per E-Mail senden',
     'set.typeName': 'Um zu prüfen, dass du es bist, gib deinen Benutzernamen ein: {name}',
+    'widget.goalTodo': 'Schaff dein {n}-Minuten-Ziel',
+    'widget.goalToGo': 'Noch {n} Min. diese Woche',
+    'widget.goalDone': 'Ziel geschafft! Stark geklettert',
+    'widget.daysLeft': 'Noch {n} Tage',
+    'widget.lastDay': 'Letzter Tag der Woche',
   },
 
   pt: {
@@ -1533,6 +1553,11 @@ const STRINGS = {
     'set.checkEmail': 'Para confirmar que é você, vamos mandar um código para {email}.',
     'set.sendCode': 'Me mande um código',
     'set.typeName': 'Para confirmar que é você, digite seu nome de usuário: {name}',
+    'widget.goalTodo': 'Bata sua meta de {n} minutos',
+    'widget.goalToGo': 'Faltam {n} min esta semana',
+    'widget.goalDone': 'Meta batida! Boa escalada',
+    'widget.daysLeft': 'Faltam {n} dias',
+    'widget.lastDay': 'Último dia da semana',
   },
 };
 

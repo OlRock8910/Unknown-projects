@@ -392,7 +392,12 @@ const Widget = {
       const json = JSON.stringify({
         weekId: d.week.id, mins: Math.floor(d.week.secs / 60), goal: goalSecs() / 60, streak: Store.weekStreakNow(),
         words: stats.words, pct: stats.pct, lang: t('lang.' + d.target), days: daysLeftInWeek(),
-        labels: { week: t('widget.week'), streak: t('widget.streak'), words: t('widget.words'), done: t('widget.done') },
+        labels: {
+          week: t('widget.week'), streak: t('widget.streak'), words: t('widget.words'), done: t('widget.done'),
+          // For the square widget ({n} is filled in on the phone, so it stays right as the week goes on).
+          goalTodo: t('widget.goalTodo', { n: '{n}' }), goalToGo: t('widget.goalToGo', { n: '{n}' }), goalDone: t('widget.goalDone'),
+          daysLeft: t('widget.daysLeft', { n: '{n}' }), lastDay: t('widget.lastDay'),
+        },
       });
       if (json === this.last) return;
       this.last = json;

@@ -234,6 +234,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             AppWidgetManager mgr = AppWidgetManager.getInstance(MainActivity.this);
             int[] ids = mgr.getAppWidgetIds(new ComponentName(MainActivity.this, LingoWidget.class));
             if (ids.length > 0) LingoWidget.draw(MainActivity.this, mgr, ids);
+            LingoGoalWidget.drawAll(MainActivity.this);
         }
     }
 
