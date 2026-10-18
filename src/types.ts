@@ -65,6 +65,12 @@ export interface NowPlaying {
   duration: number;
   position: number;
   playing: boolean;
+  /**
+   * Paused by something other than the user: another app's sound (a voice
+   * note, a call, directions) took over and the WebView will play again
+   * once it ends.
+   */
+  interrupted: boolean;
   canPrev: boolean;
   canNext: boolean;
   /** Songs get a heart on the notification, like Spotify; videos do not. */
