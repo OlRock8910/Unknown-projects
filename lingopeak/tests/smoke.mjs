@@ -22,8 +22,10 @@ async function newPage(state) {
   await page.addInitScript((s) => {
     window.CLOUD_OVERRIDE = { url: '', anonKey: '' };
     // Seeded once per page, so a reload after deleting the account stays empty.
-    if (s && !sessionStorage.getItem('seeded') && !localStorage.getItem('lingopeak.v1')) localStorage.setItem('lingopeak.v1', JSON.stringify({ epoch: 2, ...s }));
-    sessionStorage.setItem('seeded', '1');
+    // The marker is window.name, which survives reloads (a file:// page's
+    // storage can come back empty after one in the test browser).
+    if (s && window.name !== 'seeded' && !localStorage.getItem('lingopeak.v1')) localStorage.setItem('lingopeak.v1', JSON.stringify({ epoch: 2, ...s }));
+    window.name = 'seeded';
   }, state || null);
   await page.goto(url);
   return page;
