@@ -16,14 +16,9 @@ Set it up once:
 1. **Authentication → Sign In / Providers → Email**: make sure **Email OTP
    length** is **6**.
 2. **Authentication → Emails → Templates**: in both **Magic Link** and
-   **Confirm signup**, set the subject to `Your Lingo Peak code` and the body to:
-
-   ```html
-   <h2>Your Lingo Peak code</h2>
-   <p>Type this code into the app:</p>
-   <p style="font-size:32px;font-weight:bold;letter-spacing:6px">{{ .Token }}</p>
-   <p>It works for 1 hour. If you didn't ask for it, you can ignore this email.</p>
-   ```
+   **Confirm signup**, set the subject to `Your Lingo Peak code` and paste all
+   of [`email/code-email.html`](email/code-email.html) as the body (its
+   pictures load from this repository, `docs/email/`).
 3. **Authentication → Emails → SMTP Settings**: Supabase's own email only
    reaches the project's team members, a few times an hour. To email
    everyone, turn on custom SMTP. With Gmail: host `smtp.gmail.com`, port
