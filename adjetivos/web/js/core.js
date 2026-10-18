@@ -45,7 +45,7 @@ const Store = {
   data: null,
   defaults() {
     return {
-      xp: 0, played: 0, best: {}, stars: {}, mastery: {},
+      xp: 0, played: 0, best: {}, stars: {}, mastery: {}, course: {}, coins: 0, climbed: 0, climber: '🧗', owned: ['🧗'],
       daily: { date: today(), xp: 0 }, streak: { last: null, n: 0 },
       settings: { sound: true, vibrate: true, voice: true, rate: 0.9, pack: 'all', voiceName: '' },
     };
@@ -272,10 +272,10 @@ const Share = {
   // Android share sheet in the APK, the browser's share sheet on phones,
   // otherwise copy to the clipboard. Always ends with where to get the app.
   async send(text) {
-    const full = `${text}\n\n📲 Get Adjetivos (free, Android): ${APK_URL}`;
+    const full = `${text}\n\n📲 Get Hablamos (free, Android): ${APK_URL}`;
     try {
       if (window.Native && window.Native.share) { window.Native.share(full); return; }
-      if (navigator.share) { await navigator.share({ title: 'Adjetivos', text: full }); return; }
+      if (navigator.share) { await navigator.share({ title: 'Hablamos', text: full }); return; }
     } catch (e) {
       if (e && e.name === 'AbortError') return; // closed the share sheet
     }
@@ -371,9 +371,10 @@ function pickWords(n, filter = () => true, pool = currentPool()) {
 // Two words could be confused with each other as answers.
 const clash = (a, b) => a.id === b.id || a.short === b.short || (a.s && a.s === b.s) || a.e === b.e;
 
-// Wrong answers for w that can't be mistaken for a right one.
+// Wrong answers for w that can't be mistaken for a right one, of the same
+// kind (adjectives with adjectives, other words with other words).
 function distractors(w, n, filter = () => true) {
-  const avoid = (d) => !clash(d, w) && filter(d);
+  const avoid = (d) => !clash(d, w) && !!d.adj === !!w.adj && filter(d);
   let cands = shuffle(currentPool().filter(avoid));
   if (cands.length < n) cands = shuffle(WORDS.filter(avoid));
   const out = [];

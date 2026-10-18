@@ -192,9 +192,9 @@ const QUESTION_TYPES = {
     return {
       word: w, say: w.m,
       top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'What does this mean?'), h('div', { class: 'q-big' }, w.m),
-        !w.inv ? h('div', { class: 'q-sub' }, 'feminine: ' + w.f) : h('div', { class: 'q-sub' }, 'same for él and ella')),
+        h('div', { class: 'q-sub' }, !w.adj ? unitOf(w).title : !w.inv ? 'feminine: ' + w.f : 'same for él and ella')),
       options: [{ label: w.short, ok: true }, ...distractors(w, 3).map((d) => ({ label: d.short, ok: false }))],
-      reveal: w.tip ? '💡 ' + w.tip : `${w.e} ${makeSentence(w).es}`,
+      reveal: w.tip ? '💡 ' + w.tip : exampleFor(w) ? `${w.e} ${exampleFor(w).es}` : `${w.e} <b>${w.m}</b> = ${w.en}`,
     };
   },
   en2es(w) {
@@ -230,10 +230,12 @@ const QUESTION_TYPES = {
   },
 };
 
-function randomQuestion(w) {
-  const types = Object.keys(QUESTION_TYPES);
-  return QUESTION_TYPES[pickOne(types)](w);
+// Sentence and gap questions describe a person, so only work for adjectives.
+function questionFor(type, w) {
+  if (!w.adj && (type === 'sentence' || type === 'gap')) type = pickOne(['es2en', 'en2es']);
+  return QUESTION_TYPES[type](w);
 }
+const randomQuestion = (w) => questionFor(pickOne(Object.keys(QUESTION_TYPES)), w);
 
 // ------------------------------------------------------------------ the games
 const GAMES = [];
@@ -297,7 +299,7 @@ addGame({
 
 // ---------------------------------------------------------------- Gender Pop
 addGame({
-  id: 'balloon', name: 'Gender Pop', emoji: '🎈', group: 'arcade', colors: ['#f472b6', '#f97316'], goal: 10,
+  id: 'balloon', name: 'Gender Pop', emoji: '🎈', group: 'arcade', colors: ['#f472b6', '#f97316'], goal: 10, adj: true,
   desc: 'Pop the balloon with the right ending: -o or -a?',
   play(S) {
     S.countdown(60);
@@ -308,7 +310,7 @@ addGame({
     let target, subj;
 
     const newTarget = () => {
-      target = pickWords(1, (w) => !w.inv)[0];
+      target = pickWords(1, (w) => w.adj && !w.inv)[0];
       subj = pickOne(SUBJECTS);
       const icon = subj.g === 'f' ? '👩' : '👨';
       setPrompt(prompt, promptPill(`${icon} ${subj.es} ${verbFor(target)}…`, `${subj.en} is ${target.short}`, null, S.replayButton()));
@@ -692,7 +694,7 @@ addGame({
   play(S) {
     const words = pickWords(10);
     const types = Object.keys(QUESTION_TYPES);
-    roundsGame(S, { rounds: words.length, time: 15, make: (i) => QUESTION_TYPES[types[i % types.length]](words[i]) });
+    roundsGame(S, { rounds: words.length, time: 15, make: (i) => questionFor(types[i % types.length], words[i]) });
   },
 });
 
@@ -780,7 +782,7 @@ addGame({
 
 // ---------------------------------------------------------------- Opposites
 addGame({
-  id: 'opposites', name: 'Opposites', emoji: '☯️', group: 'brain', colors: ['#94a3b8', '#334155'], goal: 7,
+  id: 'opposites', name: 'Opposites', emoji: '☯️', group: 'brain', colors: ['#94a3b8', '#334155'], goal: 7, adj: true,
   desc: 'Tall ↔ short, brave ↔ cowardly… find the opposite',
   play(S) {
     const opp = (w) => WORD_BY_ID[w.o];
@@ -805,7 +807,7 @@ addGame({
 // ---------------------------------------------------------------- Emoji Guess
 addGame({
   id: 'emoji', name: 'Emoji Guess', emoji: '😜', group: 'brain', colors: ['#fde047', '#f59e0b'], goal: 7,
-  desc: 'Which adjective does the emoji show?',
+  desc: 'Which Spanish word does the emoji show?',
   play(S) {
     const words = pickWords(10);
     roundsGame(S, {
@@ -826,7 +828,7 @@ addGame({
 // ---------------------------------------------------------------- Listen Up
 addGame({
   id: 'listen', name: 'Listen Up', emoji: '🎧', group: 'brain', colors: ['#818cf8', '#4338ca'], goal: 7,
-  desc: 'Hear a sentence in Spanish and pick what it means',
+  desc: 'Hear it in Spanish and pick what it means',
   play(S) {
     const words = pickWords(10);
     const canSpeak = Voice.available();
@@ -834,12 +836,13 @@ addGame({
       rounds: words.length, time: 18,
       make: (i) => {
         const w = words[i];
-        const s = makeSentence(w);
+        // Adjectives come in a sentence about someone; other words on their own.
+        const s = w.adj ? makeSentence(w) : { es: w.m, en: w.en };
         const play = () => Voice.say(s.es, true);
         return {
           word: w,
           task: [{ text: s.es, lang: 'es', force: true }],
-          top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Listen — what is the person like?'),
+          top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, w.adj ? 'Listen — what is the person like?' : 'Listen — what does it mean?'),
             h('button', { class: 'speak-big', onclick: play }, '🔊'),
             canSpeak ? h('div', { class: 'q-sub' }, 'Tap to hear it again') : h('div', { class: 'q-sentence' }, s.es)),
           options: [{ label: w.short, ok: true }, ...distractors(w, 3).map((d) => ({ label: d.short, ok: false }))],
@@ -852,7 +855,7 @@ addGame({
 
 // ---------------------------------------------------------------- Describe Them
 addGame({
-  id: 'describe', name: 'Describe Them', emoji: '🕵️', group: 'brain', colors: ['#34d399', '#047857'], goal: 7,
+  id: 'describe', name: 'Describe Them', emoji: '🕵️', group: 'brain', colors: ['#34d399', '#047857'], goal: 7, adj: true,
   desc: 'Read what someone does and pick the word for them',
   play(S) {
     const words = pickWords(10, (w) => w.clue, WORDS.filter((w) => w.clue && currentPool().includes(w)).length >= 10 ? currentPool() : WORDS);
@@ -881,9 +884,9 @@ addGame({
 // ---------------------------------------------------------------- Word Scramble
 addGame({
   id: 'scramble', name: 'Word Scramble', emoji: '🔤', group: 'build', colors: ['#f0abfc', '#a21caf'], goal: 5,
-  desc: 'Unscramble the letters to spell the adjective',
+  desc: 'Unscramble the letters to spell the Spanish word',
   play(S) {
-    const words = pickWords(8, (w) => w.m.length <= 11);
+    const words = pickWords(8, (w) => (w.adj ? w.m.length <= 11 : spellable(w)));
     let i = 0;
     const box = h('div', { class: 'builder' });
     S.stage.append(box);
@@ -894,7 +897,7 @@ addGame({
       const w = words[i];
       const g = pickOne(['m', 'f']);
       const subj = pickOne(SUBJECTS.filter((s) => s.g === g));
-      const answer = form(w, g);
+      const answer = w.adj ? form(w, g) : w.bare;
       const letters = [...answer];
       let order;
       do { order = shuffle(letters.map((c, k) => k)); } while (letters.length > 1 && order.every((k, j) => letters[k] === letters[j]));
@@ -918,7 +921,7 @@ addGame({
           solved = true;
           slots.classList.add('solved');
           S.hit(w, Math.max(5, 20 - hints * 6), centerOf(slots), { form: answer });
-          Voice.say(`${subj.es} ${verbFor(w)} ${answer}`);
+          Voice.say(w.adj ? `${subj.es} ${verbFor(w)} ${answer}` : w.m);
           S.after(1100, () => { i++; next(); });
         } else {
           slots.classList.remove('shake-x'); void slots.offsetWidth; slots.classList.add('shake-x');
@@ -972,7 +975,7 @@ addGame({
       sayTask(S, answer);
       box.replaceChildren(
         h('div', { class: 'q-card pop-in' }, S.replayButton('corner'), h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'q-big small' }, w.short),
-          h('div', { class: 'q-sub' }, `${g === 'f' ? '👩' : '👨'} ${subj.es} ${verbFor(w)}…`)),
+          h('div', { class: 'q-sub' }, w.adj ? `${g === 'f' ? '👩' : '👨'} ${subj.es} ${verbFor(w)}…` : w.art ? `${w.art} …` : unitOf(w).title)),
         slots, tiles, h('div', { class: 'row-btns' }, hintBtn, skipBtn));
       render();
     };
@@ -985,7 +988,7 @@ addGame({
   id: 'hangman', name: 'Save the Balloons', emoji: '🎈', group: 'build', colors: ['#fca5a5', '#ef4444'], goal: 4,
   desc: 'Guess the letters before all the balloons pop',
   play(S) {
-    const words = pickWords(5, (w) => w.m.length >= 4);
+    const words = pickWords(5, (w) => (w.adj ? w.m.length >= 4 : spellable(w) && w.bare.length >= 4));
     let i = 0;
     const box = h('div', { class: 'builder' });
     S.stage.append(box);
@@ -995,8 +998,8 @@ addGame({
       S.setProgress(i / words.length);
       S.setExtra(`${i + 1}/${words.length}`);
       const w = words[i];
-      const answer = w.m;
-      const plain = stripAccents(answer);
+      const answer = w.adj ? w.m : w.bare;
+      const plain = stripAccents(answer.toLowerCase());
       const guessed = new Set();
       let lives = 6, done = false;
       const balloons = h('div', { class: 'hm-balloons' });
@@ -1011,7 +1014,7 @@ addGame({
         renderWord();
         if (won) { S.hit(w, 10 + lives * 4, centerOf(wordEl)); Sfx.win(); }
         else { S.miss(w, centerOf(wordEl)); Sfx.lose(); }
-        Voice.say(answer);
+        Voice.say(w.m);
         S.after(1500, () => { i++; next(); });
       };
       LETTERS.forEach((L) => {
@@ -1040,7 +1043,7 @@ addGame({
 // ---------------------------------------------------------------- Sentence Builder
 addGame({
   id: 'builder', name: 'Sentence Builder', emoji: '🧱', group: 'build', colors: ['#fdba74', '#ea580c'], goal: 4,
-  desc: 'Put the blocks in order to describe someone',
+  desc: 'Put the blocks in order to make a Spanish sentence',
   play(S) {
     const words = pickWords(6);
     let i = 0;
@@ -1051,11 +1054,17 @@ addGame({
       S.setProgress(i / words.length);
       S.setExtra(`${i + 1}/${words.length}`);
       const w = words[i];
-      const s = makeSentence(w);
-      const tokens = s.es.replace(/\.$/, '').split(' ');
+      // Adjectives describe someone; other words use a sentence from their unit.
+      const s = w.adj ? makeSentence(w) : { ...(exampleFor(w) || unitPhrases(unitOf(w), 1)[0]) };
+      const tokens = s.es.replace(/[.!?¿¡]/g, '').split(' ');
       const extras = [];
-      if (!w.inv) extras.push(form(w, s.subj.g === 'f' ? 'm' : 'f'));
-      if (w.v !== 'both') extras.push(s.verb === 'es' ? 'está' : 'es');
+      if (w.adj) {
+        if (!w.inv) extras.push(form(w, s.subj.g === 'f' ? 'm' : 'f'));
+        if (w.v !== 'both') extras.push(s.verb === 'es' ? 'está' : 'es');
+      } else {
+        const others = (unitOf(w).phrases || []).flatMap(([es]) => es.replace(/[.,!?¿¡]/g, '').split(' '));
+        shuffle(others.filter((t) => !tokens.some((x) => normText(x) === normText(t)))).slice(0, 2).forEach((t) => extras.push(t));
+      }
       const pool = shuffle([...tokens, ...extras].map((t, k) => ({ t, k })));
       const line = h('div', { class: 'sb-line' });
       const bank = h('div', { class: 'sb-bank' });
@@ -1080,14 +1089,14 @@ addGame({
       check.addEventListener('click', () => {
         if (done) return;
         done = true;
-        const ok = chosen.map((c) => c.t).join(' ') === tokens.join(' ');
+        const ok = normText(chosen.map((c) => c.t).join(' ')) === normText(tokens.join(' '));
         if (ok) { line.classList.add('solved'); S.hit(w, 20, centerOf(line), { form: s.adj }); }
         else { line.classList.add('wrong'); S.miss(w, centerOf(line)); }
         Voice.say(s.es);
         fb.className = 'feedback show ' + (ok ? 'ok' : 'no');
         fb.replaceChildren(...[h('div', { class: 'fb-head' }, ok ? '¡Perfecto!' : 'Not quite'),
           h('div', { class: 'fb-answer' }, h('b', {}, s.es)),
-          !w.inv && h('div', { class: 'fb-reveal' }, `${s.subj.es} → ${s.adj} (${s.subj.g === 'f' ? 'feminine' : 'masculine'})`)].filter(Boolean));
+          w.adj && !w.inv && h('div', { class: 'fb-reveal' }, `${s.subj.es} → ${s.adj} (${s.subj.g === 'f' ? 'feminine' : 'masculine'})`)].filter(Boolean));
         S.after(ok ? 1400 : 2600, () => { i++; next(); });
       });
       box.replaceChildren(
@@ -1101,7 +1110,7 @@ addGame({
 
 // ---------------------------------------------------------------- Él o Ella?
 addGame({
-  id: 'gender', name: '¿Él o Ella?', emoji: '👫', group: 'grammar', colors: ['#67e8f9', '#db2777'], goal: 15,
+  id: 'gender', name: '¿Él o Ella?', emoji: '👫', group: 'grammar', colors: ['#67e8f9', '#db2777'], goal: 15, adj: true,
   desc: '45 seconds. Is the word for him, her, or both?',
   play(S) {
     S.countdown(45);
@@ -1117,7 +1126,7 @@ addGame({
     let cur, last;
     const next = () => {
       let w;
-      do { w = pickWords(1)[0]; } while (last && w.id === last.id);
+      do { w = pickWords(1, (x) => x.adj)[0]; } while (last && w.id === last.id);
       last = w;
       const useInv = w.inv;
       const g = pickOne(['m', 'f']);
@@ -1146,11 +1155,11 @@ addGame({
 
 // ---------------------------------------------------------------- Ser o Estar?
 addGame({
-  id: 'serestar', name: '¿Ser o Estar?', emoji: '⚖️', group: 'grammar', colors: ['#a78bfa', '#0ea5e9'], goal: 8,
+  id: 'serestar', name: '¿Ser o Estar?', emoji: '⚖️', group: 'grammar', colors: ['#a78bfa', '#0ea5e9'], goal: 8, adj: true,
   desc: 'Es or está? Who you are vs how you feel',
   play(S) {
     const items = [];
-    const normal = pickWords(9, (w) => w.v !== 'both');
+    const normal = pickWords(9, (w) => w.adj && w.v !== 'both');
     normal.forEach((w) => items.push({ w }));
     shuffle(DUAL_MEANINGS).slice(0, 3).forEach((d) => {
       const useEstar = Math.random() < 0.5;
@@ -1176,6 +1185,71 @@ addGame({
             h('div', { class: 'q-sub' }, `${subj.en} is ${meaning}.`)),
           options: [{ label: 'es', ok: verb === 'es' }, { label: 'está', ok: verb === 'está' }],
           reveal: why,
+        };
+      },
+    });
+  },
+});
+
+// ---------------------------------------------------------------- El o La?
+addGame({
+  id: 'article', name: '¿El o La?', emoji: '🏷️', group: 'grammar', colors: ['#fbbf24', '#7c3aed'], goal: 15,
+  desc: '45 seconds. Every thing is el or la — which one?',
+  play(S) {
+    S.countdown(45);
+    const card = h('div', { class: 'gender-card' });
+    const fb = h('div', { class: 'g-explain' });
+    const btns = h('div', { class: 'g-btns' });
+    S.stage.append(h('div', { class: 'hint-line' }, 'Pick the right word for “the”'), S.replayButton('stage-corner'), card, fb, btns);
+    let cur, last;
+    const next = () => {
+      let w;
+      do { w = pickWords(1, (x) => x.art)[0]; } while (last && w.id === last.id);
+      last = w;
+      cur = { w, done: false };
+      card.replaceChildren(h('div', { class: 'q-emoji' }, w.e), h('div', { class: 'g-word pop-in' }, '__ ' + w.bare), h('div', { class: 'q-sub' }, 'the ' + w.short));
+      const pair = w.plural ? ['los', 'las'] : ['el', 'la'];
+      btns.replaceChildren(...pair.map((a, k) => {
+        const b = h('button', { class: 'g-btn ' + (k ? 'g-f' : 'g-m') }, a);
+        b.addEventListener('click', () => answer(a, b));
+        return b;
+      }));
+      S.task([{ text: w.bare, lang: 'es' }], { queue: false });
+    };
+    const answer = (a, b) => {
+      if (!cur || cur.done) return;
+      cur.done = true;
+      const ok = a === cur.w.art;
+      const at = centerOf(b);
+      if (ok) S.hit(cur.w, 10, at, { say: true });
+      else { S.miss(cur.w, at, 5); Voice.say(cur.w.m); }
+      fb.textContent = (ok ? '✓ ' : '✗ ') + cur.w.m + (cur.w.id === 'el agua' ? ' (feminine, but el!)' : '');
+      fb.className = 'g-explain ' + (ok ? 'ok' : 'no');
+      S.after(ok ? 350 : 1100, next);
+    };
+    next();
+  },
+});
+
+// ---------------------------------------------------------------- Odd One Out
+addGame({
+  id: 'oddone', name: 'Odd One Out', emoji: '🧐', group: 'brain', colors: ['#2dd4bf', '#a21caf'], goal: 7,
+  desc: 'Three words go together. Which one doesn’t belong?',
+  play(S) {
+    roundsGame(S, {
+      rounds: 10, time: 12,
+      make: () => {
+        const base = pickWords(1)[0];
+        const unit = unitOf(base);
+        const group = [base];
+        for (const w of shuffle(unit.items)) if (group.length < 3 && group.every((g) => !clash(g, w))) group.push(w);
+        const odd = pickOne(WORDS.filter((w) => w.unit !== unit.id && group.every((g) => !clash(g, w))));
+        const other = unitOf(odd);
+        return {
+          word: odd, sayAfter: odd.m,
+          top: h('div', { class: 'q-card' }, h('div', { class: 'q-label' }, 'Which one doesn’t belong?'), h('div', { class: 'q-sub' }, 'Three are from the same topic')),
+          options: [{ label: odd.m, ok: true }, ...group.map((g) => ({ label: g.m, ok: false }))],
+          reveal: `${odd.e} <b>${odd.m}</b> (${odd.short}) is from ${other.emoji} ${other.title}. The others are ${unit.emoji} ${unit.title}: ${group.map((g) => g.short).join(', ')}.`,
         };
       },
     });

@@ -25,7 +25,7 @@ await page.addInitScript(() => {
   Math.random = (() => { let s = 7; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
 });
 await page.goto(url);
-await page.waitForSelector('.game-card');
+await page.waitForSelector('.path-node');
 const shot = (name) => page.screenshot({ path: path.join(out, name + '.jpg'), type: 'jpeg', quality: 86 });
 
 await shot('home');

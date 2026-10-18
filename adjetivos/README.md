@@ -8,11 +8,21 @@
   <img alt="Free, no ads" src="https://img.shields.io/badge/free-no_ads-facc15?style=for-the-badge">
 </p>
 
-# Adjetivos 🇪🇸
+# Hablamos 🇪🇸 (was Adjetivos)
 
-**Learn Spanish describing words by popping bubbles, slicing words and
-whacking moles.** *Mi hermano es muy molesto* 😤 — 96 adjectives, 19 mini
-games, a real Spanish voice, and no ads or accounts.
+**Climb Monte Español and learn Spanish on the way up.** A full beginner
+course in bite-sized lessons — greetings, numbers, colours, family, food,
+animals, the body, clothes, school, town, weather, days, verbs, hobbies,
+questions and 96 describing words — plus 21 mini games, a real Spanish voice,
+and no ads.
+
+- **The mountain:** every camp is a topic, every lesson climbs higher. Pass the
+  heights of Ben Nevis, Teide, Mont Blanc and Everest on the way to the 9,000 m
+  summit. Collect a 🪙 coin every 100 m and spend them on new climbers.
+- **Lessons:** new-word cards, pick the picture, listen and tap, match pairs,
+  build sentences from word tiles, spell it, type it, el or la. Anything you
+  get wrong comes back at the end. Already know some? **Jump ahead.**
+- **21 mini games** that use whichever topic you pick.
 
 | **Home** | **Bubble Pop** — right answers flash up big | **Whack-a-Word** | **Gender Pop** |
 |:---:|:---:|:---:|:---:|

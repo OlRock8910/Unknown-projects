@@ -82,7 +82,8 @@ const Account = {
       if (e.friendly) throw e;
       if (e.status === 429) e.friendly = 'Too many codes sent. Wait a few minutes, then try again.';
       else if (e.status === 400 || e.status === 422) e.friendly = 'That email address doesn’t look right.';
-      else e.friendly = 'Couldn’t send the code. Try again in a moment.';
+      else if (/sending|smtp|email/i.test(e.message)) e.friendly = `The email couldn’t be sent (${e.message}). The app’s email settings need fixing — try again later.`;
+      else e.friendly = `Couldn’t send the code (${e.message}). Try again in a moment.`;
       throw e;
     }
   },
@@ -156,6 +157,15 @@ function mergeProgress(local, cloud) {
   out.best = maxEach(local.best, cloud.best);
   out.stars = maxEach(local.stars, cloud.stars);
   out.mastery = maxEach(local.mastery, cloud.mastery);
+  out.coins = max(local.coins, cloud.coins);
+  out.climbed = max(local.climbed, cloud.climbed);
+  out.owned = [...new Set([...(cloud.owned || []), ...(local.owned || [])])];
+  // Lessons finished on either phone count as finished.
+  out.course = { ...(cloud.course || {}) };
+  for (const [id, v] of Object.entries(local.course || {})) {
+    const c = out.course[id];
+    out.course[id] = !c ? v : { ...c, ...v, n: Math.max(c.n || 0, v.n || 0), perfect: !!(c.perfect || v.perfect), skipped: !!(c.skipped && v.skipped) };
+  }
   const ls = local.streak || {}, cs = cloud.streak || {};
   out.streak = (cs.last || '') > (ls.last || '') ? cs : (ls.last || '') > (cs.last || '') ? ls : { last: ls.last || cs.last || null, n: max(ls.n, cs.n) };
   const ld = local.daily || {}, cd = cloud.daily || {};

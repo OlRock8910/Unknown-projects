@@ -1,5 +1,6 @@
-// Opens the app in a real browser, checks the word data, then plays every
-// mini game for a few seconds with random taps and fails on any page error.
+// Opens the app in a real browser, checks the course and word data, climbs
+// through lessons from every unit and plays every mini game for a few
+// seconds with random taps, failing on any page error.
 //
 //   node spanish-adjectives/tests/smoke.mjs [--shots]
 import { chromium } from 'playwright';
@@ -22,7 +23,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 const offlineNoise = (t) => /peerjs|WebSocket|ERR_(NAME|CONNECTION|INTERNET|TUNNEL|PROXY)/i.test(t);
 page.on('console', (m) => { if (m.type() === 'error' && !offlineNoise(m.text())) errors.push(m.text()); });
 await page.goto(url);
-await page.waitForSelector('.game-card');
+await page.waitForSelector('.path-node');
 
 // ---- data integrity
 const problems = await page.evaluate(() => {
@@ -33,26 +34,116 @@ const problems = await page.evaluate(() => {
     ids.add(w.id);
     if (w.o && !WORD_BY_ID[w.o]) out.push(`${w.id}: opposite ${w.o} missing`);
     if (w.o && WORD_BY_ID[w.o] && WORD_BY_ID[w.o].o !== w.id) out.push(`${w.id}: opposite ${w.o} is not mutual`);
-    if (!['pos', 'neg', 'look', 'feel'].includes(w.c)) out.push(`${w.id}: bad category`);
+    if (w.adj && !['pos', 'neg', 'look', 'feel'].includes(w.c)) out.push(`${w.id}: bad category`);
+    if (!UNIT_BY_ID[w.unit]) out.push(`${w.id}: in no unit`);
+    if (!w.e || !w.short || !w.bare) out.push(`${w.id}: missing emoji, meaning or bare form`);
+    if (WORD_BY_ID[w.id] !== w) out.push(`${w.id}: not in WORD_BY_ID`);
   }
-  const emojis = new Map();
-  for (const w of WORDS) {
-    if (emojis.has(w.e)) out.push(`emoji ${w.e} used by ${emojis.get(w.e)} and ${w.id}`);
-    emojis.set(w.e, w.id);
+  // Within a unit (and among the adjectives) emojis and meanings must differ,
+  // or picture questions would have two right answers.
+  for (const group of [...COURSE.map((u) => u.items), WORDS.filter((w) => w.adj)]) {
+    const emojis = new Map(), meanings = new Map();
+    for (const w of group) {
+      if (emojis.has(w.e)) out.push(`emoji ${w.e} used by ${emojis.get(w.e)} and ${w.id}`);
+      if (meanings.has(w.short) && !(w.s && WORD_BY_ID[meanings.get(w.short)].s === w.s)) out.push(`meaning ${w.short} used by ${meanings.get(w.short)} and ${w.id}`);
+      emojis.set(w.e, w.id);
+      meanings.set(w.short, w.id);
+    }
   }
+  for (const u of COURSE) {
+    if (u.items.length < 8) out.push(`unit ${u.id} has only ${u.items.length} words`);
+    if (!u.adjectives && (u.phrases || []).length < 4) out.push(`unit ${u.id} needs at least 4 sentences`);
+    for (const k of u.grammar || []) if (!GRAMMAR_TIPS[k]) out.push(`unit ${u.id}: no grammar tip ${k}`);
+    for (const l of unitLessons(u)) if (!l.words.length) out.push(`${l.id}: no words`);
+  }
+  const lessonIds = ALL_LESSONS().map((l) => l.id);
+  if (new Set(lessonIds).size !== lessonIds.length) out.push('lesson ids repeat');
   for (const d of DUAL_MEANINGS) if (!WORD_BY_ID[d.id]) out.push('dual ' + d.id + ' missing');
-  for (const p of PACKS) if (WORDS.filter(p.test).length < 12) out.push('pack ' + p.id + ' too small');
+  for (const p of PACKS) if (p.id !== 'mine' && WORDS.filter(p.test).length < 8) out.push('pack ' + p.id + ' too small');
   return out;
 });
 if (problems.length) { console.error('Data problems:\n  ' + problems.join('\n  ')); process.exit(1); }
 
 if (shots) await page.screenshot({ path: path.join(shotDir, 'home.png') });
-for (const tab of ['friends', 'learn', 'words', 'me']) {
+
+// ---- lessons: the first lesson and the review of every unit, answered at random
+async function playLesson(start) {
+  await page.evaluate(start);
+  for (let step = 0; step < 400; step++) {
+    const st = await page.evaluate(() => {
+      if (App.overlayKind !== 'lesson' || !document.querySelector('.lesson')) return 'over';
+      const opts = [...document.querySelectorAll('.ls-opt')];
+      if (opts.length && !document.querySelector('.ls-opt.sel')) pickOne(opts).click();
+      for (const t of [...document.querySelectorAll('.ls-bank .ls-tile:not(.used)')].slice(0, 4)) t.click();
+      for (const t of document.querySelectorAll('.ls-body .tile:not(.used)')) t.click();
+      const inp = document.querySelector('.ls-input');
+      if (inp && !inp.value) { inp.value = pickOne(['perro', WORDS[0].m]); inp.dispatchEvent(new Event('input')); }
+      const L = [...document.querySelectorAll('.match-item.es:not(.done)')], R = [...document.querySelectorAll('.match-item.en:not(.done)')];
+      if (L.length) { L[0].click(); pickOne(R).click(); }
+      if (/\b(null|undefined|NaN)\b/.test(document.querySelector('.lesson').innerText)) return 'stray';
+      const m = document.querySelector('.ls-main');
+      if (m && !m.disabled && m.offsetParent) m.click();
+      return 'ok';
+    });
+    if (st === 'over') return true;
+    if (st === 'stray') { errors.push('"null"/"undefined" shown in a lesson'); return false; }
+    await page.waitForTimeout(st === 'ok' ? 40 : 0);
+  }
+  return false;
+}
+let lessonsPlayed = 0;
+for (const uid of await page.evaluate(() => COURSE.map((u) => u.id))) {
+  for (const which of ['first', 'review']) {
+    const lid = await page.evaluate(([u, w]) => { const ls = unitLessons(UNIT_BY_ID[u]); return (w === 'first' ? ls[0] : ls.at(-1)).id; }, [uid, which]);
+    await page.evaluate(() => { if (App.overlayKind) App.closeOverlay(); });
+    const ok = await playLesson(`openLesson(LESSON_BY_ID()['${lid}'])`);
+    // The lesson either finished on the results screen or was still going after 400 taps.
+    const result = await page.evaluate((id) => [App.overlayKind, !!document.querySelector('.results'), lessonDone(id)], lid);
+    if (!result[1] || !result[2]) errors.push(`lesson ${lid} did not finish: ${JSON.stringify(result)} (${ok})`);
+    lessonsPlayed++;
+  }
+}
+await page.evaluate(() => App.closeOverlay());
+console.log(`  ok ${lessonsPlayed} lessons`);
+if (shots) await page.screenshot({ path: path.join(shotDir, 'mountain.png') });
+
+// The path: open lessons, locked ones, and jumping ahead.
+const pathCheck = await page.evaluate(() => {
+  const out = [];
+  localStorage.removeItem(Store.KEY); Store.load(); App.show('learn');
+  const nodes = [...document.querySelectorAll('.path-node')];
+  if (nodes.length !== ALL_LESSONS().length) out.push(`${nodes.length} nodes for ${ALL_LESSONS().length} lessons`);
+  if (!nodes[0].classList.contains('current') || !nodes[1].classList.contains('locked')) out.push('first lesson not current, or second not locked');
+  nodes[1].click();
+  if (App.overlayKind) out.push('a locked lesson opened');
+  document.querySelector('.continue-hero').click();
+  if (App.overlayKind !== 'lesson') out.push('Start did not open the first lesson');
+  App.closeOverlay();
+  return out;
+});
+errors.push(...pathCheck);
+const jumped = await playLesson(`openJump(UNIT_BY_ID['food'])`);
+const jump = await page.evaluate(() => {
+  const hearts = document.querySelector('.results') && /Out of hearts/.test(document.querySelector('.results').textContent);
+  return { hearts, open: lessonOpen(unitLessons(UNIT_BY_ID.food)[0]), colours: lessonDone('colours-review') };
+});
+// Random answers usually run out of hearts; when they pass, everything before food is done.
+if (!jumped || (!jump.hearts && !(jump.open && jump.colours))) errors.push('jump test misbehaved: ' + JSON.stringify(jump));
+await page.evaluate(() => {
+  App.closeOverlay();
+  const c = courseData();
+  for (const l of ALL_LESSONS()) { if (l.unit.id === 'food') break; c[l.id] = { n: 1 }; }
+  App.show('learn');
+});
+if (!(await page.evaluate(() => lessonOpen(unitLessons(UNIT_BY_ID.food)[0]) && /Higher than Ben Nevis/.test(document.querySelector('.mountain').textContent)))) errors.push('climbing past Ben Nevis is not shown');
+await page.evaluate(() => { localStorage.removeItem(Store.KEY); Store.load(); App.show('learn'); });
+
+for (const tab of ['play', 'friends', 'words', 'me']) {
   await page.click(`#tabs button[data-tab=${tab}]`);
   await page.waitForTimeout(400);
   if (shots) await page.screenshot({ path: path.join(shotDir, `tab-${tab}.png`) });
 }
-await page.click('#tabs button[data-tab=learn]');
+await page.click('#tabs button[data-tab=words]');
 await page.click('.flash-start');
 await page.waitForSelector('.fc');
 await page.click('.fc');
@@ -173,7 +264,7 @@ const back = await page.evaluate(() => {
   const b = appBack();
   return [a, b, App.tab];
 });
-if (back[0] !== true || back[1] !== false || back[2] !== 'play') errors.push('appBack misbehaves: ' + JSON.stringify(back));
+if (back[0] !== true || back[1] !== false || back[2] !== 'learn') errors.push('appBack misbehaves: ' + JSON.stringify(back));
 
 // The Android voice bridge, faked: first with no Spanish voice, then with Google's.
 for (const state of ['missing', 'ok']) {
@@ -205,7 +296,7 @@ for (const state of ['missing', 'ok']) {
     };
   }, state);
   await p.goto(url);
-  await p.waitForSelector('.game-card');
+  await p.waitForSelector('.path-node');
   const banner = await p.$('.voice-banner');
   if (state === 'missing') {
     if (!banner) errors.push('no "get the Google voice" banner when the voice is missing');
@@ -224,7 +315,7 @@ for (const state of ['missing', 'ok']) {
     if (res[0] !== 'es-es-x-eed-local' || !res[1] || !/voice 2/.test(res[2] || '')) errors.push('voice picker misbehaves: ' + JSON.stringify(res));
     if (shots) await p.screenshot({ path: path.join(shotDir, 'voice-picker.png'), fullPage: true });
     await p.click('#tabs button[data-tab=play]');
-    await p.evaluate(() => App.startGame(GAMES.find((g) => g.id === 'bubble')));
+    await p.evaluate(() => { Store.s.pack = 'neg'; App.startGame(GAMES.find((g) => g.id === 'bubble')); }); // one-word adjectives
     await p.waitForTimeout(500);
     await p.evaluate(() => document.querySelector('.bubble') && Voice.say('molesto'));
     if (!(await p.evaluate(() => window.__spoken.includes('molesto')))) errors.push('speech did not reach the Android bridge');

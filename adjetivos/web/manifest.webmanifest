@@ -1,7 +1,7 @@
 {
-  "name": "Adjetivos",
-  "short_name": "Adjetivos",
-  "description": "Learn Spanish describing words with 19 mini games",
+  "name": "Hablamos",
+  "short_name": "Hablamos",
+  "description": "Learn Spanish with bite-sized lessons and 21 mini games",
   "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",

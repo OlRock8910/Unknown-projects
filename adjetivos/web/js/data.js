@@ -1,9 +1,10 @@
-// Every adjective in the app. Pure content — games only read this.
+// Every adjective in the app (course.js adds the rest of the vocabulary).
+// Pure content — games only read this.
 //
 //   m / f   masculine and feminine singular (identical when the adjective is invariable)
 //   en      English meaning; the first comma-separated part is used in sentences
 //   e       emoji
-//   c       pack: pos (good traits), neg (annoying & mean), look (appearance), feel (feelings)
+//   c       unit: pos (good traits), neg (annoying & mean), look (appearance), feel (feelings)
 //   v       verb it normally takes with a person: ser, estar, or both
 //   o       opposite (masculine form of another entry)
 //   s       synonym group — words in one group are never used as each other's wrong answers
@@ -126,15 +127,8 @@ const WORDS = RAW_WORDS.map((w, i) => ({
 
 const WORD_BY_ID = Object.fromEntries(WORDS.map((w) => [w.id, w]));
 
-const PACKS = [
-  { id: 'all', name: 'Everything', emoji: '🌍', test: () => true },
-  { id: 'neg', name: 'Annoying & mean', emoji: '😤', test: (w) => w.c === 'neg' },
-  { id: 'pos', name: 'Good traits', emoji: '😇', test: (w) => w.c === 'pos' },
-  { id: 'look', name: 'Looks', emoji: '👀', test: (w) => w.c === 'look' },
-  { id: 'feel', name: 'Feelings', emoji: '💭', test: (w) => w.c === 'feel' },
-];
-
-const CATEGORY_NAMES = { pos: 'Good traits', neg: 'Annoying & mean', look: 'Looks', feel: 'Feelings' };
+// Word packs for the games; course.js fills this in with one per unit.
+const PACKS = [];
 
 // People to describe. Spanish subject, English subject, gender.
 const SUBJECTS = [

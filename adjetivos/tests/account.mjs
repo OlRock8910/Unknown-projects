@@ -107,7 +107,7 @@ async function phone(name, progress) {
     if (prog && !localStorage.getItem('adjetivos.v1')) localStorage.setItem('adjetivos.v1', JSON.stringify(prog));
   }, [PORT, ANON, progress]);
   await page.goto(url);
-  await page.waitForSelector('.game-card');
+  await page.waitForSelector('.path-node');
   await page.evaluate(() => App.show('me'));
   return page;
 }
@@ -184,7 +184,7 @@ try {
 
   // Reopening the app stays signed in (phone one).
   await one.reload();
-  await one.waitForSelector('.game-card');
+  await one.waitForSelector('.path-node');
   await one.evaluate(() => App.show('me'));
   if (!/ana@gmail.com/.test(await cardText(one))) fail('not signed in after reopening the app');
 } catch (e) {
@@ -195,7 +195,7 @@ try {
 const plain = await browser.newPage();
 await plain.addInitScript(() => { window.CLOUD_OVERRIDE = { url: '', anonKey: '' }; });
 await plain.goto(url);
-await plain.waitForSelector('.game-card');
+await plain.waitForSelector('.path-node');
 await plain.evaluate(() => App.show('me'));
 if (await plain.$('.account')) fail('sign-in shown without a Supabase project');
 

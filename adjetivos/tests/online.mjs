@@ -33,7 +33,7 @@ async function phone(name) {
     localStorage.setItem('adjetivos.v1', JSON.stringify({ settings: { playerName: who, sound: false, vibrate: false, voice: false } }));
   }, [PORT, name]);
   await page.goto(url);
-  await page.waitForSelector('.game-card');
+  await page.waitForSelector('.path-node');
   return page;
 }
 
