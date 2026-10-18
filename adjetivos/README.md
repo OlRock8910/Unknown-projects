@@ -115,8 +115,8 @@ Spanish over English (**AMABLE · KIND**), and says it out loud.
 **☁️ Optional sign-in** — on the **Me** tab, type your email, get a 6-digit
 code, and your XP, stars, scores and learned words are saved to your account
 and follow you to any phone. Playing on two phones merges the best of both.
-It needs a free Supabase project — see [docs/SIGN-IN.md](docs/SIGN-IN.md);
-until one is set up, the app works without accounts exactly as before.
+It runs on a free Supabase project (set up as in [docs/SIGN-IN.md](docs/SIGN-IN.md)),
+and signing in is optional: everything works without an account.
 
 Also: flashcards, eight short grammar lessons, a searchable word list with
 pronunciation, XP and levels, a daily goal and streak, combo multipliers,
@@ -132,7 +132,7 @@ web/            The whole app: plain HTML, CSS and JavaScript, no build step
   js/app.js       Screens and navigation
   js/online.js    Online duels between two phones (PeerJS, in js/vendor/)
   js/account.js   Optional sign-in with an emailed code, and saving progress to it
-  js/config.js    The Supabase project sign-in uses (empty = sign-in off)
+  js/config.js    The Supabase project sign-in uses (empty values turn sign-in off)
 android/        A WebView wrapper that adds Spanish text-to-speech and vibration
 build-apk.sh    Builds and signs the APK without Gradle
 tests/smoke.mjs Plays every game in a real browser and fails on any error

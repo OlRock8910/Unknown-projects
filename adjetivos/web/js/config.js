@@ -3,8 +3,8 @@
 // meant to be public — what each person can read or change is enforced by
 // the database's row-level security (see docs/SIGN-IN.md).
 //
-// While these are empty, sign-in is hidden and the app works as before.
+// With these empty, sign-in is hidden and the app works without accounts.
 const CLOUD = window.CLOUD_OVERRIDE || {
-  url: '',
-  anonKey: '',
+  url: 'https://sjbncalappjgwidhookp.supabase.co',
+  anonKey: 'sb_publishable_VTAO_CwKgZF9J0R1hQD8VQ_JOiJErZz',
 };

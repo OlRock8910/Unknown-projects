@@ -96,7 +96,12 @@ const Online = {
       return;
     }
     if (!free) {
-      c.on('open', () => { try { c.send({ t: 'busy', name: myName() }); } catch (e) { /* closed */ } setTimeout(() => c.close(), 500); });
+      // The first message on a new connection can go missing, so say it a few times.
+      c.on('open', () => {
+        const say = () => { try { c.send({ t: 'busy', name: myName() }); } catch (e) { /* closed */ } };
+        [0, 300, 700].forEach((ms) => setTimeout(say, ms));
+        setTimeout(() => c.close(), 1500);
+      });
       return;
     }
     this.begin(c, true);

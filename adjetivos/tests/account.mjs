@@ -193,6 +193,7 @@ try {
 
 // Without a project set up, there is no sign-in at all.
 const plain = await browser.newPage();
+await plain.addInitScript(() => { window.CLOUD_OVERRIDE = { url: '', anonKey: '' }; });
 await plain.goto(url);
 await plain.waitForSelector('.game-card');
 await plain.evaluate(() => App.show('me'));
