@@ -390,11 +390,14 @@ function renderPractice() {
   };
   return h('div', { class: 'page' }, topBar(),
     h('h1', { class: 'page-title' }, t('tab.practice')),
+    weakSpotsCard(),
     card('review', 'refresh', t('practice.review'), stats.due ? t('practice.dueN', { n: stats.due }) : t('practice.noneDue'), learned >= 4),
     card('weak', 'target', t('practice.weak'), t('practice.weakSub'), learned >= 4),
     canListen() ? card('listen', 'headphones', t('practice.listen'), t('practice.listenSub'), learned >= 4) : null,
     h('button', { class: 'card practice-card', onclick: () => openCards() }, h('div', { class: 'pc-icon' }, icon('cards')), h('div', { class: 'pc-text' }, h('b', {}, t('practice.cards')), h('span', {}, t('practice.cardsSub'))), icon('right', 'chev')),
-    typeof renderGamesList === 'function' ? renderGamesList() : null);
+    typeof renderGamesList === 'function' ? renderGamesList() : null,
+    // A tip in the corner: what to strengthen, and a game or practice for it.
+    learned >= 4 ? coachPopup() : null);
 }
 
 // Flashcards of the words you've learned (or the first unit's, to start with).

@@ -502,6 +502,9 @@ function reviewExercise(w, L) {
   if (w.art && Store.data.target !== 'en' && box >= 1) kinds.push('article');
   if (box >= 1 && canSpeak() && speakable_word(w)) kinds.push('speak');
   kinds = kinds.filter((k) => (k !== 'listen' && k !== 'dictation') || canListen()).filter((k) => k !== 'spell' || canSpell(w)).filter((k) => !['spell', 'type', 'dictation'].includes(k) || canType());
+  // A bit more of whatever you've been getting wrong lately.
+  const focus = Coach.focusKinds().filter((k) => kinds.includes(k));
+  kinds.push(...focus, ...focus);
   const kind = pickOne(kinds.length ? kinds : ['meaning']);
   return kind === 'dictation' ? { kind, word: w, gen: () => EX.type(w, L, { dictation: true }) } : { kind, word: w, gen: () => EX[kind](w, L) };
 }
@@ -554,10 +557,31 @@ function buildPracticeQueue(kind) {
   if (pool.length < 8) pool = [...pool, ...weakWords().filter((w) => !pool.includes(w))];
   const ws = pool.slice(0, 12);
   const L = { words: ws };
+  // Practice aimed at one weak skill.
+  if (kind === 'spelling') return ws.slice(0, 10).map((w) => (canSpell(w) && Math.random() < 0.5 ? { kind: 'spell', word: w, gen: () => EX.spell(w) } : { kind: 'type', word: w, gen: () => EX.type(w, L) }));
+  if (kind === 'gender') {
+    const nouns = [...weakWords(), ...learnedWords()].filter((w, i, a) => w.art && a.indexOf(w) === i).slice(0, 10);
+    if (nouns.length >= 4) return nouns.map((w) => ({ kind: 'article', word: w, gen: () => EX.article(w) }));
+  }
+  if (kind === 'speaking') {
+    const say = ws.filter(speakable_word).slice(0, 6).map((w) => ({ kind: 'speak', word: w, gen: () => EX.speak(w) }));
+    const ss = shuffle(practiceSentences()).sort((a, b) => a.t.length - b.t.length).slice(0, 3);
+    return [...say, ...ss.map((s) => ({ kind: 'speak', sentence: s, gen: () => EX.speak(s) }))];
+  }
+  if (kind === 'sentences') return shuffle(practiceSentences()).slice(0, 8).map((s, i) => {
+    const k = ['decode', 'gap', 'build'][i % 3];
+    return { kind: k, sentence: s, gen: k === 'build' ? () => EX.build(s) : k === 'gap' ? () => EX.gap(s) : () => EX.decode(s) };
+  });
   if (kind === 'listen') return ws.map((w, i) => (i % 2 && canType() ? { kind: 'dictation', word: w, gen: () => EX.type(w, L, { dictation: true }) } : { kind: 'listen', word: w, gen: () => EX.listen(w, L) }));
   const q = ws.map((w) => reviewExercise(w, L));
   if (ws.length >= 5) q.splice(4, 0, { kind: 'match', gen: () => EX.match(ws.slice(0, 5)) });
   return q;
+}
+
+// Sentences from the units you've started (or the first one).
+function practiceSentences() {
+  const started = C.units.filter((u) => u.lessons.some((l) => lessonDone(l.id)));
+  return (started.length ? started : C.units.slice(0, 1)).flatMap((u) => u.sentences);
 }
 
 // ---------------------------------------------------------------- playing a session
@@ -644,6 +668,7 @@ function openSession(queue, meta) {
       if (!seen.has(item)) { seen.add(item); queue.push(item); } // try it again at the end, once
     }
     if (item.word && item.kind !== 'match' && item.kind !== 'intro') gradeWord(item.word, res.ok);
+    Coach.record(skillOfKind(item.kind), res.ok);
     streakEl.textContent = streak >= 3 ? `×${streak}` : '';
     if (res.say) Voice.say(res.say);
     foot.className = 'ses-foot show ' + (res.ok ? 'ok' : 'no');

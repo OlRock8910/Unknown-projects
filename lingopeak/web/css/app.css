@@ -977,3 +977,27 @@ html[data-theme="dark"] .rw.no { color: #FF8A80; }
 .read-mean-btn { align-self: flex-start; padding: 4px 0; font-size: 14px; }
 .read-mean { color: var(--muted); font-weight: 700; font-size: 15px; }
 .read-done { margin-top: 2px; }
+
+/* ---------------------------------------------------------------- the coach */
+.coach-card { display: flex; flex-direction: column; gap: 12px; }
+.coach-head { display: flex; align-items: center; gap: 8px; font-size: 17px; }
+.coach-head .ic { width: 26px; height: 26px; }
+.coach-empty { margin: 0; font-size: 14px; }
+.coach-row { display: flex; align-items: center; gap: 12px; }
+.coach-ic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: var(--coral-l); flex-shrink: 0; }
+.coach-ic .ic { width: 30px; height: 30px; }
+.coach-mid { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.coach-mid small { color: var(--muted); font-weight: 700; font-size: 12px; }
+.coach-bar { height: 8px; border-radius: 4px; background: var(--surface2); overflow: hidden; }
+.coach-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--coral), var(--yellow)); }
+.coach-words { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; border-top: 2px solid var(--line); padding-top: 10px; }
+.coach-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.word-chip { background: var(--surface2); padding: 6px 10px; border-radius: 99px; font-weight: 800; }
+.coach-pop { position: fixed; z-index: 7; right: 12px; bottom: calc(var(--safe-bottom) + 84px); width: min(300px, calc(100vw - 24px)); display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 20px; background: var(--surface); border: 2px solid var(--yellow); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22); animation: coachIn 0.5s 0.6s cubic-bezier(.3,1.5,.5,1) backwards; }
+.coach-pop.out { animation: coachOut 0.3s ease forwards; }
+@keyframes coachIn { from { transform: translateX(120%); opacity: 0; } }
+@keyframes coachOut { to { transform: translateX(120%); opacity: 0; } }
+.coach-pop .coach-mid b { font-size: 15px; }
+.coach-pop .btn { align-self: flex-start; margin-top: 4px; }
+.coach-x { width: 28px; height: 28px; display: grid; place-items: center; color: var(--muted); flex-shrink: 0; }
+.coach-x .ic { width: 16px; height: 16px; }

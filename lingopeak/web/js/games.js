@@ -58,6 +58,7 @@ class GameSession {
     const gained = pts * this.mult();
     this.score += gained;
     if (w) gradeWord(w, true);
+    Coach.record(skillOfGame(this.game.id), true);
     Sfx.good(this.combo);
     Haptics.buzz(15);
     if (at) { floatText(at[0], at[1], '+' + gained, 'good', this.stage); goldBurst(at[0], at[1], this.combo >= 5); }
@@ -67,6 +68,7 @@ class GameSession {
     this.wrong++; this.combo = 0;
     if (penalty) this.score = Math.max(0, this.score - penalty);
     if (w) gradeWord(w, false);
+    Coach.record(skillOfGame(this.game.id), false);
     Sfx.bad();
     Haptics.buzz([40, 30, 40]);
     if (at) floatText(at[0], at[1], penalty ? '−' + penalty : '×', 'bad', this.stage);
@@ -653,8 +655,8 @@ addGame({
       r.marks.forEach((m, i) => {
         if (m === marks[i]) return;
         spans[i].className = 'rw ' + (m === 1 ? 'ok' : m === 2 ? 'no' : '');
-        if (m === 1) { S.right++; S.score += 10 * S.mult(); S.combo++; Sfx.select(); }
-        if (m === 2) { S.wrong++; S.combo = 0; Sfx.tap(); }
+        if (m === 1) { S.right++; S.score += 10 * S.mult(); S.combo++; Sfx.select(); Coach.record('speaking', true); }
+        if (m === 2) { S.wrong++; S.combo = 0; Sfx.tap(); Coach.record('speaking', false); }
       });
       marks = r.marks;
       spans.forEach((sp, i) => sp.classList.toggle('next', i === r.next && active));

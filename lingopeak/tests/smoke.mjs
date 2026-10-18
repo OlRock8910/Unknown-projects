@@ -319,6 +319,40 @@ for (const [nat, tgt, idx] of [['en', 'es', [0, 1, 2, 3]], ['es', 'en', [0, 3, 4
   console.log('  ok speaking and gap fill (' + w + ')');
 }
 
+// ---------------------------------------------------------------- the coach: weak spots and tips
+{
+  const page = await newPage({ profile: { name: 'Coachy' }, native: 'en', target: 'es', settings: { sound: false } });
+  await page.waitForSelector('#tabs:not([hidden])');
+  const setup = await page.evaluate(() => {
+    C.lessons.slice(0, 8).forEach((l) => { Store.course.lessons[l.id] = { n: 1 }; l.words.forEach((w) => { seeWord(w); gradeWord(w, true); }); });
+    C.words.filter((w) => w.art).slice(0, 6).forEach((w) => { seeWord(w); gradeWord(w, true); });
+    // Spelling has been going badly; one word keeps tripping you up.
+    for (let k = 0; k < 7; k++) Coach.record('spelling', k < 2);
+    for (let k = 0; k < 8; k++) Coach.record('words', true);
+    const w = C.units[0].words[3]; gradeWord(w, false); gradeWord(w, false);
+    Store.save();
+    return [Coach.weakSpots().map((x) => x.skill).join(), Coach.trickyWords().map((x) => x.t).join(), Coach.tip().skill];
+  });
+  if (setup[0] !== 'spelling' || !setup[1] || setup[2] !== 'spelling') fail('coach weak spots: ' + setup);
+  await page.evaluate(() => App.show('practice'));
+  const txt = await page.textContent('.coach-card');
+  if (!/Spelling/.test(txt) || !/2 of 7/.test(txt) || !/mixing up/.test(txt)) fail('weak spots card: ' + txt);
+  await page.waitForSelector('.coach-pop');
+  if (!/Strengthen your spelling/.test(await page.textContent('.coach-pop'))) fail('coach pop-up text');
+  await page.click('.coach-pop .btn.primary');
+  if ((await page.evaluate(() => [App.overlayKind, Games.session && Games.session.game.id].join())) !== 'game,scramble') fail('coach pop-up did not start Scramble');
+  await page.evaluate(() => { Games.session.quit(); App.show('practice'); });
+  if (await page.$('.coach-pop')) fail('coach pop-up came back the same day');
+  const queues = await page.evaluate(() => {
+    const kinds = (k) => [...new Set(buildPracticeQueue(k).map((x) => x.kind))].sort().join('+');
+    return [kinds('spelling'), kinds('gender'), kinds('sentences'), buildPracticeQueue('sentences').length, kinds('speaking')];
+  });
+  if (!/^(spell|spell\+type|type)$/.test(queues[0]) || queues[1] !== 'article' || queues[2] !== 'build+decode+gap' || queues[3] !== 8 || queues[4] !== 'speak') fail('targeted practice: ' + queues);
+  await playSession(page, "openPractice('sentences')", 'sentence practice');
+  await page.close();
+  console.log('  ok coach: weak spots, tips, targeted practice');
+}
+
 // ---------------------------------------------------------------- daily chest, achievements, streak rewards
 {
   const page = await newPage({ profile: { name: 'Chesty' }, native: 'en', target: 'fr', settings: { sound: false } });

@@ -21,6 +21,7 @@ higher, and each mountain stays hidden in the clouds until you reach the top.
 • You recall words, not just re-read them, so they stick
 • Every word is spoken by a natural voice
 • Speak answers out loud, fill gaps in sentences and build your own sentences
+• A coach that spots your weak points and tells you what to practise next
 
 **Characters who talk back**
 A banana, a shark, a dinosaur and friends in costumes say things in your new
