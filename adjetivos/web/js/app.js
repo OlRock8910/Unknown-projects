@@ -499,6 +499,7 @@ function renderFriends() {
   // Your name, so your friend knows who they're playing.
   const name = h('input', { class: 'search name-input', placeholder: 'Your name', maxlength: '14', value: Store.s.playerName || '' });
   name.addEventListener('input', () => { Store.s.playerName = name.value.trim(); Store.save(); });
+  name.addEventListener('change', () => { if (Account.signedIn()) Friends.pushProfile(); });
 
   // Your code: kept up to date as the phone comes online.
   const codeBox = h('div', { class: 'my-code' });
@@ -535,10 +536,11 @@ function renderFriends() {
 
   return h('div', { class: 'page' },
     h('header', { class: 'top' }, h('div', {}, h('div', { class: 'hello' }, 'Amigos'), h('div', { class: 'brand' }, 'Friends'))),
+    friendsBoardCard(),
     h('div', { class: 'card online-hero' },
       h('div', { class: 'oh-title' }, '🌐 Play a friend online'),
-      h('div', { class: 'oh-steps' }, '1. Send your friend your code  ·  2. They type it in  ·  3. Race to tap the right Spanish word!'),
-      h('div', { class: 'oh-label' }, 'Your code'),
+      h('div', { class: 'oh-steps' }, '1. Send your friend your game code  ·  2. They type it in  ·  3. Race to tap the right Spanish word!'),
+      h('div', { class: 'oh-label' }, 'Your game code'),
       codeBox,
       sendBtn,
       h('div', { class: 'oh-or' }, h('span', {}, 'or type your friend’s code')),

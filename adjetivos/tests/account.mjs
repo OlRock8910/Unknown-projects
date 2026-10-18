@@ -1,7 +1,8 @@
 // Signs in with an emailed code on two "phones" against a stand-in for
-// Supabase (its /auth/v1 code and session endpoints and the /rest/v1
-// progress table, with each user only able to see their own row), and checks
-// progress follows the account.
+// Supabase (its /auth/v1 code and session endpoints, the /rest/v1 progress
+// table with each user only able to see their own row, and the profiles,
+// friends and leaderboard functions from docs/FRIENDS.md), and checks
+// progress follows the account and friends can find each other.
 //
 //   node tests/account.mjs
 import { chromium } from 'playwright';
@@ -22,6 +23,9 @@ const users = new Map();   // email → id
 const rows = new Map();    // userId → { data, updated_at }
 const sent = [];
 let rateLimited = false;
+const profiles = new Map(); // userId → profile row
+const friendships = new Set(); // 'a|b'
+let friendsTables = false;
 let tokenLife = 3600;
 const rand = () => Math.random().toString(36).slice(2);
 
@@ -87,6 +91,35 @@ const server = http.createServer(async (req, res) => {
       if (body.user_id !== userId) return send(403, { code: '42501', message: 'new row violates row-level security policy' });
       rows.set(userId, { data: body.data, updated_at: body.updated_at });
       res.writeHead(201, cors); return res.end();
+    }
+  }
+  if (u.pathname === '/rest/v1/profiles' || u.pathname.startsWith('/rest/v1/rpc/')) {
+    if (!friendsTables) return send(404, { code: 'PGRST205', message: 'Could not find the table in the schema cache' });
+    const userId = authUser();
+    if (!userId) return send(401, { code: 'PGRST301', message: 'JWT expired' });
+    if (u.pathname === '/rest/v1/profiles' && req.method === 'POST') {
+      if (body.user_id !== userId) return send(403, { code: '42501', message: 'new row violates row-level security policy' });
+      const row = profiles.get(userId) || { user_id: userId, code: rand().slice(0, 6).toUpperCase().padEnd(6, 'X') };
+      Object.assign(row, body);
+      profiles.set(userId, row);
+      return send(201, [row]);
+    }
+    if (u.pathname === '/rest/v1/rpc/add_friend') {
+      const f = [...profiles.values()].find((p) => p.code === String(body.friend_code).trim().toUpperCase());
+      if (!f) return send(400, { code: 'P0001', message: 'no such code' });
+      if (f.user_id === userId) return send(400, { code: 'P0001', message: 'that is your own code' });
+      friendships.add(userId + '|' + f.user_id); friendships.add(f.user_id + '|' + userId);
+      return send(200, f.name);
+    }
+    if (u.pathname === '/rest/v1/rpc/remove_friend') {
+      friendships.delete(userId + '|' + body.friend); friendships.delete(body.friend + '|' + userId);
+      return send(200, null);
+    }
+    if (u.pathname === '/rest/v1/rpc/friends_leaderboard') {
+      return send(200, [...profiles.values()].filter((p) => p.user_id === userId || friendships.has(userId + '|' + p.user_id)).map((p) => ({
+        user_id: p.user_id, name: p.name, climber: p.climber, height: p.height, xp: p.xp,
+        week_xp: p.week === body.this_week ? p.week_xp : 0, me: p.user_id === userId,
+      })));
     }
   }
   send(404, { message: 'not found' });
@@ -177,6 +210,38 @@ try {
   await until(three, () => /Progress saved/.test(document.querySelector('.account')?.textContent || ''), 'phone three signed in');
   if (await three.evaluate(() => Store.data.xp) !== 5) fail('another account got Ana’s progress');
 
+  // Friends: not set up yet, then add each other by code and see the leaderboard.
+  await one.evaluate(() => App.show('friends'));
+  await until(one, () => /switched on yet/.test(document.querySelector('.board')?.textContent || ''), 'friends-not-set-up message');
+  friendsTables = true;
+  const codeOf = async (page) => {
+    await page.evaluate(() => { Friends.profile = null; App.show('friends'); });
+    await until(page, () => /^[0-9A-Z]{6}$/.test(document.querySelector('.board-code .room-code')?.textContent || ''), 'a friend code');
+    return page.textContent('.board-code .room-code');
+  };
+  await three.evaluate(() => { Store.s.playerName = 'Ben'; Store.data.course = { 'hello-1': { n: 1 } }; Store.addXp(40); });
+  const anaCode = await codeOf(one);
+  const benCode = await codeOf(three);
+  if (anaCode === benCode) fail('two players got the same friend code');
+  await three.fill('.board .code-input', benCode);
+  await three.click('.board .btn.primary');
+  await until(three, () => /own code/.test(document.querySelector('.board').textContent), 'own-code message');
+  await three.fill('.board .code-input', 'ZZZZZZ');
+  await three.click('.board .btn.primary');
+  await until(three, () => /No one has that code/.test(document.querySelector('.board').textContent), 'unknown-code message');
+  await three.fill('.board .code-input', anaCode.toLowerCase());
+  await three.click('.board .btn.primary');
+  await until(three, () => document.querySelectorAll('.board-row').length === 2 && /Ana/.test(document.querySelector('.board-list').textContent), 'Ana on Ben’s leaderboard');
+  // This week Ben has more XP (Ana's came before the week started on this stand-in), all-time Ana… both shown.
+  const benBoard = await three.evaluate(() => [...document.querySelectorAll('.board-row')].map((r) => r.querySelector('.br-name b').textContent));
+  if (!benBoard.includes('Ben (you)')) fail('leaderboard does not mark you: ' + JSON.stringify(benBoard));
+  await one.evaluate(() => App.show('friends'));
+  await until(one, () => /Ben/.test(document.querySelector('.board-list')?.textContent || ''), 'Ben on Ana’s leaderboard');
+  if (await one.evaluate(() => /@/.test(document.querySelector('.board').textContent))) fail('an email address is shown on the leaderboard');
+  one.once('dialog', (d) => d.accept());
+  await one.click('.board-row:not(.me) .br-x');
+  await until(one, () => document.querySelectorAll('.board-row').length === 1, 'friend removed');
+
   // Signing out keeps this phone's progress and forgets the session.
   await two.click('text=Sign out');
   await until(two, () => /Save your progress/.test(document.querySelector('.account').textContent), 'signed out');
@@ -198,6 +263,8 @@ await plain.goto(url);
 await plain.waitForSelector('.path-node');
 await plain.evaluate(() => App.show('me'));
 if (await plain.$('.account')) fail('sign-in shown without a Supabase project');
+await plain.evaluate(() => App.show('friends'));
+if (await plain.$('.board')) fail('leaderboard shown without a Supabase project');
 
 await browser.close();
 server.close();

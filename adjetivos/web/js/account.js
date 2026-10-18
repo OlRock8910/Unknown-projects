@@ -127,6 +127,7 @@ const Account = {
         body: { user_id: uid, data: Store.data, updated_at: new Date().toISOString() },
       });
       this.lastSync = Date.now();
+      await Friends.pushProfile(token);
     } catch (e) {
       // Offline or signed out elsewhere: try again on the next save.
     } finally {
@@ -141,6 +142,139 @@ const Account = {
     this.syncTimer = setTimeout(() => this.sync(), 3000);
   },
 };
+
+// ---------------------------------------------------------------- friends & leaderboard
+// Your public profile (name, climber, height, XP) and your friends, kept in
+// the profiles and friends tables. Friends are added with a 6-letter code and
+// the leaderboard only ever shows you and your friends (see docs/FRIENDS.md).
+const Friends = {
+  profile: null,   // { code, name, ... } once uploaded
+  board: null,     // rows from friends_leaderboard
+  missing: false,  // the tables haven't been set up in Supabase yet
+  error: null,
+
+  mine() {
+    const d = Store.data;
+    const wk = d.week && d.week.id === weekId() ? d.week.xp : 0;
+    return { name: (Store.s.playerName || 'Climber').slice(0, 20), climber: myClimber(), height: myHeight(), xp: d.xp, week: weekId(), week_xp: wk };
+  },
+  noTable: (e) => e.status === 404 || /PGRST20[25]|42P01|42883|does not exist|schema cache/i.test(`${e.code} ${e.message}`),
+
+  async pushProfile(token) {
+    try {
+      token = token || await Account.token();
+      const rows = await Account.call('/rest/v1/profiles?on_conflict=user_id', {
+        token,
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+        body: { user_id: Account.session.user.id, ...this.mine(), updated_at: new Date().toISOString() },
+      });
+      this.profile = (rows && rows[0]) || this.profile;
+      this.missing = false;
+    } catch (e) {
+      if (this.noTable(e)) this.missing = true;
+    }
+  },
+  async load() {
+    this.error = null;
+    try {
+      const token = await Account.token();
+      if (!this.profile) await this.pushProfile(token);
+      if (this.missing) return;
+      this.board = await Account.call('/rest/v1/rpc/friends_leaderboard', { token, body: { this_week: weekId() } });
+    } catch (e) {
+      if (this.noTable(e)) this.missing = true;
+      else this.error = e.friendly || 'Couldn’t load the leaderboard. Check your internet.';
+    }
+  },
+  async add(code) {
+    const token = await Account.token();
+    try {
+      const name = await Account.call('/rest/v1/rpc/add_friend', { token, body: { friend_code: code } });
+      return name;
+    } catch (e) {
+      if (this.noTable(e)) { this.missing = true; e.friendly = 'Friends aren’t switched on yet.'; }
+      else if (/own code/i.test(e.message)) e.friendly = 'That’s your own code! Send it to a friend instead.';
+      else if (/no such code/i.test(e.message)) e.friendly = 'No one has that code — check it and try again.';
+      else e.friendly = e.friendly || 'Couldn’t add them. Check your internet.';
+      throw e;
+    }
+  },
+  async remove(id) {
+    await Account.call('/rest/v1/rpc/remove_friend', { token: await Account.token(), body: { friend: id } });
+  },
+};
+
+// The friends card at the top of the Friends tab: your code, add a friend,
+// and who has climbed highest.
+function friendsBoardCard() {
+  if (!Account.enabled()) return null;
+  const card = h('div', { class: 'card board' });
+  const mode = { v: 'week' };
+  const head = h('div', { class: 'board-head' }, h('span', { class: 'bh-emoji' }, '🏆'), h('div', {}, h('b', {}, 'Friends leaderboard'), h('span', {}, 'Who’s climbing Monte Español fastest?')));
+  if (!Account.signedIn()) {
+    card.append(head,
+      h('p', { class: 'muted' }, 'Sign in with your email to get a friend code, add your friends and race them up the leaderboard.'),
+      h('button', { class: 'btn primary wide', onclick: () => App.show('me') }, '☁️ Sign in to add friends'));
+    return card;
+  }
+  const body = h('div', { class: 'board-body' }, h('div', { class: 'muted' }, 'Loading…'));
+  card.append(head, body);
+
+  const draw = () => {
+    if (Friends.missing) {
+      body.replaceChildren(h('p', { class: 'muted' }, '🛠 Friends aren’t switched on yet — the app’s database needs one more step (docs/FRIENDS.md).'));
+      return;
+    }
+    const code = Friends.profile && Friends.profile.code;
+    const input = h('input', { class: 'search code-input', placeholder: 'Friend’s code', maxlength: '6', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false' });
+    const msg = h('div', { class: 'acc-error' });
+    const addBtn = h('button', { class: 'btn primary' }, '➕ Add');
+    const add = async () => {
+      const c = input.value.trim().toUpperCase();
+      if (c.length !== 6) { msg.textContent = 'Friend codes are 6 letters and numbers.'; return; }
+      addBtn.disabled = true;
+      try {
+        const name = await Friends.add(c);
+        toast(`🤝 ${name || 'Your friend'} is now your friend!`);
+        Sfx.win();
+        await Friends.load();
+        draw();
+      } catch (e) { msg.textContent = e.friendly; addBtn.disabled = false; }
+    };
+    addBtn.addEventListener('click', add);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+
+    const rows = (Friends.board || []).slice().sort((a, b) => (mode.v === 'week' ? b.week_xp - a.week_xp || b.height - a.height : b.height - a.height || b.xp - a.xp));
+    const medal = (i) => ['🥇', '🥈', '🥉'][i] || `${i + 1}.`;
+    const list = h('div', { class: 'board-list' }, ...rows.map((r, i) => h('div', { class: 'board-row' + (r.me ? ' me' : '') },
+      h('span', { class: 'br-rank' }, medal(i)),
+      h('span', { class: 'br-climber' }, r.climber || '🧗'),
+      h('div', { class: 'br-name' }, h('b', {}, r.me ? `${r.name} (you)` : r.name), h('small', {}, `⛰ ${metres(r.height || 0)}`)),
+      h('span', { class: 'br-score' }, mode.v === 'week' ? `${r.week_xp || 0} XP` : metres(r.height || 0)),
+      r.me ? null : h('button', {
+        class: 'br-x', 'aria-label': 'Remove friend',
+        onclick: async () => { if (!confirm(`Remove ${r.name} from your friends?`)) return; try { await Friends.remove(r.user_id); await Friends.load(); draw(); } catch (e) { toast('Couldn’t remove them — check your internet'); } },
+      }, '✕'))));
+    const tabs = h('div', { class: 'board-tabs' }, ...[['week', '📅 This week'], ['all', '⛰ Highest']].map(([v, label]) =>
+      h('button', { class: 'pack' + (mode.v === v ? ' active' : ''), onclick: () => { mode.v = v; draw(); } }, label)));
+    body.replaceChildren(...[
+      tabs,
+      Friends.error ? h('div', { class: 'acc-error' }, Friends.error) : list,
+      rows.length <= 1 && !Friends.error ? h('div', { class: 'board-empty' }, 'No friends yet — send them your code 👇') : null,
+      h('div', { class: 'board-code' },
+        h('div', {}, h('small', {}, 'Your friend code'), h('div', { class: 'room-code small' }, code || '······')),
+        h('button', {
+          class: 'btn share small', disabled: !code,
+          onclick: () => Share.send(`🏔️ Race me up Monte Español on Hablamos! Add me as a friend with my code: ${code}\nOpen Hablamos → 👥 Friends → type my code → Add.`),
+        }, '📤 Send')),
+      h('div', { class: 'oh-join' }, input, addBtn),
+      msg,
+      Store.s.playerName ? null : h('div', { class: 'muted small-note' }, 'Tip: set your name below so friends know it’s you.'),
+    ].filter(Boolean));
+  };
+  Friends.load().then(() => { if (card.isConnected) draw(); });
+  return card;
+}
 
 // The best of two saves: highest XP, scores, stars and word mastery, the
 // most recent streak, and this phone's own settings.
@@ -157,6 +291,8 @@ function mergeProgress(local, cloud) {
   out.best = maxEach(local.best, cloud.best);
   out.stars = maxEach(local.stars, cloud.stars);
   out.mastery = maxEach(local.mastery, cloud.mastery);
+  const lw = local.week || {}, cw = cloud.week || {};
+  out.week = lw.id === cw.id ? { id: lw.id, xp: max(lw.xp, cw.xp) } : ((cw.id || '') > (lw.id || '') ? cw : lw);
   out.coins = max(local.coins, cloud.coins);
   out.climbed = max(local.climbed, cloud.climbed);
   out.owned = [...new Set([...(cloud.owned || []), ...(local.owned || [])])];

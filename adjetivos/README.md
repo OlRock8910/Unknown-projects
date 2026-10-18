@@ -23,6 +23,8 @@ and no ads.
   build sentences from word tiles, spell it, type it, el or la. Anything you
   get wrong comes back at the end. Already know some? **Jump ahead.**
 - **21 mini games** that use whichever topic you pick.
+- **Friends:** add friends with a 6-letter code and race them on a weekly
+  leaderboard (set up with [docs/FRIENDS.md](docs/FRIENDS.md)).
 
 | **Home** | **Bubble Pop** — right answers flash up big | **Whack-a-Word** | **Gender Pop** |
 |:---:|:---:|:---:|:---:|

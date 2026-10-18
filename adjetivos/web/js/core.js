@@ -36,6 +36,14 @@ function h(tag, attrs = {}, ...kids) {
   return el;
 }
 const today = () => new Date().toISOString().slice(0, 10);
+// This week as 2026-W42 (weeks start on Monday), for the weekly leaderboard.
+function weekId(date = new Date()) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const jan1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return `${d.getUTCFullYear()}-W${String(Math.ceil(((d - jan1) / 864e5 + 1) / 7)).padStart(2, '0')}`;
+}
 const stripAccents = (s) => s.normalize('NFD').replace(/[̀-́̈]/g, '');
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -72,6 +80,8 @@ const Store = {
     this.data.xp += n;
     if (this.data.daily.date !== today()) this.data.daily = { date: today(), xp: 0 };
     this.data.daily.xp += n;
+    if (!this.data.week || this.data.week.id !== weekId()) this.data.week = { id: weekId(), xp: 0 };
+    this.data.week.xp += n;
     const st = this.data.streak;
     if (st.last !== today()) {
       const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);

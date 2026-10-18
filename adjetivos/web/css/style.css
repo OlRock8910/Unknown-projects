@@ -812,3 +812,29 @@ input { font: inherit; }
 .landmark.reached .lm-tag { background: linear-gradient(135deg, #facc15, #f59e0b); color: #422006; border-color: transparent; }
 .base-camp { align-self: flex-start; }
 .summit { padding-top: 10px; }
+
+/* ------------------------------------------------------------ friends leaderboard */
+.board { border-color: rgba(250, 204, 21, 0.35); background: linear-gradient(160deg, rgba(250, 204, 21, 0.12), rgba(139, 92, 246, 0.08)); }
+.board-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.board-head > div { display: flex; flex-direction: column; gap: 2px; }
+.board-head b { font-size: 19px; font-weight: 900; }
+.board-head span:not(.bh-emoji) { color: var(--muted); font-size: 13.5px; }
+.bh-emoji { font-size: 36px; }
+.board-body { display: flex; flex-direction: column; gap: 10px; }
+.board-tabs { display: flex; gap: 8px; }
+.board-list { display: flex; flex-direction: column; gap: 6px; }
+.board-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.06); }
+.board-row.me { background: rgba(250, 204, 21, 0.16); border: 1px solid rgba(250, 204, 21, 0.4); }
+.br-rank { width: 30px; text-align: center; font-weight: 900; font-size: 18px; }
+.br-climber { font-size: 26px; }
+.br-name { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.br-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-name small { color: var(--muted); font-size: 12px; }
+.br-score { font-weight: 900; color: #fde047; white-space: nowrap; }
+.br-x { width: 28px; height: 28px; border-radius: 9px; background: rgba(255,255,255,0.08); color: var(--muted); font-size: 13px; }
+.board-empty { text-align: center; color: var(--muted); font-size: 14px; padding: 4px 0; }
+.board-code { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 16px; background: rgba(0,0,0,0.2); }
+.board-code small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.room-code.small { font-size: 26px; letter-spacing: 5px; padding: 0; background: none; border: 0; box-shadow: none; text-align: left; }
+.small-note { font-size: 13px; }
+.muted { color: var(--muted); }
