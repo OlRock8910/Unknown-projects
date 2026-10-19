@@ -14,7 +14,15 @@ public abstract class Item {
     public abstract Box bounds();
 
     /** A copy with every coordinate mapped through x' = x * scale + dx (and the same for y). */
-    public abstract Item transformed(float scale, float dx, float dy);
+    public Item transformed(float scale, float dx, float dy) {
+        return transformed(scale, scale, dx, dy);
+    }
+
+    /**
+     * A copy stretched by sx across and sy down: x' = x * sx + dx, y' = y * sy + dy. Text keeps
+     * its size when only one side is pulled, and rewraps to the new width instead.
+     */
+    public abstract Item transformed(float sx, float sy, float dx, float dy);
 
     /** A copy in another colour (the opacity of the original is kept where it has one). */
     public abstract Item recolored(int argb);

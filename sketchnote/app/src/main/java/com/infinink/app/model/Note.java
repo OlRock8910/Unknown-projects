@@ -45,7 +45,13 @@ public final class Note extends Item {
 
     @Override
     public Note transformed(float scale, float dx, float dy) {
-        return new Note(style, x * scale + dx, y * scale + dy, w * scale, h * scale, fontSize * scale, paper, ink, text);
+        return transformed(scale, scale, dx, dy);
+    }
+
+    @Override
+    public Note transformed(float sx, float sy, float dx, float dy) {
+        float fs = sx == sy ? fontSize * sx : fontSize;
+        return new Note(style, x * sx + dx, y * sy + dy, w * sx, h * sy, fs, paper, ink, text);
     }
 
     @Override
