@@ -70,7 +70,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
     }
 
     private static final int M_NONE = 0, M_DRAW = 1, M_ERASE = 2, M_LASSO = 3, M_SHAPE = 4,
-            M_NAV = 5, M_MOVE_SEL = 6, M_SCALE_SEL = 7, M_NOTE = 8, M_IGNORE = 9, M_PICK = 10;
+            M_NAV = 5, M_MOVE_SEL = 6, M_SCALE_SEL = 7, M_NOTE = 8, M_IGNORE = 9, M_PICK = 10, M_TWIST = 11;
 
     /** Pixels sampled around the eyedropper, shown magnified in the loupe. */
     private static final int LOUPE = 15;
@@ -126,6 +126,10 @@ public final class CanvasView extends View implements ImageCache.Listener {
     // A selection being moved or resized: x' = anchor + (x - anchor) * scale + offset.
     private float selSx = 1f, selSy = 1f, selDx, selDy, selAx, selAy;
     private int selHx, selHy; // which handle is held: -1 / 0 / 1 across and down
+
+    // Two fingers on a selection turn, resize and move it: p' = c1 + R(twR) * twS * (p - c0).
+    private float twC0x, twC0y, twC1x, twC1y, twS = 1f, twR, twD0, twA0, twTravel;
+    private int twId0 = -1, twId1 = -1;
     private float gestureBx, gestureBy;
     private Note touchedNote;
 
@@ -294,8 +298,15 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
         if (!selection.isEmpty()) {
             c.save();
-            c.translate(selAx - selAx * selSx + selDx, selAy - selAy * selSy + selDy);
-            c.scale(selSx, selSy);
+            if (mode == M_TWIST) {
+                c.translate(twC1x, twC1y);
+                c.rotate((float) Math.toDegrees(twR));
+                c.scale(twS, twS);
+                c.translate(-twC0x, -twC0y);
+            } else {
+                c.translate(selAx - selAx * selSx + selDx, selAy - selAy * selSy + selDy);
+                c.scale(selSx, selSy);
+            }
             for (Item it : selection) ink.draw(c, it);
             c.restore();
         }
@@ -329,7 +340,9 @@ public final class CanvasView extends View implements ImageCache.Listener {
             c.drawPath(lassoPath, ui);
             ui.setPathEffect(null);
         }
-        if (!selection.isEmpty() && selBox != null) {
+        if (mode == M_TWIST && selBox != null) {
+            drawTwistFrame(c, accent);
+        } else if (!selection.isEmpty() && selBox != null) {
             RectF r = selectionScreenRect(tmp);
             ui.setColor(accent);
             ui.setStrokeWidth(1.5f * density);
@@ -586,6 +599,13 @@ public final class CanvasView extends View implements ImageCache.Listener {
                     return true;
                 }
                 maxPointers = Math.max(maxPointers, e.getPointerCount());
+                if (mode == M_TWIST) return true; // a third finger changes nothing
+                if (twistStarts(e)) {
+                    if (mode != M_NAV && mode != M_NONE) abortToolForGesture(e);
+                    mode = M_TWIST;
+                    beginTwist(e);
+                    return true;
+                }
                 if (mode != M_NAV) {
                     abortToolForGesture(e);
                     mode = M_NAV;
@@ -600,11 +620,18 @@ public final class CanvasView extends View implements ImageCache.Listener {
                     return true;
                 }
                 if (mode == M_NAV) nav(e);
+                else if (mode == M_TWIST) twist(e);
                 else if (mode != M_NONE && mode != M_IGNORE) moveTool(e);
                 return true;
             case MotionEvent.ACTION_POINTER_UP: {
                 int i = e.getActionIndex();
-                if (mode == M_NAV) {
+                if (mode == M_TWIST) {
+                    int id = e.getPointerId(i);
+                    if (id == twId0 || id == twId1) {
+                        endTwist(e);
+                        mode = M_IGNORE;
+                    }
+                } else if (mode == M_NAV) {
                     beginNav(e, i);
                 } else if (e.getPointerId(i) == activeId && mode != M_NONE && mode != M_IGNORE) {
                     endTool(e, i);
@@ -617,6 +644,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
                     pickArmed = false;
                     if (listener != null) listener.onColorPicked(pickColor);
                 } else if (mode == M_NAV) endNav(e);
+                else if (mode == M_TWIST) endTwist(e);
                 else if (mode != M_NONE && mode != M_IGNORE) endTool(e, 0);
                 mode = M_NONE;
                 activeId = -1;
@@ -624,6 +652,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 if (mode == M_PICK) pickArmed = false;
+                if (mode == M_TWIST) resetTwist();
                 cancelTool();
                 if (mode == M_NAV) settled();
                 mode = M_NONE;
@@ -657,6 +686,143 @@ public final class CanvasView extends View implements ImageCache.Listener {
         boolean eraserEnd = e.getToolType(i) == MotionEvent.TOOL_TYPE_ERASER
                 || (pen && (e.getButtonState() & (MotionEvent.BUTTON_STYLUS_PRIMARY | MotionEvent.BUTTON_SECONDARY)) != 0);
         beginTool(e, i, eraserEnd);
+    }
+
+    // ---- two-finger turn / resize of a selection ------------------------------------------------
+
+    /** Two fingers start a turn of the selection when the first (or their middle) is on it. */
+    private boolean twistStarts(MotionEvent e) {
+        if (selection.isEmpty() || selBox == null || e.getPointerCount() != 2) return false;
+        if (isPen(e, 0) || isPen(e, 1)) return false;
+        if (mode != M_NAV && mode != M_NONE && mode != M_MOVE_SEL && mode != M_DRAW && mode != M_LASSO) return false;
+        RectF r = selectionScreenRect(tmp);
+        r.inset(-24 * density, -24 * density);
+        float mx = (e.getX(0) + e.getX(1)) / 2, my = (e.getY(0) + e.getY(1)) / 2;
+        return r.contains(downX, downY) || r.contains(mx, my);
+    }
+
+    private void beginTwist(MotionEvent e) {
+        twId0 = e.getPointerId(0);
+        twId1 = e.getPointerId(1);
+        float x0 = e.getX(0), y0 = e.getY(0), x1 = e.getX(1), y1 = e.getY(1);
+        twC0x = twC1x = vp.toBoardX((x0 + x1) / 2);
+        twC0y = twC1y = vp.toBoardY((y0 + y1) / 2);
+        twD0 = Math.max(1f, Geometry.dist(x0, y0, x1, y1));
+        twA0 = (float) Math.atan2(y1 - y0, x1 - x0);
+        twS = 1f;
+        twR = 0f;
+        twTravel = 0;
+        invalidate();
+    }
+
+    private void twist(MotionEvent e) {
+        int i0 = e.findPointerIndex(twId0), i1 = e.findPointerIndex(twId1);
+        if (i0 < 0 || i1 < 0) return;
+        float x0 = e.getX(i0), y0 = e.getY(i0), x1 = e.getX(i1), y1 = e.getY(i1);
+        float ncx = vp.toBoardX((x0 + x1) / 2), ncy = vp.toBoardY((y0 + y1) / 2);
+        twTravel = Math.max(twTravel, Geometry.dist(twC0x, twC0y, ncx, ncy) * vp.scale);
+        twC1x = ncx;
+        twC1y = ncy;
+        twS = Math.max(0.05f, Geometry.dist(x0, y0, x1, y1) / twD0);
+        float r = (float) Math.IEEEremainder(Math.atan2(y1 - y0, x1 - x0) - twA0, 2 * Math.PI);
+        twR = snapTurn(r);
+        invalidate();
+    }
+
+    /**
+     * Snaps to straight: a single picture to upright, sideways or upside down; anything else to
+     * no turn or a quarter turn. Keeps a pinch meant only to resize from turning things a little.
+     */
+    private float snapTurn(float r) {
+        float base = 0f;
+        if (selection.size() == 1 && selection.get(0) instanceof Picture) base = ((Picture) selection.get(0)).angle;
+        double target = base + r;
+        double quarter = Math.PI / 2;
+        double straight = Math.round(target / quarter) * quarter;
+        if (Math.abs(target - straight) < Math.toRadians(5)) return (float) (straight - base);
+        return r;
+    }
+
+    private void endTwist(MotionEvent e) {
+        boolean tap = e.getEventTime() - downTime < 320 && Math.abs(twS - 1f) < 0.05f
+                && Math.abs(twR) < Math.toRadians(4) && twTravel < 24 * density;
+        if (tap) {
+            resetTwist();
+            if (fingerOnlyGesture) {
+                undo(); // a quick two-finger tap is still undo, even on a selection
+                performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            }
+            invalidate();
+            return;
+        }
+        if (twS == 1f && twR == 0f && twC0x == twC1x && twC0y == twC1y) {
+            resetTwist();
+            return;
+        }
+        Change c = new Change();
+        List<Item> moved = new ArrayList<>();
+        for (Item it : selection) {
+            Item t = it.transformed(twS, twS, twC0x - twC0x * twS, twC0y - twC0y * twS);
+            if (twR != 0f) t = t.rotated(twR, twC0x, twC0y);
+            t = t.transformed(1f, 1f, twC1x - twC0x, twC1y - twC0y);
+            if (t instanceof Note) {
+                Note n = (Note) t;
+                t = n.withSize(n.w, ink.measureNoteHeight(n));
+            }
+            c.apply(board.items, it, t);
+            moved.add(t);
+        }
+        history.push(c);
+        resetTwist();
+        selection.clear();
+        selectionSet.clear();
+        selection.addAll(moved);
+        selectionSet.addAll(moved);
+        contentChanged();
+        if (listener != null) listener.onSelectionChanged(selection);
+    }
+
+    private void resetTwist() {
+        twS = 1f;
+        twR = 0f;
+        twId0 = twId1 = -1;
+        twC1x = twC0x;
+        twC1y = twC0y;
+    }
+
+    /** While turning: the selection's box, turned with it, and the angle. */
+    private void drawTwistFrame(Canvas c, int accent) {
+        float[] xs = {selBox.minX, selBox.maxX, selBox.maxX, selBox.minX};
+        float[] ys = {selBox.minY, selBox.minY, selBox.maxY, selBox.maxY};
+        float cos = (float) Math.cos(twR), sin = (float) Math.sin(twR);
+        tmpPath.rewind();
+        for (int k = 0; k < 4; k++) {
+            float dx = (xs[k] - twC0x) * twS, dy = (ys[k] - twC0y) * twS;
+            float bx = twC1x + dx * cos - dy * sin, by = twC1y + dx * sin + dy * cos;
+            if (k == 0) tmpPath.moveTo(vp.toScreenX(bx), vp.toScreenY(by));
+            else tmpPath.lineTo(vp.toScreenX(bx), vp.toScreenY(by));
+        }
+        tmpPath.close();
+        ui.setColor(accent);
+        ui.setStrokeWidth(1.5f * density);
+        ui.setPathEffect(new DashPathEffect(new float[]{7 * density, 5 * density}, 0));
+        c.drawPath(tmpPath, ui);
+        ui.setPathEffect(null);
+        float deg = (float) Math.toDegrees(twR);
+        if (selection.size() == 1 && selection.get(0) instanceof Picture) {
+            deg = (float) Math.toDegrees(Math.IEEEremainder(((Picture) selection.get(0)).angle + twR, 2 * Math.PI));
+        }
+        String label = Math.round(deg) + "°" + (Math.abs(twS - 1f) > 0.01f ? "  ·  " + Math.round(twS * 100) + "%" : "");
+        loupeText.setColor(0xFFFFFFFF);
+        loupeText.setTextSize(13 * density);
+        loupeText.setTextAlign(Paint.Align.CENTER);
+        loupeText.setFakeBoldText(true);
+        float sx = vp.toScreenX(twC1x), sy = vp.toScreenY(twC1y) - 56 * density;
+        float tw = loupeText.measureText(label) / 2 + 12 * density;
+        tmp.set(sx - tw, sy - 14 * density, sx + tw, sy + 12 * density);
+        uiFill.setColor(0xD9000000);
+        c.drawRoundRect(tmp, 13 * density, 13 * density, uiFill);
+        c.drawText(label, sx, sy + 4.5f * density, loupeText);
     }
 
     // ---- navigation -----------------------------------------------------------------------------

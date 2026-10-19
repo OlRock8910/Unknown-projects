@@ -195,6 +195,72 @@ public class ModelTest {
     }
 
     @Test
+    public void turnedPictureBoundsAndHits() {
+        Picture p = new Picture("a.jpg", 0, 0, 200, 100).rotated((float) (Math.PI / 2), 100, 50);
+        assertEquals(Math.PI / 2, p.angle, 1e-5);
+        assertEquals(100, p.centerX(), 1e-3);
+        Box b = p.bounds();
+        assertEquals(100, b.width(), 0.01f);  // now standing up
+        assertEquals(200, b.height(), 0.01f);
+        assertTrue(p.hits(100, -40, 0));      // inside the turned picture
+        assertFalse(p.hits(180, 50, 0));      // where it used to be, but not any more
+        Picture back = p.rotated((float) (-Math.PI / 2), 100, 50);
+        assertEquals(0, back.angle, 1e-5);
+        assertEquals(0, back.x, 1e-3);
+    }
+
+    @Test
+    public void strokeTurnsAboutAPoint() {
+        Stroke s = new Stroke(Brush.PEN, 0xFF000000, 2, 0, new float[]{10, 0, .5f});
+        Stroke r = s.rotated((float) (Math.PI / 2), 0, 0);
+        assertEquals(0, r.pts[0], 1e-4);
+        assertEquals(10, r.pts[1], 1e-4);
+    }
+
+    @Test
+    public void turnedPictureRoundTripsAndOldFilesStillOpen() throws Exception {
+        Board b = new Board("x", "Turns");
+        b.items.add(new Picture("p.png", 1, 2, 30, 40, 0.75f));
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        BoardCodec.write(b, new DataOutputStream(bytes));
+        Picture p = (Picture) BoardCodec.read(new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()))).items.get(0);
+        assertEquals(0.75f, p.angle, 1e-6);
+
+        // A version 1 file, as written before pictures could turn.
+        ByteArrayOutputStream v1 = new ByteArrayOutputStream();
+        DataOutputStream o = new DataOutputStream(v1);
+        o.writeInt(0x494E4B42);
+        o.writeInt(1);
+        for (String str : new String[]{"old", "Old board"}) {
+            byte[] u = str.getBytes("UTF-8");
+            o.writeInt(u.length);
+            o.write(u);
+        }
+        o.writeLong(1);
+        o.writeLong(2);
+        o.writeInt(0xFFFFFFFF);
+        o.writeInt(Board.PATTERN_DOTS);
+        o.writeInt(1);
+        o.writeFloat(0);
+        o.writeFloat(0);
+        o.writeFloat(1);
+        o.writeByte(3);
+        byte[] f = "pic.jpg".getBytes("UTF-8");
+        o.writeInt(f.length);
+        o.write(f);
+        o.writeFloat(5);
+        o.writeFloat(6);
+        o.writeFloat(70);
+        o.writeFloat(80);
+        o.writeByte(0);
+        Board old = BoardCodec.read(new DataInputStream(new ByteArrayInputStream(v1.toByteArray())));
+        Picture op = (Picture) old.items.get(0);
+        assertEquals("pic.jpg", op.file);
+        assertEquals(0, op.angle, 0);
+        assertEquals(70, op.w, 0);
+    }
+
+    @Test
     public void recolorKeepsHighlighterSeeThrough() {
         Stroke s = new Stroke(Brush.HIGHLIGHTER, 0x66FFFF00, 20, 0, new float[]{0, 0, .5f});
         assertEquals(0x660000FF, s.recolored(0xFF0000FF).color);

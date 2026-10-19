@@ -12,7 +12,8 @@ import java.nio.charset.StandardCharsets;
  */
 public final class BoardCodec {
     private static final int MAGIC = 0x494E4B42; // "INKB"
-    public static final int VERSION = 1;
+    /** 2 added a picture's angle. */
+    public static final int VERSION = 2;
 
     private static final int T_STROKE = 1, T_NOTE = 2, T_PICTURE = 3;
 
@@ -23,6 +24,7 @@ public final class BoardCodec {
         public String id, name;
         public long created, modified;
         public int paper, pattern, itemCount;
+        public int version;
     }
 
     public static void write(Board b, DataOutput out) throws IOException {
@@ -60,6 +62,7 @@ public final class BoardCodec {
                 out.writeFloat(p.y);
                 out.writeFloat(p.w);
                 out.writeFloat(p.h);
+                out.writeFloat(p.angle);
             }
         }
         out.writeByte(0);
@@ -82,6 +85,7 @@ public final class BoardCodec {
         int version = in.readInt();
         if (version < 1 || version > VERSION) throw new IOException("board file version " + version + " is too new");
         Header h = new Header();
+        h.version = version;
         h.id = readString(in);
         h.name = readString(in);
         h.created = in.readLong();
@@ -132,7 +136,8 @@ public final class BoardCodec {
                 case T_PICTURE: {
                     String file = readString(in);
                     float x = in.readFloat(), y = in.readFloat(), w = in.readFloat(), hh = in.readFloat();
-                    b.items.add(new Picture(file, x, y, w, hh));
+                    float angle = h.version >= 2 ? in.readFloat() : 0f;
+                    b.items.add(new Picture(file, x, y, w, hh, angle));
                     break;
                 }
                 default:

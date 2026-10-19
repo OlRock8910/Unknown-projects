@@ -67,7 +67,9 @@ magnifier over anything on the board (ink, notes, photos) and take that exact co
 
 **Lasso.** Loop round anything (or tap one thing) to move it, recolour, duplicate or delete
 it. Dots on every corner and side resize it: corners keep its shape, sides stretch it one way
-(text gets wider or narrower and rewraps instead of stretching).
+(text gets wider or narrower and rewraps instead of stretching). Put two fingers on the
+selection and twist to turn it (pinch to resize at the same time); it snaps straight at 0°,
+90°, 180° and 270°. Two fingers anywhere else still move and zoom the page.
 
 **Eraser.** Precise (rubs out just what it touches, splitting lines) or whole strokes.
 
