@@ -257,6 +257,13 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
 
     @Override
     public void onSelectionChanged(List<Item> selection) {
+        if (selection.isEmpty() && toolBeforePress >= 0 && tools.tool == ToolBox.LASSO) {
+            // Let go of something picked up by pressing: back to the tool you were using.
+            int t = toolBeforePress;
+            toolBeforePress = -1;
+            selectTool(t);
+            return;
+        }
         boolean show = !selection.isEmpty() && tools.tool == ToolBox.LASSO;
         selBar.setVisibility(show ? View.VISIBLE : View.GONE);
         if (show) {
@@ -273,6 +280,34 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     public void onNoteTap(Note existing, float bx, float by) {
         hidePanel();
         editNote(existing, bx, by, tools.tool == ToolBox.NOTE ? Note.STICKY : Note.TEXT);
+    }
+
+    /** The tool to go back to once a pressed-on item is let go (-1: none). */
+    private int toolBeforePress = -1;
+
+    @Override
+    public void onItemPressed(Item item) {
+        if (tools.tool != ToolBox.LASSO) toolBeforePress = tools.tool;
+        selectTool(ToolBox.LASSO);
+        hidePanel();
+        if (item instanceof Picture) {
+            showHint("Picture picked up. Tap it again to crop, cut out or pick colours. Drag to move, pull the dots to resize, twist with two fingers to turn.");
+        } else if (item instanceof Note) {
+            showHint("Note picked up. Tap it again to change the text. Drag to move, pull the dots to resize.");
+        } else {
+            showHint("Picked up. Drag to move, pull the dots to resize, or use the bar below to recolour, copy or delete.");
+        }
+    }
+
+    @Override
+    public void onEditRequested(Item item) {
+        if (item instanceof Picture) {
+            Picture p = (Picture) item;
+            startEditor(p.file, p);
+        } else if (item instanceof Note) {
+            Note n = (Note) item;
+            editNote(n, n.x, n.y, n.style);
+        }
     }
 
     @Override
@@ -631,6 +666,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     // ---- tools ----------------------------------------------------------------------------------
 
     private void selectTool(int t) {
+        if (t != ToolBox.LASSO) toolBeforePress = -1;
         tools.tool = t;
         if (t != ToolBox.LASSO) canvas.setSelection(new ArrayList<Item>());
         refreshDock();
@@ -1253,6 +1289,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                 + "• Tap with two fingers to undo, three fingers to redo.\n\n"
                 + "• Hold still at the end of a line to snap it into a clean line, circle, triangle, box or polygon.\n\n"
                 + "• With a pen, your palm and fingers are ignored while writing. The pen's button (or eraser end) erases.\n\n"
+                + "• Press and hold on anything you've put down (a picture, a note, a drawing) to pick it up. Tap it again to edit it. Tap empty paper to put it down and get your pen back.\n\n"
                 + "• Lasso: draw round things to select them, then drag, resize, recolour, duplicate or delete. Corner dots resize, side dots stretch, and two fingers on the selection turn it.\n\n"
                 + "• Tap the zoom number to jump between 100% and seeing everything.\n\n"
                 + "• Everything saves by itself, on your device only.";

@@ -67,6 +67,12 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
         /** The eyedropper picked this colour off the page. */
         void onColorPicked(int rgb);
+
+        /** Something was picked up by pressing on it (or a finger tap when fingers only pan). */
+        void onItemPressed(Item item);
+
+        /** A selected picture or note was tapped again: open its editor. */
+        void onEditRequested(Item item);
     }
 
     private static final int M_NONE = 0, M_DRAW = 1, M_ERASE = 2, M_LASSO = 3, M_SHAPE = 4,
@@ -129,6 +135,12 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
     // Two fingers on a selection turn, resize and move it: p' = c1 + R(twR) * twS * (p - c0).
     private float twC0x, twC0y, twC1x, twC1y, twS = 1f, twR, twD0, twA0, twTravel;
+
+    // Press and hold on something to pick it up; tap a picked-up picture or note to edit it.
+    private static final long PRESS_FINGER_MS = 450, PRESS_PEN_MS = 650;
+    private Item pressItem;
+    private boolean pickedByPress;
+    private boolean tapToEdit;
     private int twId0 = -1, twId1 = -1;
     private float gestureBx, gestureBy;
     private Note touchedNote;
@@ -965,17 +977,49 @@ public final class CanvasView extends View implements ImageCache.Listener {
         if (zoomAnim != null) zoomAnim.cancel();
     }
 
-    /** A finger tap while fingers only pan: still lets the text and lasso tools pick things. */
+    /**
+     * A finger tap while fingers only pan (the pen draws): the text tools place notes, and with
+     * any other tool it picks up whatever is under the finger, or opens it if it already is.
+     */
     private void fingerTap(float x, float y) {
         float bx = vp.toBoardX(x), by = vp.toBoardY(y);
         int t = tools.tool;
         if (t == ToolBox.TEXT || t == ToolBox.NOTE) {
             if (listener != null) listener.onNoteTap(noteAt(bx, by), bx, by);
-        } else if (t == ToolBox.LASSO) {
-            Item hit = itemAt(bx, by);
-            setSelection(hit == null ? Collections.<Item>emptyList() : Collections.singletonList(hit));
+            return;
         }
+        Item hit = itemAt(bx, by);
+        if (hit != null && selection.size() == 1 && selection.get(0) == hit && editable(hit)) {
+            if (listener != null) listener.onEditRequested(hit);
+            return;
+        }
+        setSelection(hit == null ? Collections.<Item>emptyList() : Collections.singletonList(hit));
+        if (hit != null && listener != null) listener.onItemPressed(hit);
     }
+
+    private static boolean editable(Item it) {
+        return it instanceof Picture || it instanceof Note;
+    }
+
+    private final Runnable holdToSelect = new Runnable() {
+        @Override
+        public void run() {
+            if (pressItem == null || (mode != M_DRAW && mode != M_SHAPE && mode != M_LASSO)) return;
+            if (mode == M_DRAW && snapped != null) return;
+            // Held still on something: this was not the start of a line, it is picking it up.
+            removeCallbacks(holdToSnap);
+            live.clear();
+            lasso.clear();
+            Item it = pressItem;
+            pressItem = null;
+            pickedByPress = true;
+            setSelection(Collections.singletonList(it));
+            mode = M_MOVE_SEL; // keep holding and drag to move it
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+            if (listener != null) listener.onItemPressed(it);
+            invalidate();
+        }
+    };
 
     // ---- tools ----------------------------------------------------------------------------------
 
@@ -995,6 +1039,8 @@ public final class CanvasView extends View implements ImageCache.Listener {
             r.inset(-6 * density, -6 * density);
             if (r.contains(x, y)) {
                 mode = M_MOVE_SEL;
+                pickedByPress = false;
+                tapToEdit = selection.size() == 1 && editable(selection.get(0)) && selection.get(0).hits(bx, by, 10 * density / vp.scale);
                 return;
             }
             setSelection(Collections.<Item>emptyList());
@@ -1047,6 +1093,11 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 postDelayed(holdToSnap, HOLD_TO_SNAP_MS);
                 break;
         }
+        pickedByPress = false;
+        tapToEdit = false;
+        removeCallbacks(holdToSelect);
+        pressItem = mode == M_DRAW || mode == M_SHAPE || mode == M_LASSO ? itemAt(bx, by) : null;
+        if (pressItem != null) postDelayed(holdToSelect, activeStylus ? PRESS_PEN_MS : PRESS_FINGER_MS);
         invalidate();
     }
 
@@ -1054,6 +1105,10 @@ public final class CanvasView extends View implements ImageCache.Listener {
         int i = e.findPointerIndex(activeId);
         if (i < 0) return;
         int hist = e.getHistorySize();
+        if (pressItem != null && Geometry.dist(downX, downY, e.getX(i), e.getY(i)) > 8 * density) {
+            removeCallbacks(holdToSelect); // it moved: a real line, not a press
+            pressItem = null;
+        }
         switch (mode) {
             case M_DRAW:
                 for (int h = 0; h < hist; h++) {
@@ -1101,6 +1156,8 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
     private void endTool(MotionEvent e, int i) {
         removeCallbacks(holdToSnap);
+        removeCallbacks(holdToSelect);
+        pressItem = null;
         switch (mode) {
             case M_DRAW:
                 if (snapped == null) sample(e.getX(i), e.getY(i), e.getPressure(i), e.getEventTime());
@@ -1119,10 +1176,15 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 commitShape();
                 break;
             case M_MOVE_SEL:
-            case M_SCALE_SEL:
+            case M_SCALE_SEL: {
+                boolean tap = mode == M_MOVE_SEL && tapToEdit && !pickedByPress
+                        && e.getEventTime() - downTime < 350 && Geometry.dist(downX, downY, e.getX(i), e.getY(i)) < 10 * density;
                 commitSelectionTransform();
                 if (gestureTool == ToolBox.TEXT || gestureTool == ToolBox.NOTE) setSelection(Collections.<Item>emptyList());
+                else if (tap && selection.size() == 1 && listener != null) listener.onEditRequested(selection.get(0));
+                tapToEdit = false;
                 break;
+            }
             case M_NOTE:
                 // A tap: edit the note under it, or start a new one. A drag on empty paper is neither.
                 boolean tap = Geometry.dist(downX, downY, e.getX(i), e.getY(i)) < 12 * density;
@@ -1135,6 +1197,9 @@ public final class CanvasView extends View implements ImageCache.Listener {
     /** A second finger arrived: this was the start of a pinch, not a drawing. */
     private void abortToolForGesture(MotionEvent e) {
         removeCallbacks(holdToSnap);
+        removeCallbacks(holdToSelect);
+        pressItem = null;
+        tapToEdit = false;
         switch (mode) {
             case M_DRAW:
                 // A long line is kept; the stray start of a pinch is thrown away.
@@ -1159,6 +1224,8 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
     private void cancelTool() {
         removeCallbacks(holdToSnap);
+        removeCallbacks(holdToSelect);
+        pressItem = null;
         if (mode == M_ERASE && eraseChange != null) {
             history.push(eraseChange);
             eraseChange = null;
@@ -1513,6 +1580,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
         flinging = false;
         removeCallbacks(flingStep);
         removeCallbacks(holdToSnap);
+        removeCallbacks(holdToSelect);
         if (zoomAnim != null) zoomAnim.cancel();
     }
 

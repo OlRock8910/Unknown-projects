@@ -65,6 +65,11 @@ picture opens in the picture editor first (and again any time: select it and tap
 **Eyedropper.** In any tool's colour panel, *Pick a colour from the page* lets you drag a
 magnifier over anything on the board (ink, notes, photos) and take that exact colour.
 
+**Pick things up.** Press and hold on anything you have put down (a picture, a note, a drawing),
+with any tool, to pick it up; keep holding and drag to move it. Tap a picked-up picture or note
+again to edit it (the picture editor or the text editor). Tap empty paper to put it down and you
+are back on the tool you were using. When drawing with a pen, a quick finger tap does the same.
+
 **Lasso.** Loop round anything (or tap one thing) to move it, recolour, duplicate or delete
 it. Dots on every corner and side resize it: corners keep its shape, sides stretch it one way
 (text gets wider or narrower and rewraps instead of stretching). Put two fingers on the
