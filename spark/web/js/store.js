@@ -70,8 +70,10 @@ export async function init() {
 
 export function loadSettings() {
   return {
+    engine: '', // 'claude' or 'local' (the free brain); '' until the person picks
     key: '',
     effort: 'medium',
+    research: true, // the free brain looks things up on Wikipedia
     about: '',
     learn: true, // let Spark save notes about you between chats
     autoUpgrade: true, // move to newer Claude models when they come out

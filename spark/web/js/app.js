@@ -1,5 +1,7 @@
-// Spark: a chat app for Claude. Screens, the chat list, and talking to the
-// Claude API with the official SDK (bundled into vendor/anthropic.js).
+// Spark: a chat app with two brains. Claude, through the Claude API with the
+// official SDK (bundled into vendor/anthropic.js) and the person's own API
+// key; or a free, smaller model that runs on the phone itself and looks
+// things up on Wikipedia (local.js and brain-worker.js).
 //
 // Spark improves itself in two ways, both visible and reversible:
 // - it saves short notes about the person (its memory) through tools, reads
@@ -10,6 +12,7 @@
 import Anthropic from './vendor/anthropic.js';
 import { renderMarkdown } from './markdown.js';
 import * as store from './store.js';
+import * as brain from './local.js';
 
 const MODEL = 'claude-opus-5-5'; // known to work with Spark; the safe fallback
 const MODEL_NAME = 'Claude Opus 5.5';
@@ -98,6 +101,10 @@ let stream = null; // the request streaming in right now
 let attachments = []; // photos waiting to be sent: [{ media_type, data }]
 let problem = null; // why the last reply failed: { text, key }
 let notice = ''; // a one-off message shown under the chat (e.g. after a refusal)
+let stopping = false; // the person tapped stop on the free brain's answer
+
+// Which brain new chats use: 'claude', 'local', or '' before the person picks.
+const engine = () => settings.engine || (settings.key ? 'claude' : '');
 
 // ---------------------------------------------------------------- talking to Claude
 
@@ -157,6 +164,7 @@ const textOf = (content) => content.filter((b) => b.type === 'text').map((b) => 
 const isToolResults = (m) => m.role === 'user' && m.content.every((b) => b.type === 'tool_result');
 
 async function respond() {
+  if (chat.engine === 'local') return respondLocal();
   const c = chat;
   problem = null;
   notice = '';
@@ -216,6 +224,138 @@ async function respond() {
     render();
     scrollDown();
   }
+}
+
+// ---------------------------------------------------------------- the free brain
+
+// What the free brain is given: a short system prompt with the notes and
+// Wikipedia passages that matter for this message, then the recent chat.
+// It's re-made for every message, because a small model has little room.
+function localMessages(c, question, sources) {
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  let sys = `You are Spark, a friendly AI helper that runs on the person's phone. Today is ${today}. Give clear, correct answers, short unless they ask for more. If you're not sure about something, say so instead of guessing.`;
+  const about = settings.about.trim();
+  if (about) sys += `\n\nAbout the person: ${about}`;
+  const all = store.loadMemories();
+  const notes = [...new Set([...search(all, question, (m) => m.note, 6).filter(() => words(question).length), ...all.slice(-5)])].slice(0, 10);
+  if (notes.length) sys += `\n\nThings the person has taught you (use them when they're relevant):\n${notes.map((m) => `- ${m.note}`).join('\n')}`;
+  if (sources.length) {
+    sys += `\n\nInformation from Wikipedia about their latest message. Base facts on it, and say so if it doesn't answer the question:\n\n${sources
+      .map((x, k) => `[${k + 1}] ${x.title}\n${x.text}`)
+      .join('\n\n')}`;
+  }
+  const history = c.messages
+    .filter((m) => !isToolResults(m))
+    .slice(-7)
+    .map((m) => ({ role: m.role, content: textOf(m.role === 'user' ? m.content : kept(m.content)).slice(0, 1500) }));
+  return [{ role: 'system', content: sys }, ...history];
+}
+
+// Small talk and creative requests don't need looking up.
+const needsLookup = (text) =>
+  !!brain.keywords(text) && !/^\s*(hi|hiya|hello|hey|thanks|thank you|ok|okay|cool|yes|no|lol|bye)\b/i.test(text) && !/^\s*(please\s+)?(write|make up|create|compose|invent|remember|tell me a (joke|story))\b/i.test(text);
+
+// Qwen models can wrap private reasoning in <think> tags; it isn't shown.
+const cleanLocal = (text) => text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trimStart();
+
+async function respondLocal() {
+  const c = chat;
+  problem = null;
+  notice = '';
+  stopping = false;
+  busy = true;
+  setBusy(true);
+  render();
+  const live = document.createElement('div');
+  live.className = 'msg msg-ai';
+  $('#thread').append(live);
+  const reply = { role: 'assistant', content: [{ type: 'text', text: '' }] };
+  const paint = (status) => {
+    const stick = nearBottom();
+    live.innerHTML = `<div class="body">${localExtras(reply)}${
+      reply.content[0].text ? `<div class="md">${renderMarkdown(reply.content[0].text)}</div>` : `<span class="status">${DOTS} ${status}</span>`
+    }</div>`;
+    if (stick) scrollDown(true);
+  };
+  paint(brain.status().status === 'ready' ? 'Thinking…' : 'Waking up Spark’s brain…');
+  scrollDown(true);
+
+  const question = textOf(c.messages.at(-1).content);
+  try {
+    // "Remember that …" teaches Spark something.
+    const teach = question.match(/^\s*(?:please\s+)?remember(?:\s+that)?\s*[:,-]?\s+([\s\S]{3,})$/i);
+    if (teach && settings.learn) {
+      const note = teach[1].replace(/\s+/g, ' ').trim().slice(0, MAX_NOTE);
+      const id = 'note-' + Date.now().toString(36);
+      if (await store.addMemory({ id, note, kind: 'about_them', created: Date.now() })) reply.learned = { id, note };
+    }
+    let sources = [];
+    if (settings.research && needsLookup(question)) {
+      reply.searched = brain.keywords(question);
+      paint('Looking it up on Wikipedia…');
+      try {
+        sources = await brain.wikipedia(reply.searched);
+        reply.sources = sources.map(({ title, url }) => ({ title, url }));
+      } catch {
+        reply.offline = true; // no internet: answer from what it knows
+      }
+    }
+    paint(brain.status().status === 'ready' ? 'Thinking…' : 'Waking up Spark’s brain…');
+    const text = stopping ? '' : await brain.generate(localMessages(c, question, sources), (t) => {
+      reply.content[0].text = cleanLocal(t);
+      paint('Thinking…');
+    });
+    reply.content[0].text = cleanLocal(text).trim();
+    if (stopping) reply.stop = 'stopped';
+    if (reply.content[0].text) c.messages.push(reply);
+    else if (!stopping) problem = { text: 'Spark’s brain didn’t come up with an answer. Try asking another way.' };
+  } catch (err) {
+    problem = { text: `Spark’s brain couldn’t answer: ${err.message}. The first time, it needs internet to download, and your phone needs about 1.5 GB free.` };
+  } finally {
+    busy = false;
+  }
+  save(c);
+  setBusy(false);
+  if (chat === c) {
+    render();
+    scrollDown();
+  }
+}
+
+// What the free brain did besides answering: what it learned, what it
+// looked up, and where its facts came from.
+function localExtras(m) {
+  let html = '';
+  if (m.learned) {
+    const still = store.loadMemories().some((n) => n.id === m.learned.id);
+    html += `<div class="learned"><span>✨ <b>Learned:</b> ${esc(m.learned.note)}</span>${still ? `<button data-a="unlearn" data-id="${esc(m.learned.id)}">Undo</button>` : '<em>forgotten</em>'}</div>`;
+  }
+  if (m.offline) html += '<div class="learned"><span>📴 Couldn’t go online, so this is from what Spark already knows.</span></div>';
+  else if (m.searched) html += `<div class="learned"><span>🔎 <b>Looked up</b> “${esc(m.searched)}” on Wikipedia</span></div>`;
+  return html;
+}
+
+const sourcesHtml = (m) =>
+  m.sources?.length
+    ? `<div class="sources">Sources: ${m.sources.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>`).join(' · ')}</div>`
+    : '';
+
+function paintBrainBar(state = brain.status()) {
+  const bar = $('#brain-bar');
+  const show = engine() === 'local' && (state.status === 'loading' || state.status === 'error');
+  bar.hidden = !show;
+  if (!show) return;
+  const mb = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : `${Math.round(n / 1e6)} MB`);
+  const pct = state.total ? Math.min(100, Math.floor((state.loaded / state.total) * 100)) : 0;
+  bar.classList.toggle('error', state.status === 'error');
+  bar.querySelector('.brain-text').textContent =
+    state.status === 'error'
+      ? `Spark’s brain couldn’t start: ${state.error}`
+      : state.total && pct < 100
+        ? `Downloading Spark’s brain… ${pct}% (${mb(state.loaded)} of ${mb(state.total)}). This only happens once.`
+        : 'Starting Spark’s brain…';
+  bar.querySelector('.bar i').style.width = `${state.status === 'error' ? 0 : pct}%`;
+  bar.querySelector('button').hidden = state.status !== 'error';
 }
 
 // One request, with retries built in for three things that can go wrong:
@@ -380,7 +520,7 @@ function describe(err) {
 // Looks for a newer Claude Opus model, at most every 12 hours. New chats move
 // to it; chats already going keep the model they started with.
 async function checkForUpgrade(force) {
-  if (!settings.key || !settings.autoUpgrade) return;
+  if (engine() !== 'claude' || !settings.key || !settings.autoUpgrade) return;
   if (!force && Date.now() - settings.lastCheck < UPGRADE_CHECK) return;
   try {
     const client = new Anthropic({ apiKey: settings.key, dangerouslyAllowBrowser: true, maxRetries: 1 });
@@ -410,16 +550,13 @@ function send(text) {
   text = text.trim();
   if (busy || (!text && !attachments.length)) return;
   if (!chat) {
-    chat = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      title: '',
-      created: Date.now(),
-      model: settings.model || MODEL,
-      system: systemPrompt(settings.learn),
-      tools: settings.learn ? TOOLS : null,
-      messages: [],
-    };
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    chat =
+      engine() === 'local'
+        ? { id, title: '', created: Date.now(), engine: 'local', messages: [] }
+        : { id, title: '', created: Date.now(), model: settings.model || MODEL, system: systemPrompt(settings.learn), tools: settings.learn ? TOOLS : null, messages: [] };
   }
+  if (chat.engine === 'local') attachments = []; // the free brain can't see photos
   const content = attachments.map((source) => ({ type: 'image', source }));
   content.push({ type: 'text', text: text || 'What’s in this photo?' });
   if (!chat.title) chat.title = text ? text.slice(0, 60) : 'Photo';
@@ -438,6 +575,10 @@ async function save(c) {
 
 function stop() {
   stream?.abort();
+  if (busy && chat?.engine === 'local') {
+    stopping = true;
+    brain.stop();
+  }
 }
 
 // Ask again from the last thing the person said.
@@ -456,7 +597,7 @@ function render() {
     t.innerHTML = `<div class="empty">
       <img src="icons/icon-192.png" alt="">
       <h2>Hi! What’s on your mind?</h2>
-      <p>Ask anything, or tap an idea to start.</p>
+      <p>${engine() === 'local' ? 'Ask anything. Spark looks things up on Wikipedia.' : 'Ask anything, or tap an idea to start.'}</p>
       <div class="chips">${SUGGESTIONS.map(([b, s]) => `<button class="chip" data-a="suggest" data-text="${esc(s)}"><b>${esc(b)}</b><span>${esc(s)}</span></button>`).join('')}</div>
     </div>`;
     if (notice) t.querySelector('.empty p').textContent = notice;
@@ -500,7 +641,7 @@ function aiHtml(m, actions, isLast, failed) {
   if (m.stop === 'max_tokens') notes.push('This reply hit the length limit and was cut short.');
   if (m.stop === 'stopped') notes.push('Stopped.');
   return `<div class="msg msg-ai">
-    <div class="body">${contentHtml(m.content, false, failed)}</div>
+    <div class="body">${localExtras(m)}${contentHtml(m.content, false, failed)}${sourcesHtml(m)}</div>
     ${notes.length ? `<div class="note">${notes.join(' ')}</div>` : ''}
     ${
       actions
@@ -691,7 +832,18 @@ function paintSettings() {
   $('#key-mask').textContent = settings.key ? `${settings.key.slice(0, 10)}…${settings.key.slice(-4)}` : 'None';
   $('#model-name').textContent = settings.model ? settings.modelName || settings.model : MODEL_NAME;
   $('#auto-upgrade').checked = settings.autoUpgrade;
+  $('#research').checked = settings.research;
   $('#learn').checked = settings.learn;
+  const local = engine() === 'local';
+  for (const b of $('#engine').children) b.classList.toggle('on', b.dataset.engine === engine());
+  $('#claude-brain').hidden = local;
+  $('#local-brain').hidden = !local;
+  $('#effort-section').hidden = local;
+  const st = brain.status();
+  $('#local-info').textContent =
+    st.status === 'ready'
+      ? `${st.model}, running on your phone’s ${st.device === 'webgpu' ? 'graphics chip' : 'processor'}. It works offline; looking things up needs internet.`
+      : 'A small open AI model that runs on your phone. It downloads once (about 0.5–1 GB), then works offline.';
   for (const b of $('#effort').children) b.classList.toggle('on', b.dataset.effort === settings.effort);
   const all = store.loadMemories();
   const filter = $('#memory-filter').value;
@@ -710,6 +862,31 @@ function paintSettings() {
   });
 }
 
+// Adds what the person typed in Settings to Spark's memory, one note per
+// sentence or so, so long text becomes several searchable notes.
+async function teach() {
+  const text = $('#teach').value.replace(/\s+/g, ' ').trim();
+  if (!text) return;
+  const parts = [];
+  let current = '';
+  for (const sentence of text.match(/[^.!?]+[.!?]*/g) ?? [text]) {
+    if (current && (current + sentence).length > MAX_NOTE) {
+      parts.push(current.trim());
+      current = '';
+    }
+    current += sentence;
+  }
+  if (current.trim()) parts.push(current.trim());
+  let saved = 0;
+  for (const [k, part] of parts.entries()) {
+    if (store.loadMemories().length >= MAX_MEMORIES) break;
+    if (await store.addMemory({ id: `taught-${Date.now().toString(36)}-${k}`, note: part.slice(0, MAX_NOTE), kind: 'about_them', created: Date.now() + k })) saved++;
+  }
+  $('#teach').value = '';
+  paintSettings();
+  toast(saved ? `Spark learned ${saved === 1 ? 'that' : `${saved} things`}` : 'Couldn’t save that');
+}
+
 async function forget(id) {
   await store.removeMemory(id);
   if (!$('#settings').hidden) paintSettings();
@@ -717,8 +894,19 @@ async function forget(id) {
   toast('Forgotten');
 }
 
+// Switches the brain new chats use. Chats already going keep theirs.
+function useEngine(name) {
+  settings.engine = name;
+  store.saveSettings(settings);
+  document.body.classList.toggle('local', name === 'local');
+  if (name === 'local') brain.load().catch(() => {}); // the bar shows progress and problems
+  paintBrainBar();
+  if (!chat) render();
+}
+
 function showWelcome(on) {
   $('#welcome').hidden = !on;
+  $('#welcome-cancel').hidden = !engine();
   if (on) {
     $('#key-input').value = '';
     $('#key-msg').textContent = '';
@@ -751,7 +939,7 @@ async function submitKey(e) {
   }
   btn.disabled = false;
   settings.key = key;
-  store.saveSettings(settings);
+  useEngine('claude');
   problem = null;
   showWelcome(false);
   openSettings(false);
@@ -785,7 +973,7 @@ async function copy(text) {
 window.sparkBack = () => {
   if (!$('#settings').hidden) openSettings(false);
   else if ($('#drawer').classList.contains('open')) openDrawer(false);
-  else if (!$('#welcome').hidden && settings.key) showWelcome(false);
+  else if (!$('#welcome').hidden && engine()) showWelcome(false);
   else return false;
   return true;
 };
@@ -815,6 +1003,18 @@ document.addEventListener('click', (e) => {
   else if (a === 'copy') copy(el.closest('.msg').querySelector('.body > .md')?.innerText ?? '');
   else if (a === 'copy-code') copy(el.closest('.code').querySelector('code').textContent);
   else if (a === 'unlearn') forget(el.dataset.id);
+  else if (a === 'go-free') {
+    useEngine('local');
+    showWelcome(false);
+  } else if (a === 'welcome-cancel') showWelcome(false);
+  else if (a === 'load-brain') brain.load().catch(() => {});
+  else if (a === 'forget-brain') {
+    if (!confirm('Delete the downloaded brain to free up space? It downloads again next time you use it.')) return;
+    brain.forget().then(() => {
+      paintSettings();
+      toast('Brain deleted');
+    });
+  } else if (a === 'teach') teach();
   else if (a === 'forget-all') {
     if (!confirm('Make Spark forget everything it has learned about you?')) return;
     store.clearMemories().then(() => {
@@ -863,6 +1063,25 @@ $('#auto-upgrade').addEventListener('change', (e) => {
   checkForUpgrade(true);
 });
 $('#memory-filter').addEventListener('input', paintSettings);
+$('#research').addEventListener('change', (e) => {
+  settings.research = e.target.checked;
+  store.saveSettings(settings);
+});
+$('#engine').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-engine]');
+  if (!b) return;
+  if (b.dataset.engine === 'claude' && !settings.key) {
+    openSettings(false);
+    showWelcome(true);
+    return;
+  }
+  useEngine(b.dataset.engine);
+  paintSettings();
+});
+brain.onChange((state) => {
+  paintBrainBar(state);
+  if (!$('#settings').hidden) paintSettings();
+});
 $('#key-form').addEventListener('submit', submitKey);
 
 $('#compose').addEventListener('submit', (e) => {
@@ -885,7 +1104,9 @@ $('#photo-input').addEventListener('change', (e) => {
 });
 
 await store.init();
+document.body.classList.toggle('local', engine() === 'local');
 render();
 updateSend();
-showWelcome(!settings.key);
+showWelcome(!engine());
 checkForUpgrade();
+if (engine() === 'local') brain.load().catch(() => {}); // warm up, so the first answer is quicker

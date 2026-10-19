@@ -21,6 +21,8 @@ import android.webkit.WebViewClient;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Hosts Spark (plain HTML/JS in assets/) in a full-screen WebView.
@@ -28,8 +30,12 @@ import java.io.InputStream;
  * The app's files are served from https://appassets.androidplatform.net/
  * instead of file://, so the page is a secure origin: the browser-side Claude
  * API calls, the clipboard and local storage all behave as they do on the
- * website. The WebView also gets a photo picker for the attach button, opens
- * outside links in the browser, and hands the back button to the page.
+ * website. The pages are also marked cross-origin isolated, which lets the
+ * free on-phone brain use every processor core. The WebView also gets a photo
+ * picker for the attach button, opens outside links in the browser, and hands
+ * the back button to the page.
+ *
+ * The app asks Android for one permission only: the internet.
  */
 public class MainActivity extends Activity {
     private static final int BG = Color.rgb(17, 16, 21);
@@ -64,7 +70,10 @@ public class MainActivity extends Activity {
                 if (path == null || path.equals("/")) path = "/index.html";
                 try {
                     InputStream in = getAssets().open(path.substring(1));
-                    return new WebResourceResponse(mime(path), mime(path).startsWith("text/") ? "utf-8" : null, in);
+                    Map<String, String> headers = new HashMap<String, String>();
+                    headers.put("Cross-Origin-Opener-Policy", "same-origin");
+                    headers.put("Cross-Origin-Embedder-Policy", "require-corp");
+                    return new WebResourceResponse(mime(path), mime(path).startsWith("text/") ? "utf-8" : null, 200, "OK", headers, in);
                 } catch (IOException e) {
                     return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null, null);
                 }

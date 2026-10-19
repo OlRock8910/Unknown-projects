@@ -11,12 +11,39 @@
 # Spark ✨
 
 **Your own AI to chat with, and it gets better the more you use it.** Ask
-it anything, get help with homework, plans, writing or code, or show it a
-photo. Spark runs on **Claude**, Anthropic's AI.
+it anything, get help with homework, plans, writing or code. Pick its
+brain when you start:
 
-| **Get started** | **Ask anything** | **Answers** | **It learns** | **Its memory** | **Your chats** |
+- **Free brain (no key, no account):** a small open AI model that runs on
+  your phone and looks things up on Wikipedia.
+- **Claude:** Anthropic's AI, the smartest option, with your own API key.
+
+| **Pick a brain** | **Free brain** | **Claude** | **It learns** | **Its memory** | **Your chats** |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-| <img src="docs/1-welcome.jpg" width="150"> | <img src="docs/2-home.jpg" width="150"> | <img src="docs/3-chat.jpg" width="150"> | <img src="docs/6-learned.jpg" width="150"> | <img src="docs/5-memory.jpg" width="150"> | <img src="docs/4-chats.jpg" width="150"> |
+| <img src="docs/1-welcome.jpg" width="150"> | <img src="docs/7-free.jpg" width="150"> | <img src="docs/3-chat.jpg" width="150"> | <img src="docs/6-learned.jpg" width="150"> | <img src="docs/5-memory.jpg" width="150"> | <img src="docs/4-chats.jpg" width="150"> |
+
+## The free brain
+
+Tap **Use the free brain** and Spark downloads a small AI model (Qwen3
+0.6B, about 0.5–1 GB, so use Wi-Fi) from Hugging Face. That only happens
+once: after that it runs **entirely on your phone**, even offline.
+
+- **It looks things up.** For questions about facts, Spark searches
+  Wikipedia first and answers from what it finds, with links to the
+  articles (🔎 **Looked up**). Only the search words leave your phone. You
+  can turn this off in **Settings**. Without internet it still answers from
+  what it knows (📴).
+- **You can teach it.** Say "remember that my dog is called Max", or type
+  facts into **Settings › What Spark has learned**, and it uses them when
+  they're relevant.
+- **Be realistic:** it's much smaller than Claude, so it's slower, makes
+  more mistakes and can't see photos. It needs a fairly recent phone with
+  about 1.5 GB free. It uses the phone's graphics chip if the browser
+  allows it, and the processor otherwise.
+- **It can't do anything on your phone.** The app asks Android for one
+  permission, the internet. It can't read your files, messages, contacts or
+  anything else, and it never takes actions; it only reads Wikipedia.
+- To free up the space, use **Settings › Delete the downloaded brain**.
 
 - **Replies stream in as they're written**, with lists, tables and code
   blocks laid out properly (code has a copy button).
@@ -73,9 +100,9 @@ model again.
   only choose which official Claude model to use, and only ones Anthropic
   publishes. It never edits the app itself.
 
-## You need an Anthropic API key
+## Using Claude: you need an Anthropic API key
 
-Spark talks to Claude directly with your own key, so there's no Spark
+The free brain needs no key. For Claude, Spark talks to Claude directly with your own key, so there's no Spark
 account or subscription. Anthropic charges for what you use: a typical
 question costs a few cents, and long chats, photos and Deep thinking cost
 more. You can set a monthly spending limit in the console.
@@ -109,14 +136,17 @@ Or use it in any browser at
 
 ```
 web/              The whole app: plain HTML, CSS and JavaScript, no build step
-  js/app.js         Screens, chats, memory, upgrades, and talking to Claude
+  js/app.js         Screens, chats, memory, upgrades, talking to Claude, and the free brain's prompts
+  js/local.js       Starts the free brain, follows its download, and searches Wikipedia
+  js/brain-worker.js  Runs the free brain's model in the background (Transformers.js)
   js/markdown.js    Lays out Claude's replies (escaped, so replies can't inject HTML)
   js/store.js       Saves chats and memory in IndexedDB, settings in localStorage
-  js/vendor/        Anthropic's official TypeScript SDK, bundled into one file by vendor.mjs
+  js/vendor/        Anthropic's TypeScript SDK and Hugging Face's Transformers.js, bundled by vendor.mjs
 android/          A WebView wrapper with a photo picker and the back button
 build-apk.sh      Builds and signs the APK without Gradle
 make-icon.py      Draws the icon
 tests/smoke.mjs   Uses the app in a real browser against a stand-in Claude API
+tests/free-brain.mjs  Checks the real brain code loads, then walks through the free brain with stand-ins
 ```
 
 To run it on a computer, serve `web/` (ES modules don't load from
@@ -148,12 +178,24 @@ your own device). The requests:
 If Claude declines a message, Spark takes it out of the chat and puts it back
 in the box to reword.
 
-### Updating the bundled SDK
+**The free brain.** `brain-worker.js` loads the model with Transformers.js
+in a Web Worker: the first of `onnx-community/Qwen3-0.6B-ONNX` and
+`onnx-community/Qwen2.5-0.5B-Instruct` that loads, 4-bit quantised, on
+WebGPU when there is an adapter and WebAssembly otherwise. Transformers.js
+caches the model files and its ONNX Runtime WebAssembly (fetched from
+jsDelivr) in the browser's Cache Storage. For each message, `app.js` builds
+a short prompt from the relevant notes, up to three Wikipedia article
+introductions (the API needs no key and allows calls from the browser) and
+the last few turns. The Android app serves its files with
+cross-origin-isolation headers so WebAssembly can use every core.
+
+### Updating the bundled libraries
 
 ```bash
-npm install --no-package-lock
-npm run vendor      # rebuilds web/js/vendor/anthropic.js from @anthropic-ai/sdk
-npm test            # the browser test
+npm install --no-package-lock --ignore-scripts   # skips onnxruntime-node's native download
+npm run vendor      # rebuilds web/js/vendor/ from @anthropic-ai/sdk and @huggingface/transformers
+npm test            # the Claude browser test
+node tests/free-brain.mjs
 ```
 
 ### Building the APK
@@ -164,7 +206,7 @@ sudo apt-get install aapt dalvik-exchange zipalign apksigner android-sdk-platfor
 cp build/Spark.apk apk/    # update the downloadable copy
 ```
 
-`.github/workflows/spark.yml` runs the browser test and builds the APK
+`.github/workflows/spark.yml` runs both browser tests and builds the APK
 (uploaded as the `spark-apk` artifact) whenever `spark/` changes, and
 `adjetivos-pages.yml` publishes `web/` as the website alongside Adjetivos.
 

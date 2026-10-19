@@ -1,4 +1,4 @@
-# Tests and builds Spark (the Claude chat app in spark/).
+# Tests and builds Spark (the AI chat app in spark/).
 name: Build Spark APK
 
 on:
@@ -30,11 +30,14 @@ jobs:
 
       - name: Install test tools
         run: |
-          npm install --no-package-lock
+          npm install --no-package-lock --ignore-scripts
           npx playwright install --with-deps chromium
 
       - name: Browser test (against a stand-in Claude API)
         run: node tests/smoke.mjs
+
+      - name: Free brain test (stand-ins for the model and Wikipedia)
+        run: node tests/free-brain.mjs
 
       - name: Build APK
         run: ./build-apk.sh

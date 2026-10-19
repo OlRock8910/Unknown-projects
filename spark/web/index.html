@@ -11,22 +11,34 @@
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
-    <!-- First run: paste an Anthropic API key. -->
+    <!-- First run: pick a brain. -->
     <section class="welcome" id="welcome" hidden>
       <div class="welcome-card">
         <img class="welcome-logo" src="icons/icon-192.png" alt="" width="88" height="88" />
         <h1>Spark</h1>
-        <p class="lead">Your own AI to chat with, powered by Claude.</p>
+        <p class="lead">Your own AI to chat with. Pick its brain:</p>
+
+        <div class="choice">
+          <h2>Free brain <span class="tag">No key needed</span></h2>
+          <p>A small AI that runs on your phone and looks things up on Wikipedia. It downloads about 0.5–1 GB the first time, so use Wi-Fi. It’s less clever than Claude.</p>
+          <button class="btn btn-primary" data-a="go-free">Use the free brain</button>
+        </div>
+
+        <div class="choice">
+          <h2>Claude <span class="tag">Smartest</span></h2>
+          <p>Anthropic’s AI. You need your own API key, and Anthropic charges a few cents a question.</p>
         <ol class="steps">
           <li>Make a free account at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> and add some credit.</li>
           <li>Tap <b>Create Key</b>, copy it, and paste it below.</li>
         </ol>
         <form id="key-form" autocomplete="off">
           <input id="key-input" type="password" placeholder="sk-ant-…" spellcheck="false" autocapitalize="off" aria-label="Anthropic API key" />
-          <button class="btn btn-primary" type="submit">Start chatting</button>
+          <button class="btn btn-primary" type="submit">Use Claude</button>
           <p class="form-msg" id="key-msg" role="status"></p>
         </form>
-        <p class="fine">Your key and your chats stay on this device. Messages go straight to Anthropic to get answers, and usage is billed to your Anthropic account.</p>
+        </div>
+        <p class="fine">Your chats stay on this device. With Claude, messages go straight to Anthropic to get answers. With the free brain, only the searches go to Wikipedia.</p>
+        <button class="btn btn-ghost" id="welcome-cancel" data-a="welcome-cancel" hidden>Back</button>
       </div>
     </section>
 
@@ -44,6 +56,11 @@
       <main class="thread" id="thread" aria-live="polite"></main>
 
       <footer class="composer">
+        <div class="brain-bar" id="brain-bar" hidden>
+          <div class="brain-text" role="status"></div>
+          <div class="bar"><i></i></div>
+          <button class="btn btn-primary btn-sm" data-a="load-brain" hidden>Try again</button>
+        </div>
         <div class="attachments" id="attachments" hidden></div>
         <form class="compose-row" id="compose">
           <button class="icon-btn attach" type="button" data-a="attach" aria-label="Add a photo">
@@ -84,23 +101,40 @@
           </button>
         </div>
 
-        <h3>How hard should Spark think?</h3>
-        <div class="seg" id="effort">
-          <button data-effort="low">Quick</button>
-          <button data-effort="medium">Balanced</button>
-          <button data-effort="high">Deep</button>
-        </div>
-        <p class="hint">Deeper thinking gives better answers to hard questions, but is slower and uses more credit.</p>
-
         <h3>Spark’s brain</h3>
-        <div class="key-row">
-          <span id="model-name"></span>
+        <div class="seg seg-2" id="engine">
+          <button data-engine="local">Free, on phone</button>
+          <button data-engine="claude">Claude</button>
         </div>
-        <label class="switch-row">
-          <span>Upgrade itself when a newer Claude comes out</span>
-          <input type="checkbox" id="auto-upgrade" role="switch" />
-        </label>
-        <p class="hint">New chats use the newest model. If one doesn’t work with Spark, it goes back to the one that does.</p>
+        <div id="local-brain">
+          <p class="hint" id="local-info"></p>
+          <label class="switch-row">
+            <span>Look things up on Wikipedia</span>
+            <input type="checkbox" id="research" role="switch" />
+          </label>
+          <p class="hint">Spark searches Wikipedia for facts it needs, then answers from what it finds. Only the search words are sent.</p>
+          <button class="btn btn-ghost btn-sm" data-a="forget-brain">Delete the downloaded brain</button>
+        </div>
+        <div id="claude-brain">
+          <div class="key-row">
+            <span id="model-name"></span>
+          </div>
+          <label class="switch-row">
+            <span>Upgrade itself when a newer Claude comes out</span>
+            <input type="checkbox" id="auto-upgrade" role="switch" />
+          </label>
+          <p class="hint">New chats use the newest model. If one doesn’t work with Spark, it goes back to the one that does.</p>
+        </div>
+
+        <div id="effort-section">
+          <h3>How hard should Spark think?</h3>
+          <div class="seg" id="effort">
+            <button data-effort="low">Quick</button>
+            <button data-effort="medium">Balanced</button>
+            <button data-effort="high">Deep</button>
+          </div>
+          <p class="hint">Deeper thinking gives better answers to hard questions, but is slower and uses more credit.</p>
+        </div>
 
         <h3>About you</h3>
         <textarea id="about" rows="4" placeholder="E.g. I'm 15, I live in Leeds, keep answers short and funny."></textarea>
@@ -111,8 +145,12 @@
           <span>Let Spark learn about me</span>
           <input type="checkbox" id="learn" role="switch" />
         </label>
-        <p class="hint">Spark saves short notes as you chat, so it gets better at helping you, and it can look back through all your old chats. Notes can’t change its rules, and you can delete any of them.</p>
+        <p class="hint">Spark saves short notes as you chat, so it gets better at helping you, and Claude can look back through your old chats. You can also teach it things here, or by saying “remember that…”. Notes can’t change its rules, and you can delete any of them.</p>
         <input class="filter" id="memory-filter" type="search" placeholder="Search notes" aria-label="Search notes" hidden />
+        <div class="teach">
+          <textarea id="teach" rows="2" placeholder="Teach Spark something, e.g. My dog is called Max."></textarea>
+          <button class="btn btn-primary btn-sm" data-a="teach">Teach</button>
+        </div>
         <ul class="memories" id="memories"></ul>
         <button class="btn btn-danger btn-sm" id="forget-all" data-a="forget-all">Forget everything</button>
 
@@ -126,7 +164,7 @@
         <button class="btn btn-danger btn-sm" data-a="delete-all">Delete all chats</button>
         <p class="hint" id="storage"></p>
 
-        <p class="fine">Answers come from Claude, Anthropic's AI. Your key and chats are saved only on this device; each message is sent to Anthropic to get a reply. Spark can make mistakes, so check anything important.</p>
+        <p class="fine">Your key and chats are saved only on this device. With Claude, each message is sent to Anthropic to get a reply; the free brain runs on your phone and only sends its searches to Wikipedia. Spark can make mistakes, especially the free brain, so check anything important.</p>
       </div>
     </div>
 
