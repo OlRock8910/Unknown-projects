@@ -260,6 +260,61 @@ public class ModelTest {
         assertEquals(70, op.w, 0);
     }
 
+    private static List<Item> stack(int n) {
+        List<Item> items = new ArrayList<>();
+        for (int i = 0; i < n; i++) items.add(line(0, 10, i));
+        return items;
+    }
+
+    @Test
+    public void arrangeSendsBehindAndBringsInFront() {
+        List<Item> items = stack(5);
+        Item a = items.get(0), b = items.get(1), c = items.get(2), d = items.get(3), e = items.get(4);
+        List<Item> back = Arrange.order(items, java.util.Arrays.asList(d, b), Arrange.BACK);
+        assertEquals(java.util.Arrays.asList(b, d, a, c, e), back);
+        List<Item> front = Arrange.order(items, java.util.Arrays.asList(b), Arrange.FRONT);
+        assertEquals(java.util.Arrays.asList(a, c, d, e, b), front);
+        List<Item> fwd = Arrange.order(items, java.util.Arrays.asList(b, c), Arrange.FORWARD);
+        assertEquals(java.util.Arrays.asList(a, d, b, c, e), fwd);
+        List<Item> bwd = Arrange.order(items, java.util.Arrays.asList(e), Arrange.BACKWARD);
+        assertEquals(java.util.Arrays.asList(a, b, c, e, d), bwd);
+        // Already at the back: nothing moves.
+        assertEquals(items, Arrange.order(items, java.util.Arrays.asList(a), Arrange.BACK));
+    }
+
+    @Test
+    public void reorderUndoesExactly() {
+        List<Item> items = stack(6);
+        List<Item> before = new ArrayList<>(items);
+        List<Item> target = Arrange.order(items, java.util.Arrays.asList(items.get(4), items.get(1)), Arrange.BACK);
+        Change c = new Change();
+        c.reorder(items, target);
+        assertEquals(target, items);
+        c.undo(items);
+        assertEquals(before, items);
+        c.redo(items);
+        assertEquals(target, items);
+        Change none = new Change();
+        none.reorder(items, new ArrayList<>(items));
+        assertTrue(none.isEmpty());
+    }
+
+    @Test
+    public void noteFontAndFormattingRoundTrip() throws Exception {
+        Board b = new Board("f", "Fonts");
+        b.items.add(new Note(Note.TEXT, 0, 0, 300, 50, 30, 0, 0xFF112233, "Hi", "Caveat", Note.BOLD | Note.CENTER));
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        BoardCodec.write(b, new DataOutputStream(bytes));
+        Note n = (Note) BoardCodec.read(new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()))).items.get(0);
+        assertEquals("Caveat", n.font);
+        assertTrue(n.has(Note.BOLD));
+        assertTrue(n.has(Note.CENTER));
+        assertFalse(n.has(Note.ITALIC));
+        // Moving or recolouring keeps the font.
+        assertEquals("Caveat", n.transformed(2, 1, 1).font);
+        assertEquals(Note.BOLD | Note.CENTER, n.recolored(0xFFFF0000).fmt);
+    }
+
     @Test
     public void recolorKeepsHighlighterSeeThrough() {
         Stroke s = new Stroke(Brush.HIGHLIGHTER, 0x66FFFF00, 20, 0, new float[]{0, 0, .5f});

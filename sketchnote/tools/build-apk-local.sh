@@ -64,7 +64,8 @@ s = s.replace('|density', '')                        # configChanges flag from A
 s = s.replace('<manifest ', '<manifest package="%s" ' % package, 1)
 open(dst, 'w').write(s)
 EOF
-aapt package -f -m -J "$OUT/gen" -M "$OUT/AndroidManifest.xml" -S "$SRC/res" -I "$PLATFORM_JAR" \
+# Bundled fonts live in assets/ (fonts are stored uncompressed so they load straight from the APK).
+aapt package -f -m -J "$OUT/gen" -M "$OUT/AndroidManifest.xml" -S "$SRC/res" -A "$SRC/assets" -0 ttf -I "$PLATFORM_JAR" \
   --min-sdk-version "$MIN_SDK" --target-sdk-version "$TARGET_SDK" \
   --version-code "$VERSION_CODE" --version-name "$VERSION_NAME" \
   -F "$OUT/unsigned.apk"

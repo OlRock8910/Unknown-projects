@@ -78,6 +78,7 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         store = new BoardStore(this);
+        com.infinink.app.render.Fonts.init(this);
         getWindow().setStatusBarColor(Color.TRANSPARENT);
         getWindow().setNavigationBarColor(Color.TRANSPARENT);
         if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);

@@ -12,8 +12,8 @@ import java.nio.charset.StandardCharsets;
  */
 public final class BoardCodec {
     private static final int MAGIC = 0x494E4B42; // "INKB"
-    /** 2 added a picture's angle. */
-    public static final int VERSION = 2;
+    /** 2 added a picture's angle; 3 a note's font and formatting. */
+    public static final int VERSION = 3;
 
     private static final int T_STROKE = 1, T_NOTE = 2, T_PICTURE = 3;
 
@@ -54,6 +54,8 @@ public final class BoardCodec {
                 out.writeInt(n.paper);
                 out.writeInt(n.ink);
                 writeString(out, n.text);
+                writeString(out, n.font);
+                out.writeInt(n.fmt);
             } else if (it instanceof Picture) {
                 Picture p = (Picture) it;
                 out.writeByte(T_PICTURE);
@@ -130,7 +132,9 @@ public final class BoardCodec {
                     float fs = in.readFloat();
                     int paper = in.readInt(), ink = in.readInt();
                     String text = readString(in);
-                    b.items.add(new Note(style, x, y, w, hh, fs, paper, ink, text));
+                    String font = h.version >= 3 ? readString(in) : "";
+                    int fmt = h.version >= 3 ? in.readInt() : 0;
+                    b.items.add(new Note(style, x, y, w, hh, fs, paper, ink, text, font, fmt));
                     break;
                 }
                 case T_PICTURE: {

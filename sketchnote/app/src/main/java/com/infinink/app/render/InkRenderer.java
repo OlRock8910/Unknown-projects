@@ -277,9 +277,13 @@ public final class InkRenderer {
         int width = Math.max(1, (int) Math.floor((n.w - 2 * pad) * k));
         tp.setTextSize(LAYOUT_SIZE);
         tp.setColor(n.ink);
+        tp.setTypeface(Fonts.typeface(n.font, n.fmt));
+        tp.setUnderlineText(n.has(Note.UNDERLINE));
         String t = n.text.isEmpty() ? " " : n.text;
+        Layout.Alignment align = n.has(Note.CENTER) ? Layout.Alignment.ALIGN_CENTER
+                : n.has(Note.RIGHT) ? Layout.Alignment.ALIGN_OPPOSITE : Layout.Alignment.ALIGN_NORMAL;
         return StaticLayout.Builder.obtain(t, 0, t.length(), tp, width)
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setAlignment(align)
                 .setLineSpacing(0, 1.12f)
                 .setIncludePad(false)
                 .build();

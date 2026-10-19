@@ -47,8 +47,20 @@ full colour picker).
 it snaps into a clean shape. Lines snap level, upright and to 45°. The Shapes tool also drags
 out lines, arrows, rectangles, ellipses, triangles and diamonds, filled or not.
 
-**Notes and text.** Sticky notes in eight colours and plain text, in four sizes. Tap to edit,
-drag to move.
+**Notes and text.** Sticky notes in eight colours and plain text. Typing happens in a bar at
+the bottom of the screen while the note itself updates live on the page (which scrolls to keep
+it above the keyboard). The bar has 47 fonts, each shown in itself (37 bundled: handwriting,
+script, classic serif, display and typewriter styles, plus the phone's own), colours, four
+sizes, **bold**, *italic*, underline and left / centre / right alignment. Tap a note to edit it,
+drag to move it.
+
+| Text bar | Fonts |
+|:---:|:---:|
+| <img src="docs/8-text.jpg" width="220"> | <img src="docs/7-fonts.jpg" width="220"> |
+
+**Layers.** Select anything and tap the layers button to bring it to the front, forward one,
+back one, or behind everything, so drawings and notes can sit behind pictures. (To pick up
+something hidden behind a picture, draw a lasso loop round it.)
 
 **Annotate photos.** Add any picture from your gallery or files and draw on top of it. Every
 picture opens in the picture editor first (and again any time: select it and tap the pencil):
@@ -124,4 +136,6 @@ written to a temporary file and renamed into place so a crash never leaves a bro
 
 ## License
 
-MIT, like the rest of this repository.
+MIT, like the rest of this repository. The bundled fonts in `app/src/main/assets/fonts` are
+from Google Fonts under the SIL Open Font License 1.1 (Permanent Marker, Homemade Apple and
+Special Elite under Apache 2.0); each font's licence is in `assets/fonts/licenses`.
