@@ -303,6 +303,173 @@ await phone.click('.tabbar [data-tab="stats"]');
 check(await phone.locator('.photo-card .ph').count() > 0, 'stats show the photos');
 if (shots) { await phone.waitForTimeout(300); await phone.screenshot({ path: path.join(shotDir, '9-photos-stats.png') }); }
 
+// ---- walks: the 1 km grid
+const grid = await page.evaluate(() => {
+  const [s, w, n, e] = cellBounds(cellOf(40.758, -73.9855));
+  return {
+    ns: kmBetween({ lat: s, lon: w }, { lat: n, lon: w }),
+    ew: kmBetween({ lat: s, lon: w }, { lat: s, lon: e }),
+    inside: s <= 40.758 && n > 40.758 && w <= -73.9855 && e > -73.9855,
+    roundTrip: [[0.1, 0.1], [-33.9, 18.4], [64.1, -21.9], [-77.8, 166.7]].every(([la, lo]) => { const b = cellBounds(cellOf(la, lo)); return b[0] <= la && la < b[2] && b[1] <= lo && lo < b[3]; }),
+    codec: (() => { const set = new Set([cellOf(1, 2), cellOf(-40, 170), cellOf(51.5, -0.1)]); const back = decodeCells(encodeCells(set)); return back.size === 3 && [...set].every((k) => back.has(k)); })(),
+  };
+});
+check(Math.abs(grid.ns - 1) < 0.02 && Math.abs(grid.ew - 1) < 0.02 && grid.inside, `squares are 1 km across (${grid.ns.toFixed(3)} × ${grid.ew.toFixed(3)})`);
+check(grid.roundTrip && grid.codec, 'squares work everywhere and save and load');
+
+// ---- importing location history
+const os = await import('node:os');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'globetrot-'));
+const t0 = Date.UTC(2023, 4, 1, 9);
+const line = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => [a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n]);
+// A 4 km walk up Central Park at walking pace, as GPX.
+const park = line([40.7680, -73.9819], [40.7968, -73.9580], 80);
+fs.writeFileSync(path.join(tmp, 'park.gpx'), `<?xml version="1.0"?><gpx version="1.1"><metadata><time>2023-05-01T08:00:00Z</time></metadata><trk><trkseg>
+${park.map(([la, lo], i) => `<trkpt lat="${la.toFixed(6)}" lon="${lo.toFixed(6)}"><ele>20</ele><time>${new Date(t0 + i * 36000).toISOString()}</time></trkpt>`).join('\n')}
+</trkseg></trk></gpx>`);
+// Timeline export from a phone: a walk in Paris, then a drive out to Versailles.
+const parisWalk = line([48.8584, 2.2945], [48.8738, 2.2950], 10);
+const drive = line([48.8738, 2.2950], [48.8049, 2.1204], 6).slice(1);
+fs.writeFileSync(path.join(tmp, 'Timeline.json'), JSON.stringify({ semanticSegments: [
+  { startTime: '2023-05-02T10:00:00.000+02:00', endTime: '2023-05-02T10:30:00.000+02:00', timelinePath: parisWalk.map(([la, lo], i) => ({ point: `${la.toFixed(7)}°, ${lo.toFixed(7)}°`, time: new Date(t0 + 86400000 + i * 180000).toISOString() })) },
+  { startTime: '2023-05-02T10:30:00.000+02:00', timelinePath: drive.map(([la, lo], i) => ({ point: `${la.toFixed(7)}°, ${lo.toFixed(7)}°`, time: new Date(t0 + 86400000 + 1800000 + (i + 1) * 180000).toISOString() })) },
+  { visit: { topCandidate: { placeLocation: { latLng: '48.8049°, 2.1204°' } } } },
+] }));
+// Google Takeout Records.json: a stroll in London.
+const london = line([51.5007, -0.1246], [51.5081, -0.0759], 30);
+fs.writeFileSync(path.join(tmp, 'Records.json'), JSON.stringify({ locations: london.map(([la, lo], i) => ({ latitudeE7: Math.round(la * 1e7), longitudeE7: Math.round(lo * 1e7), accuracy: 10, source: 'GPS', timestamp: new Date(t0 + 2 * 86400000 + i * 60000).toISOString() })) }, null, 2));
+// KML from a tracker: a walk in Rome, no times.
+const rome = line([41.8902, 12.4922], [41.9009, 12.4833], 12);
+fs.writeFileSync(path.join(tmp, 'rome.kml'), `<kml><Document><Placemark><LineString><coordinates>${rome.map(([la, lo]) => `${lo},${la},0`).join(' ')}</coordinates></LineString></Placemark></Document></kml>`);
+
+await page.evaluate(() => { closeModal(); closeSheet(); walkDb.photos = false; walkChanged(); });
+const cellsIn = (box) => page.evaluate((b) => explored().keys.filter((k) => { const [s, w] = cellBounds(k); return s > b[0] && s < b[2] && w > b[1] && w < b[3]; }).length, box);
+async function importFile(name) {
+  await page.setInputFiles('#history-in', path.join(tmp, name));
+  await page.waitForSelector('#modal .dialog:not(.scan)', { timeout: 10000 });
+  const title = await page.locator('#modal h2').innerText();
+  await page.evaluate(() => closeModal());
+  return title;
+}
+const t1 = await importFile('park.gpx');
+const nyc = await cellsIn([40.70, -74.05, 40.85, -73.90]);
+check(nyc >= 4 && nyc <= 12, `a 4 km GPX walk lights up a trail of squares, not all of New York (${nyc}: “${t1}”)`);
+check(await page.evaluate(() => exploredCount()) === nyc, 'and nothing anywhere else');
+await importFile('Timeline.json');
+const paris = await cellsIn([48.84, 2.27, 48.89, 2.32]);
+const road = await cellsIn([48.815, 2.13, 48.865, 2.28]);
+const versailles = await cellsIn([48.79, 2.10, 48.815, 2.14]);
+check(paris >= 2 && road === 0 && versailles === 1, `Timeline: the Paris walk and the stop at Versailles count, the drive between doesn't (${paris}, ${road}, ${versailles})`);
+await importFile('Records.json');
+check(await cellsIn([51.49, -0.14, 51.52, -0.06]) >= 3, 'Google Takeout Records.json');
+await importFile('rome.kml');
+check(await cellsIn([41.88, 12.47, 41.91, 12.50]) >= 2, 'KML');
+// The same file again adds nothing.
+check((await importFile('park.gpx')).startsWith('🥾 0 new'), 'importing twice adds nothing');
+// Big files are read in pieces: the streaming reader finds every point.
+const streamed = await page.evaluate(async (text) => {
+  const all = [], parts = [];
+  readPoints(text, all, true);
+  let rest = '';
+  for (let i = 0; i < text.length; i += 997) rest = readPoints(rest + text.slice(i, i + 997), parts, false);
+  readPoints(rest, parts, true);
+  return [all.length, parts.length, parts.filter((p) => p.t).length];
+}, fs.readFileSync(path.join(tmp, 'Records.json'), 'utf8'));
+check(streamed[0] === 31 && streamed[1] === 31 && streamed[2] === 31, `chunked reading finds the same points (${streamed})`);
+const byCountry = await page.evaluate(() => Object.fromEntries(exploredByCountry()));
+check(byCountry.US > 0 && byCountry.FR > 0 && byCountry.GB > 0 && byCountry.IT > 0, `explored squares know their country (${JSON.stringify(byCountry)})`);
+
+// ---- the Walks map: fog with holes where you've been
+await page.click('.tabbar [data-tab="walks"]');
+await page.waitForTimeout(300);
+check(await page.evaluate(() => !$('#wk-intro').hidden), 'the Walks map explains itself the first time');
+await page.click('[data-w="intro-ok"]');
+await page.evaluate(() => wkGoTo(40.782, -73.97, 13.5));
+await page.waitForTimeout(900);
+const fog = await page.evaluate(() => {
+  const g = wkFog.getContext('2d'), S = 2 ** wcam.z;
+  const at = (lat, lon) => { const [s, w, n, e] = cellBounds(cellOf(lat, lon)); const [x, y] = merc((s + n) / 2, (w + e) / 2); const sx = (x - wcam.x) * S + wvw / 2, sy = (y - wcam.y) * S + wvh / 2; return g.getImageData(Math.round(sx * dpr), Math.round(sy * dpr), 1, 1).data[3]; };
+  return { walked: at(40.7824, -73.9700), elsewhere: at(40.7824, -73.9500) };
+});
+check(fog.walked < fog.elsewhere - 60, `the fog clears over the walk and stays elsewhere (alpha ${fog.walked} vs ${fog.elsewhere})`);
+check(await page.evaluate(() => !$('#wk-streets').hidden), 'zoomed into a city, the map offers the streets');
+await shot('10-walks');
+// Street map pictures only when switched on.
+let tileHits = 0;
+const png = fs.readFileSync(path.join(here, '..', 'web', 'icons', 'icon-192.png'));
+await page.route('https://*.basemaps.cartocdn.com/**', (r) => { tileHits++; r.fulfill({ contentType: 'image/png', body: png }); });
+await page.evaluate(() => { wkZoom(1.01, 200, 300); });
+await page.waitForTimeout(300);
+check(tileHits === 0, 'no street map downloads unless switched on');
+await page.click('[data-w="menu"]');
+await page.click('#modal [data-m="streets"]');
+await page.waitForTimeout(800);
+check(tileHits > 0 && await page.evaluate(() => !$('#wk-attr').hidden), `street map tiles load with credit (${tileHits})`);
+await page.evaluate(() => { walkDb.streets = false; saveWalks(); });
+
+// ---- the world map shows walked squares, and countries know their km²
+await page.click('.tabbar [data-tab="map"]');
+await page.evaluate(() => { const [x, y] = project(-73.97, 40.78); const k = kMin * 40; cam.k = k; cam.x = vw / 2 - x * k; cam.y = vh / 2 - y * k; clampCam(); render(); });
+await page.waitForTimeout(200);
+const speck = await page.evaluate(() => {
+  const [x, y] = project(-73.9700, 40.7824), sd = Math.min(3, devicePixelRatio);
+  const px = $('#walk-specks').getContext('2d').getImageData(Math.round((x * cam.k + cam.x) * sd), Math.round((y * cam.k + cam.y) * sd), 1, 1).data;
+  return px[3];
+});
+check(speck > 200, 'walked squares show on the world map');
+await page.evaluate(() => openSheet('US', { expand: true }));
+check(/km²/.test(await page.locator('#sheet .walk-line').innerText()), 'the country card says how much you walked there');
+await page.evaluate(() => closeSheet());
+
+// ---- walks are in the backup
+const withWalks = await page.evaluate(() => JSON.parse(backupJson()).walks);
+const walkedBefore = await page.evaluate(() => exploredCount());
+await page.evaluate(() => { walkDb.cells = new Set(); walkChanged(); });
+await page.evaluate((w) => restoreFrom(JSON.stringify({ app: 'globetrot', c: state.c, pins: state.pins, walks: w })), withWalks);
+check(walkedBefore > 10 && await page.evaluate(() => exploredCount()) === walkedBefore, `restoring a backup brings walks back (${walkedBefore})`);
+
+// ---- recording a walk (Android stand-in)
+const walker = await browser.newPage({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2, hasTouch: true });
+walker.on('pageerror', (e) => errors.push('walker: ' + e.message));
+await walker.addInitScript(() => {
+  let on = false, queue = [];
+  window.__walk = { push: (lines) => queue.push(...lines) };
+  window.Native = {
+    share() {}, copy() {}, vibrate() {}, shareFile() {}, savePhoto() {}, deletePhoto() {},
+    hasPhotoAccess: () => 'no', scanPhotos() {}, photoScanResult: () => '[]',
+    walkStart() { on = true; setTimeout(() => window.onWalkEvent('{"state":"on"}'), 10); },
+    walkStop() { on = false; },
+    walkState: () => (on ? 'on' : 'off'),
+    walkTake() { const t = queue.join('\n'); queue = []; return t; },
+    locate() { setTimeout(() => window.onWalkEvent('{"state":"here","lat":38.7139,"lon":-9.1394,"acc":8}'), 10); },
+  };
+});
+await walker.goto(url);
+await walker.waitForSelector('.country');
+await walker.click('.tabbar [data-tab="walks"]');
+await walker.click('[data-w="intro-rec"]');
+await walker.waitForFunction(() => walkDb.rec);
+check(await walker.evaluate(() => $('#rec-btn').classList.contains('on')), 'Record turns on');
+// 2 km across Lisbon at walking pace, one fix every 20 s, then a 30 km jump in five minutes (a car).
+const now = Date.now();
+const lisbon = line([38.7139, -9.1394], [38.7223, -9.1180], 40).map(([la, lo], i) => `${now + i * 20000},${la},${lo},6`);
+await walker.evaluate((l) => window.__walk.push(l), [...lisbon, `${now + 41 * 20000 + 300000},38.98,-9.42,6`]);
+await walker.evaluate(() => window.onAppResume());
+const rec = await walker.evaluate(() => ({ km: walkDb.dayKm, n: exploredCount(), btn: $('#rec-btn').textContent }));
+check(rec.km > 1.8 && rec.km < 2.4 && rec.n >= 3 && rec.n <= 8, `a recorded 2 km walk lights up its squares (${rec.km.toFixed(2)} km, ${rec.n} km²)`);
+check(/2\.\d km today/.test(rec.btn), `the button shows today's distance (${rec.btn})`);
+await walker.click('[data-w="locate"]');
+await walker.waitForTimeout(900);
+check(await walker.evaluate(() => here && here.lat === 38.7139 && wcam.z >= 13.9), 'find me centres the map on you');
+await walker.click('#rec-btn');
+check(await walker.evaluate(() => !walkDb.rec && !recording()), 'Stop ends recording');
+// Stopped from the notification while the app was in the background.
+await walker.click('#rec-btn');
+await walker.waitForFunction(() => walkDb.rec);
+await walker.evaluate(() => { Native.walkStop(); window.onAppResume(); });
+check(await walker.evaluate(() => !walkDb.rec && !$('#rec-btn').classList.contains('on')), 'stopping from the notification is noticed');
+if (shots) { await walker.waitForTimeout(300); await walker.screenshot({ path: path.join(shotDir, '11-recording.png') }); }
+
 if (errors.length) fail('page errors:\n  ' + errors.join('\n  '));
 await browser.close();
 if (!process.exitCode) console.log('all good');

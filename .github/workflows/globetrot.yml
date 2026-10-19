@@ -25,7 +25,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq aapt dalvik-exchange zipalign apksigner android-sdk-platform-23 zip
+          sudo apt-get install -y -qq aapt dalvik-exchange zipalign apksigner zip
 
       - name: Browser test
         run: |

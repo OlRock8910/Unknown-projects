@@ -5,11 +5,21 @@
     <!-- A little buzz when you tick a country off. -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Only asked for when you tap "Find my photos": reading the gallery, and where
-         each photo was taken. No internet permission, so nothing can leave the phone. -->
+         each photo was taken. Photos are only read, never sent anywhere. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+    <!-- Only asked for when you tap "Record walks" or "find me": where you are, while
+         recording, so the squares you walk through light up. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Only for street map pictures on the Walks map, and only when you switch them on.
+         Nothing you record is ever sent anywhere. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:label="@string/app_name"
@@ -20,6 +30,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -27,6 +38,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".WalkService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
         <provider
             android:name=".ShareProvider"
             android:authorities="com.olrock.globetrot.share"

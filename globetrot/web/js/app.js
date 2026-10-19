@@ -47,6 +47,8 @@ const ACHIEVEMENTS = [
   { e: '🏡', t: 'Expat', d: 'Lived in 2 countries', test: (s) => s.lived >= 2 },
   { e: '📌', t: 'Pinpointer', d: 'Pinned 10 places', test: () => state.pins.length >= 10 },
   { e: '💭', t: 'Dreamer', d: '10 places on your wish list', test: (s) => s.want >= 10 },
+  { e: '🥾', t: 'Wanderer', d: 'Explore 100 km² on foot', test: () => exploredCount() >= 100 },
+  { e: '🧭', t: 'Trailblazer', d: 'Explore 1,000 km²', test: () => exploredCount() >= 1000 },
 ];
 const all = (ids) => ids.split(' ').every(visited);
 const some = (ids) => ids.split(' ').filter(visited).length;
@@ -289,6 +291,7 @@ function render() {
     const p = pinById(g.dataset.pin);
     if (p) g.setAttribute('transform', `translate(${(p.x * cam.k + cam.x).toFixed(1)} ${(p.y * cam.k + cam.y).toFixed(1)})`);
   }
+  drawSpecks();
   placePhotos();
   scheduleLabels();
   saveCam();
@@ -741,7 +744,8 @@ function renderSheet() {
     <div class="status-row">${st('been')}${st('lived')}${st('want')}</div>
     ${photoStrip(pics, 6)}`;
   if (!sheetExpanded) {
-    const extra = [e.y?.length ? e.y.join(', ') : '', pics.length ? `${fmt(pics.length)} photo${pics.length > 1 ? 's' : ''}` : '', pins.length ? `${pins.length} place${pins.length > 1 ? 's' : ''}` : '', e.n ? 'notes' : ''].filter(Boolean).join(' · ');
+    const walked = exploredByCountry().get(id) || 0;
+    const extra = [e.y?.length ? e.y.join(', ') : '', pics.length ? `${fmt(pics.length)} photo${pics.length > 1 ? 's' : ''}` : '', walked ? `${fmt(walked)} km² walked` : '', pins.length ? `${pins.length} place${pins.length > 1 ? 's' : ''}` : '', e.n ? 'notes' : ''].filter(Boolean).join(' · ');
     html += `<button class="more-btn" data-a="expand">${extra ? esc(extra) + ' · ' : ''}Years, photos & notes ${ICON.down}</button>`;
   } else {
     html += `<div class="sh-sec"><h3>${s === 'want' ? 'Hoping to go in' : 'Years visited'}</h3><div class="years">
@@ -752,6 +756,7 @@ function renderSheet() {
         ${pics.length ? '' : '<p class="muted" style="margin-bottom:8px">Photos you took here show up on the map and in this card.</p>'}
         <div class="years">${pics.length > 5 ? '<button class="chip-btn" data-a="all-photos">See all</button>' : ''}<button class="chip-btn" data-a="add-photos">＋ Add photos</button></div>
       </div>
+      ${walkSheetHtml(id)}
       <div class="sh-sec"><h3>Places</h3><div class="places">
         ${pins.length ? pins.map((p) => `<div class="place"><span>📍 ${esc(p.name)}</span><button class="go" data-a="go-pin" data-pin="${esc(p.id)}">Show</button><button class="icon-btn" data-a="rm-pin" data-pin="${esc(p.id)}" aria-label="Remove ${esc(p.name)}">${ICON.close}</button></div>`).join('')
           : '<p class="muted">Long-press the map to pin a city or spot you loved.</p>'}
@@ -794,6 +799,7 @@ sheet.addEventListener('click', (ev) => {
     changed(id);
   } else if (a === 'add-year') addYear();
   else if (a === 'add-photos') pickPhotos(id);
+  else if (a === 'walk-map') { closeSheet(); wkFit(id); }
   else if (a === 'all-photos') openGallery(photosIn(id), `${flag(id)} ${BY_ID[id].n}`, id);
   else if (a === 'rm-year') {
     const e = entry(id);
@@ -842,14 +848,16 @@ let currentTab = 'map';
 const dirty = { list: true, stats: true };
 function showTab(tab) {
   if (tab === currentTab) {
-    if (tab !== 'map') $(`#view-${tab} .panel-body`).scrollTo({ top: 0, behavior: 'smooth' });
+    if (tab === 'list' || tab === 'stats') $(`#view-${tab} .panel-body`).scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
   closeSheet();
   currentTab = tab;
   for (const b of $$('.tabbar button')) b.classList.toggle('on', b.dataset.tab === tab);
+  $('#view-walks').classList.toggle('active', tab === 'walks');
   $('#view-list').classList.toggle('active', tab === 'list');
   $('#view-stats').classList.toggle('active', tab === 'stats');
+  if (tab === 'walks') wkOpen();
   if (tab === 'list' && dirty.list) renderList();
   if (tab === 'stats' && dirty.stats) renderStats();
   if (tab === 'map') { measure(); draw(); }
@@ -1023,6 +1031,7 @@ function renderStats() {
         <div class="bar"><i style="width:${(toNext * 100).toFixed(1)}%"></i></div></div>
     </div>
     ${photoCard()}
+    ${walkCard()}
     <div class="tiles">${tiles.map(([v, l]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('')}</div>
     <div class="card"><h3>Continents</h3>${conts}</div>
     <div class="card"><h3>Badges · ${gotCount} of ${ACHIEVEMENTS.length}</h3><div class="badges">${badges.join('')}</div></div>
@@ -1053,6 +1062,7 @@ $('#stats-body').addEventListener('click', (e) => {
   else if (a === 'reset') resetAll();
   else if (a === 'scan') { scanPhone(false); showScanProgress(0, 0); }
   else if (a === 'add-photos') pickPhotos('');
+  else if (a === 'walks') showTab('walks');
 });
 
 // ---------------------------------------------------------------- sharing & backup
@@ -1188,7 +1198,7 @@ function download(href, name) {
 }
 
 function backupJson() {
-  return JSON.stringify({ app: 'globetrot', v: 1, saved: new Date().toISOString(), c: state.c, pins: state.pins }, null, 1);
+  return JSON.stringify({ app: 'globetrot', v: 1, saved: new Date().toISOString(), c: state.c, pins: state.pins, walks: walkBackup() }, null, 1);
 }
 
 function exportBackup() {
@@ -1246,6 +1256,7 @@ function restoreFrom(text) {
   const fresh = normalize({ ...data, cam: state.cam, hint: true });
   state = fresh;
   save(true);
+  if (typeof data.walks === 'string') walkRestore(data.walks);
   buildPins();
   for (const c of COUNTRIES) paintCountry(c.id);
   changed('');
@@ -1257,7 +1268,7 @@ function restoreFrom(text) {
 function resetAll() {
   modal(`<div class="dialog">
     <h2>Start over?</h2>
-    <p>This clears every country, place, year and note on this phone. Back up first if you might want them again.</p>
+    <p>This clears every country, place, year, note and walked square on this phone. Your photos stay. Back up first if you might want them again.</p>
     <div class="row-btns"><button class="btn" data-m="cancel">Keep them</button><button class="btn primary" style="background:#ff6b6b;color:#2a0505" data-m="ok">Clear everything</button></div>
   </div>`, {
     ok: () => {
@@ -1266,6 +1277,9 @@ function resetAll() {
       state.cam = cam0;
       state.hint = true;
       save(true);
+      walkDb.cells = new Set();
+      walkDb.last = null;
+      walkChanged();
       buildPins();
       for (const c of COUNTRIES) paintCountry(c.id);
       changed('');

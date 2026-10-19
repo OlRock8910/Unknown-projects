@@ -2,10 +2,10 @@
 
 # Globetrot
 
-Your own world travel map. Tap the countries you've been to and watch the world fill in, and see
-**the photos you took, on the map where you took them**. Keep a wish list, pin the cities you
-loved, and see how much of the world you've seen. Free, with no ads, no account and no internet.
-Everything stays on your phone.
+Your own world travel map. Tap the countries you've been to and watch the world fill in. See
+**the photos you took, on the map where you took them**, and **every street you've walked, to the
+nearest kilometre**. Keep a wish list, pin the cities you loved, and see how much of the world
+you've seen. Free, with no ads and no account. Everything you record stays on your phone.
 
 | The map | A country | Every country | Your stats | Badges |
 |:---:|:---:|:---:|:---:|:---:|
@@ -14,6 +14,10 @@ Everything stays on your phone.
 | Your photos on the map | A country's photos | All your photos |
 |:---:|:---:|:---:|
 | <img src="docs/7-photos-map.jpg" width="200"> | <img src="docs/8-photos-country.jpg" width="200"> | <img src="docs/9-photos-all.jpg" width="200"> |
+
+| Where you've walked | Up close | Km² explored per country |
+|:---:|:---:|:---:|
+| <img src="docs/10-walks.jpg" width="200"> | <img src="docs/11-walks-close.jpg" width="200"> | <img src="docs/12-walks-stats.jpg" width="200"> |
 
 ## Install
 
@@ -39,8 +43,8 @@ see it full screen and swipe through the rest. Each country's card shows the pho
 After a scan Globetrot lists the countries your photos come from that aren't on your map yet, so
 you can mark them all in one tap. When you open the app again it quietly picks up new photos.
 
-- Photos are only read. They stay in your gallery and nothing is uploaded (the app has no
-  internet permission). **Hide** takes a photo off the map without touching your gallery.
+- Photos are only read. They stay in your gallery and are never uploaded. **Hide** takes a photo
+  off the map without touching your gallery.
 - You can also **add photos** by hand from any country's card, or with the 📷 button. A photo with
   a location goes where it was taken; one without goes in the country you added it to.
 - Android asks permission to see your photos the first time. Allow access to all photos and
@@ -48,6 +52,29 @@ you can mark them all in one tap. When you open the app again it quietly picks u
   share just some photos.
 - Your camera has to save the location. Most phones do this when location is turned on in the
   camera settings.
+
+**Every street you've walked, to the nearest kilometre.** Going to Brazil once doesn't mean you've
+seen Brazil. The **Walks** tab cuts the world into squares about 1 km across and lights up only the
+ones you've actually been in. Everywhere else stays under a fog that clears as you explore. A
+weekend wandering around Manhattan lights up the blocks you walked, not all of New York.
+
+- **Record a walk** and walk. Recording keeps going with the screen off or the app in the
+  background (there's a notification with a Stop button), and the button shows how far you've
+  walked today. Anything faster than walking or cycling pace (a car, a train) is left out.
+- **Import your history** to light up years of walks at once: your Google Maps Timeline (on the
+  phone: Settings → Location → Location services → Timeline → Export Timeline data), Google
+  Takeout location history, or GPX and KML files from Strava, Garmin, Komoot and other trackers.
+  Big Takeout files are read a piece at a time. You can keep only the places you walked or
+  cycled, or count everywhere you went.
+- **Your photo locations count too**: the square around each photo lights up. You can switch
+  that off in the Walks menu.
+- **Show streets** to see the street map under the fog (from OpenStreetMap, drawn by CARTO). It's
+  off until you switch it on, because it downloads map pictures. That's the only thing Globetrot
+  uses the internet for. Without it, the Walks map draws the country outlines.
+- The world map shows your walked squares as small white specks. Each country's card and the
+  Stats tab say how many km² you've explored there, and two badges reward 100 km² and 1,000 km².
+- Recording asks for **precise** location. Approximate location is only good to a few km, which
+  is too rough for 1 km squares.
 
 **Quick mark.** Turn it on and every tap ticks a country off, or unticks it, without opening
 anything. It's the fastest way to fill in your map the first time. Made a mistake? Every change
@@ -67,7 +94,7 @@ just the places you've been, want to go, lived in or starred, or the ones you ha
 - Continents visited, how much of the world's land you've covered, and progress for each
   continent.
 - A traveller rank, from 🏠 Homebody through ⛵ Voyager and ✈️ Globetrotter to 👑 Completionist.
-- 16 badges: Four corners, All seven continents, Polar explorer, the G7, the Nordic set and more.
+- 18 badges: Four corners, All seven continents, Polar explorer, the G7, the Nordic set and more.
 - Year by year: the flags of everywhere you went each year.
 
 **Share your map.** Share a picture of your coloured-in map with your stats, or a line of text with
@@ -77,8 +104,8 @@ all your flags, to WhatsApp, Instagram, anywhere.
 
 **Back up and restore.** Save a backup file to Drive or email it to yourself, then restore it on
 any phone. You can also copy and paste the backup as text. The backup has your countries, years,
-notes and pins, but not your photos. On a new phone, **Find my photos** puts your gallery back
-on the map.
+notes, pins and walked squares, but not your photos. On a new phone, **Find my photos** puts
+your gallery back on the map.
 
 ## How it's built
 
@@ -89,16 +116,25 @@ older Android, and from the photo itself on Android 10 and later, with the resul
 later scans are quick). It also gives the map its thumbnails at `https://globetrot.local/`. In a
 browser, added photos are kept in IndexedDB instead.
 
+Walks are recorded by `WalkService.java`, a foreground service (type `location`) that writes GPS
+fixes to a file. The page collects them, joins points less than 1.5 km apart, and adds each
+1 km square to a set that's saved as compact, delta-encoded text. `web/js/walks.js` draws the
+Walks map in Web Mercator. The street map uses CARTO's dark tiles; offline, it uses the country
+outlines from `world.js`, converted from the Natural Earth projection. Location history files are
+read with one regular-expression pass that understands Timeline, Takeout, GPX and KML.
+
 The map is Natural Earth's 1:50m country shapes (public domain). `tools/build-map.mjs` merges the
 pieces a traveller counts as one country (Somaliland into Somalia, Northern Cyprus into Cyprus),
 simplifies the outlines and projects them in advance into `web/js/world.js` (about 230 KB), so the
 app needs no map library and no internet.
 
 ```sh
-npm install && node tests/smoke.mjs    # browser test: tap, pinch, pin, search, list, stats, backup, photos
+npm install && node tests/smoke.mjs    # browser test: tap, pinch, pin, search, list, stats, backup, photos, walks
 ./build-apk.sh                          # → build/Globetrot.apk
 python3 make-icon.py                    # redraw the launcher icon
 ```
 
 `build-apk.sh` needs `aapt2`, `javac`, `dalvik-exchange`, `zipalign` and `apksigner`. On Ubuntu:
-`sudo apt-get install aapt dalvik-exchange zipalign apksigner android-sdk-platform-23 default-jdk-headless zip`.
+`sudo apt-get install aapt dalvik-exchange zipalign apksigner default-jdk-headless zip`. It builds
+against Android 14 (API 34). It uses the SDK's `android.jar` when `ANDROID_HOME` has one, and
+otherwise downloads one once and checks it against a pinned SHA-256.

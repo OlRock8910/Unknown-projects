@@ -10,8 +10,9 @@
 const PHOTO_BASE = 'https://globetrot.local/';
 const PHOTO_KEY = 'globetrot.photos';
 
-// g: gallery photos [id, x, y, taken, country]; a: added photos [id, x, y, taken, country, hasGps].
-// x/y are map units. hidden: gallery ids taken off the map. skip: countries the user
+// g: gallery photos [id, x, y, taken, country, lat, lon]; a: added photos
+// [id, x, y, taken, country, hasGps, lat, lon]. x/y are map units; lat/lon are
+// missing on photos saved by version 1.1. hidden: gallery ids taken off the map. skip: countries the user
 // said "not now" to after a scan.
 let photoDb = loadPhotoDb();
 let photoList = null; // every photo on the map, newest first, built on demand
@@ -37,8 +38,8 @@ function savePhotoDb() {
 function allPhotos() {
   if (photoList) return photoList;
   const list = [];
-  for (const [id, x, y, t, cc] of photoDb.g) list.push({ key: 'g' + id, src: 'g', id, x, y, t, cc: cc || '', gps: true });
-  for (const [id, x, y, t, cc, gps] of photoDb.a) list.push({ key: 'a' + id, src: 'a', id, x, y, t, cc: cc || '', gps: !!gps });
+  for (const [id, x, y, t, cc, lat, lon] of photoDb.g) list.push({ key: 'g' + id, src: 'g', id, x, y, t, cc: cc || '', gps: true, lat, lon });
+  for (const [id, x, y, t, cc, gps, lat, lon] of photoDb.a) list.push({ key: 'a' + id, src: 'a', id, x, y, t, cc: cc || '', gps: !!gps, lat, lon });
   list.sort((p, q) => q.t - p.t);
   photoList = list;
   return list;
@@ -61,6 +62,23 @@ function project(lon, lat) {
   const y = f * (1.007226 + f2 * (0.015085 + f4 * (-0.044475 + 0.028874 * f2 - 0.005916 * f4)));
   const P = WORLD.proj;
   return [P.tx + P.k * x, P.ty - P.k * y];
+}
+
+// The inverse, by Newton's method on the latitude (as d3 does).
+function unproject(x, y) {
+  const P = WORLD.proj;
+  const px = (x - P.tx) / P.k, py = (P.ty - y) / P.k;
+  let f = py;
+  for (let i = 0; i < 25; i++) {
+    const f2 = f * f, f4 = f2 * f2;
+    const delta = (f * (1.007226 + f2 * (0.015085 + f4 * (-0.044475 + 0.028874 * f2 - 0.005916 * f4))) - py) /
+      (1.007226 + f2 * (0.015085 * 3 + f4 * (-0.044475 * 7 + 0.028874 * 9 * f2 - 0.005916 * 11 * f4)));
+    f -= delta;
+    if (Math.abs(delta) < 1e-9) break;
+  }
+  const f2 = f * f;
+  const l = px / (0.8707 + f2 * (-0.131979 + f2 * (-0.013791 + f2 * f2 * f2 * (0.003971 - 0.001529 * f2))));
+  return [l * 180 / Math.PI, f * 180 / Math.PI];
 }
 
 const hitCtx = document.createElement('canvas').getContext('2d');
@@ -264,7 +282,9 @@ async function addPhotoFiles(files, cc) {
     await storeBlob(id + '.jpg', await jpeg(bmp, 1600, false));
     await storeBlob(id + '-t.jpg', await jpeg(bmp, 320, true));
     bmp.close?.();
-    photoDb.a.push([id, +x.toFixed(2), +y.toFixed(2), exifDate(ex.date) || f.lastModified || Date.now(), where || '', ex.lat != null ? 1 : 0]);
+    const row = [id, +x.toFixed(2), +y.toFixed(2), exifDate(ex.date) || f.lastModified || Date.now(), where || '', ex.lat != null ? 1 : 0];
+    if (ex.lat != null) row.push(+ex.lat.toFixed(6), +ex.lon.toFixed(6));
+    photoDb.a.push(row);
     if (where) touched.add(where);
     added++;
   }
@@ -321,7 +341,7 @@ function finishScan(ev) {
   for (const [id, lat, lon, t] of rows) {
     if (hidden.has(String(id))) continue;
     const [x, y] = project(lon, lat);
-    photoDb.g.push([id, +x.toFixed(2), +y.toFixed(2), t, countryAt(x, y)]);
+    photoDb.g.push([id, +x.toFixed(2), +y.toFixed(2), t, countryAt(x, y), +lat.toFixed(6), +lon.toFixed(6)]);
   }
   photoDb.scanned = true;
   savePhotoDb();

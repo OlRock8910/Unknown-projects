@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # Builds a signed, installable APK straight from web/ and android/, without
 # Gradle or the full Android SDK. Needs: aapt2, javac (JDK 8+), dx
-# (dalvik-exchange), zipalign, apksigner and an android.jar.
+# (dalvik-exchange), zipalign, apksigner and an API 34 android.jar (found or
+# downloaded, see below).
 #
 # On Ubuntu/Debian:
-#   sudo apt-get install aapt dalvik-exchange zipalign apksigner android-sdk-platform-23 default-jdk-headless zip
+#   sudo apt-get install aapt dalvik-exchange zipalign apksigner default-jdk-headless zip
 #
 #   ./build-apk.sh            → build/Globetrot.apk
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=${OUT:-$HERE/build}
-ANDROID_JAR=${ANDROID_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}
 DX=${DX:-$(command -v dalvik-exchange || command -v dx)}
-VERSION_NAME=${VERSION_NAME:-1.1}
+VERSION_NAME=${VERSION_NAME:-1.2}
 # The version code is minutes since 2020 at the last commit, so every newer
 # build installs over an older one, whichever repository it was built in.
 COMMIT_TIME=$(git -C "$HERE" log -1 --format=%ct 2>/dev/null || date +%s)
@@ -22,6 +22,27 @@ VERSION_CODE=${VERSION_CODE:-$(( (COMMIT_TIME - 1577836800) / 60 ))}
 KEYSTORE="$HERE/android/globetrot-sideload.jks"
 KS_PASS=globetrot
 KS_ALIAS=globetrot
+
+# Walk recording needs Android 14's manifest attributes, so this builds against
+# API 34: the SDK's copy if there is one, otherwise a cached download checked
+# against a known hash.
+JAR_URL=https://raw.githubusercontent.com/Sable/android-platforms/master/android-34/android.jar
+JAR_SHA256=6cea1df3efb77103ac3e2beb9bf4718964b0e0869ab16d39d29d5cbae1c147ad
+if [ -z "${ANDROID_JAR:-}" ]; then
+  for sdk in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}"; do
+    if [ -n "$sdk" ] && [ -f "$sdk/platforms/android-34/android.jar" ]; then ANDROID_JAR="$sdk/platforms/android-34/android.jar"; break; fi
+  done
+fi
+if [ -z "${ANDROID_JAR:-}" ]; then
+  ANDROID_JAR="${XDG_CACHE_HOME:-$HOME/.cache}/globetrot/android-34.jar"
+  if [ ! -f "$ANDROID_JAR" ]; then
+    echo "› downloading android-34 android.jar"
+    mkdir -p "$(dirname "$ANDROID_JAR")"
+    curl -sSfL -o "$ANDROID_JAR.part" "$JAR_URL"
+    echo "$JAR_SHA256  $ANDROID_JAR.part" | sha256sum -c --quiet
+    mv "$ANDROID_JAR.part" "$ANDROID_JAR"
+  fi
+fi
 
 for tool in aapt2 javac zipalign apksigner zip; do
   command -v "$tool" >/dev/null || { echo "missing tool: $tool" >&2; exit 1; }

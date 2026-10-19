@@ -8,9 +8,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Looper;
 import android.os.Vibrator;
 import android.util.Base64;
 import android.view.View;
@@ -34,13 +38,16 @@ import java.util.List;
 /**
  * Hosts the map (plain HTML/JS in assets/) in a full-screen WebView and lends
  * it what a WebView lacks: the share sheet, the clipboard, vibration, a file
- * picker, and the phone's photos (see Photos). No internet permission;
- * everything stays on the phone.
+ * picker, the phone's photos (see Photos) and walk recording (see
+ * WalkService). Your data stays on the phone; the internet is only used for
+ * street map pictures, when that's switched on.
  */
 public class MainActivity extends Activity {
     private static final int BG = Color.rgb(10, 15, 30);
     private static final int PICK_FILE = 1;
     private static final int ASK_PHOTOS = 2;
+    private static final int ASK_WALK = 3;
+    private static final int ASK_LOCATE = 4;
 
     private WebView web;
     private ValueCallback<Uri[]> pending;
@@ -168,10 +175,80 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        if (requestCode == ASK_WALK) {
+            if (preciseLocation()) startWalk();
+            else walkEvent(granted("android.permission.ACCESS_COARSE_LOCATION") ? "{\"state\":\"coarse\"}" : "{\"state\":\"denied\"}");
+            return;
+        }
+        if (requestCode == ASK_LOCATE) {
+            if (preciseLocation() || granted("android.permission.ACCESS_COARSE_LOCATION")) locateNow();
+            else walkEvent("{\"state\":\"denied\"}");
+            return;
+        }
         if (requestCode != ASK_PHOTOS || !scanAfterAsking) return;
         scanAfterAsking = false;
         if (canSeePhotos()) startScan();
         else emit("{\"state\":\"denied\"}");
+    }
+
+    // ------------------------------------------------------------ walks
+
+    private boolean preciseLocation() {
+        return granted("android.permission.ACCESS_FINE_LOCATION");
+    }
+
+    private String[] walkPermissions() {
+        List<String> want = new ArrayList<String>();
+        want.add("android.permission.ACCESS_FINE_LOCATION");
+        want.add("android.permission.ACCESS_COARSE_LOCATION");
+        if (Build.VERSION.SDK_INT >= 33) want.add("android.permission.POST_NOTIFICATIONS");
+        return want.toArray(new String[0]);
+    }
+
+    private void startWalk() {
+        Intent i = new Intent(this, WalkService.class);
+        try {
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+            walkEvent("{\"state\":\"on\"}");
+        } catch (Exception e) {
+            walkEvent("{\"state\":\"error\"}");
+        }
+    }
+
+    /** Where you are right now, for the "find me" button: the last fix at once, then a fresh one. */
+    private void locateNow() {
+        final LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        try {
+            Location best = null;
+            for (String p : lm.getProviders(true)) {
+                Location l = lm.getLastKnownLocation(p);
+                if (l != null && (best == null || l.getTime() > best.getTime())) best = l;
+            }
+            if (best != null) sendLocation(best);
+            String provider = preciseLocation() && lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ? LocationManager.GPS_PROVIDER : LocationManager.NETWORK_PROVIDER;
+            lm.requestSingleUpdate(provider, new LocationListener() {
+                @Override public void onLocationChanged(Location l) { sendLocation(l); }
+                @Override public void onStatusChanged(String p, int st, Bundle b) { }
+                @Override public void onProviderEnabled(String p) { }
+                @Override public void onProviderDisabled(String p) { }
+            }, Looper.getMainLooper());
+        } catch (Exception e) {
+            walkEvent("{\"state\":\"nofix\"}");
+        }
+    }
+
+    private void sendLocation(Location l) {
+        walkEvent("{\"state\":\"here\",\"lat\":" + l.getLatitude() + ",\"lon\":" + l.getLongitude() + ",\"acc\":" + Math.round(l.getAccuracy()) + "}");
+    }
+
+    private void walkEvent(final String json) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                web.evaluateJavascript("window.onWalkEvent && window.onWalkEvent(" + JSONObject.quote(json) + ")", null);
+            }
+        });
     }
 
     private void startScan() {
@@ -217,6 +294,45 @@ public class MainActivity extends Activity {
 
     /** Exposed to JavaScript as window.Native. */
     private class Bridge {
+        /** Starts recording, asking for location (and notification) permission first if needed. */
+        @JavascriptInterface
+        public void walkStart() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (preciseLocation()) startWalk();
+                    else if (Build.VERSION.SDK_INT >= 23) requestPermissions(walkPermissions(), ASK_WALK);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void walkStop() {
+            stopService(new Intent(MainActivity.this, WalkService.class));
+        }
+
+        @JavascriptInterface
+        public String walkState() {
+            return WalkService.running ? "on" : "off";
+        }
+
+        /** Points recorded since the last call: "time,lat,lon,accuracy" lines. */
+        @JavascriptInterface
+        public String walkTake() {
+            return WalkService.take(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void locate() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (preciseLocation() || granted("android.permission.ACCESS_COARSE_LOCATION")) locateNow();
+                    else if (Build.VERSION.SDK_INT >= 23) requestPermissions(walkPermissions(), ASK_LOCATE);
+                }
+            });
+        }
+
         /** Opens Android's share sheet with the given text. */
         @JavascriptInterface
         public void share(final String text) {
@@ -343,6 +459,8 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         web.onResume();
+        // Pick up anything recorded while the app was in the background.
+        web.evaluateJavascript("window.onAppResume && window.onAppResume()", null);
     }
 
     @Override

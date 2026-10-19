@@ -13,6 +13,7 @@
   <!-- Map: always underneath; the other tabs slide over it. -->
   <section id="view-map" class="view active" aria-label="Map">
     <svg id="map" role="img" aria-label="World map"></svg>
+    <canvas id="walk-specks" aria-hidden="true"></canvas>
     <div id="labels" aria-hidden="true"></div>
     <div id="photo-layer" aria-hidden="true"></div>
     <header class="map-top">
@@ -50,6 +51,39 @@
     </div>
   </section>
 
+  <section id="view-walks" class="view panel" aria-label="Walks">
+    <canvas id="wk-base" aria-hidden="true"></canvas>
+    <canvas id="wk-fog" aria-label="Map of the places you've walked through"></canvas>
+    <header class="map-top">
+      <button class="brand" data-w="fit">
+        <span class="brand-globe">🥾</span>
+        <span class="brand-count"><b id="wk-km">0</b> <span>km² explored</span></span>
+      </button>
+      <div class="top-btns">
+        <button class="round" data-w="locate" aria-label="Where am I">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        </button>
+        <button class="round" data-w="menu" aria-label="Walks menu">
+          <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+        </button>
+      </div>
+    </header>
+    <div id="wk-intro" class="hint" hidden>
+      <b>Clear the fog.</b> Every 1 km square you walk through lights up. Not the whole country, just the streets you've really been on.
+      <div class="intro-btns">
+        <button data-w="intro-rec">Record a walk</button>
+        <button data-w="intro-import" class="ghost">Import my history</button>
+        <button data-w="intro-streets" class="ghost">Show streets</button>
+        <button data-w="intro-ok" class="ghost">Got it</button>
+      </div>
+    </div>
+    <button id="wk-streets" class="street-chip" data-w="streets-on" hidden>🗺️ Show streets</button>
+    <div class="wk-bottom">
+      <button class="rec-btn" id="rec-btn" data-w="rec"><i></i><span>Record a walk</span></button>
+    </div>
+    <div class="wk-attr" id="wk-attr" hidden>© OpenStreetMap contributors © CARTO</div>
+  </section>
+
   <section id="view-list" class="view panel" aria-label="Countries">
     <header class="panel-head">
       <h1>Countries</h1>
@@ -69,6 +103,7 @@
 
   <nav class="tabbar">
     <button data-a="tab" data-tab="map" class="on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Map</span></button>
+    <button data-a="tab" data-tab="walks"><svg viewBox="0 0 24 24"><path d="M8.5 3C10.4 3 11 5.2 11 7.5S10 12 8.5 12 6 9.8 6 7.5 6.6 3 8.5 3zM6.5 14h4v2.5a2 2 0 0 1-4 0zM15.5 7c1.9 0 2.5 2.2 2.5 4.5S17 16 15.5 16 13 13.8 13 11.5 13.6 7 15.5 7zM13.5 18h4v.5a2 2 0 0 1-4 0z"/></svg><span>Walks</span></button>
     <button data-a="tab" data-tab="list"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg><span>Countries</span></button>
     <button data-a="tab" data-tab="stats"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/></svg><span>Stats</span></button>
   </nav>
@@ -90,9 +125,11 @@
   <div id="toast" role="status"></div>
   <input id="file-in" type="file" accept="application/json,.json,text/plain" hidden>
   <input id="photo-in" type="file" accept="image/*" multiple hidden>
+  <input id="history-in" type="file" accept=".json,.gpx,.kml,application/json,application/gpx+xml,application/vnd.google-earth.kml+xml,application/xml,text/xml" hidden>
 
   <script src="js/world.js"></script>
   <script src="js/app.js"></script>
   <script src="js/photos.js"></script>
+  <script src="js/walks.js"></script>
 </body>
 </html>
