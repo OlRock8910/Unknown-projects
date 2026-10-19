@@ -26,7 +26,7 @@
             android:name=".BoardActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|navigation|density"
-            android:windowSoftInputMode="adjustNothing" />
+            android:windowSoftInputMode="adjustResize|stateHidden" />
 
         <activity
             android:name=".ImageEditActivity"

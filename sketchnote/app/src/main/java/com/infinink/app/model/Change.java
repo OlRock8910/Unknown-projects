@@ -17,11 +17,18 @@ public final class Change {
     private static final class Step {
         final Item before;
         final Item[] after;
+        /** For an insertion: where in the stacking order (-1 = on top). */
+        final int at;
         int index = -1;
 
         Step(Item before, Item[] after) {
+            this(before, after, -1);
+        }
+
+        Step(Item before, Item[] after, int at) {
             this.before = before;
             this.after = after;
+            this.at = at;
         }
     }
 
@@ -42,6 +49,25 @@ public final class Change {
         apply(items, before, after.toArray(new Item[0]));
     }
 
+    /** Puts item into the stacking order at index (0 = bottom), right now, and records it. */
+    public void insert(List<Item> items, int index, Item item) {
+        Step s = new Step(null, new Item[]{item}, index);
+        run(items, s);
+        steps.add(s);
+    }
+
+    /**
+     * Restacks the board into newOrder (the same items, in a new order) as steps of this change:
+     * the moved items are taken out, then put back in their new places.
+     */
+    public void reorder(List<Item> items, List<Item> newOrder) {
+        java.util.Set<Item> moved = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Item, Boolean>());
+        for (int i = 0; i < newOrder.size(); i++) if (items.get(i) != newOrder.get(i)) moved.add(newOrder.get(i));
+        if (moved.isEmpty()) return;
+        for (Item it : new ArrayList<>(items)) if (moved.contains(it)) apply(items, it);
+        for (int i = 0; i < newOrder.size(); i++) if (moved.contains(newOrder.get(i))) insert(items, i, newOrder.get(i));
+    }
+
     /** Applies every step again (redo). */
     public void redo(List<Item> items) {
         for (Step s : steps) run(items, s);
@@ -59,7 +85,7 @@ public final class Change {
     private static void run(List<Item> items, Step s) {
         int idx;
         if (s.before == null) {
-            idx = items.size();
+            idx = s.at >= 0 ? Math.min(s.at, items.size()) : items.size();
         } else {
             idx = indexOf(items, s.before);
             if (idx < 0) {

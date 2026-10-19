@@ -47,6 +47,9 @@ public final class ToolBox {
     public boolean shapeFill;
     /** null until the user picks; then whether a finger draws (true) or only pans (false). */
     public Boolean fingerDraws;
+    /** Font and bold/italic/underline/alignment for new text and notes. */
+    public String textFont = "";
+    public int textFmt;
     private final int[] recent = new int[10];
     private int recentCount;
 
@@ -61,6 +64,8 @@ public final class ToolBox {
         shape = prefs.getInt("shape", Shapes.RECT);
         shapeFill = prefs.getBoolean("shapeFill", false);
         if (prefs.contains("fingerDraws")) fingerDraws = prefs.getBoolean("fingerDraws", true);
+        textFont = prefs.getString("textFont", "");
+        textFmt = prefs.getInt("textFmt", 0);
         recentCount = Math.min(recent.length, prefs.getInt("recentCount", 0));
         for (int i = 0; i < recentCount; i++) recent[i] = prefs.getInt("recent" + i, 0);
     }
@@ -176,6 +181,8 @@ public final class ToolBox {
         e.putInt("shape", shape);
         e.putBoolean("shapeFill", shapeFill);
         if (fingerDraws != null) e.putBoolean("fingerDraws", fingerDraws);
+        e.putString("textFont", textFont);
+        e.putInt("textFmt", textFmt);
         e.putInt("recentCount", recentCount);
         for (int i = 0; i < recentCount; i++) e.putInt("recent" + i, recent[i]);
         e.apply();

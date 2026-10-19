@@ -111,7 +111,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     private Picture editing;
     private String editingFile;
     private boolean dirty;
-    private int insetTop, insetBottom, insetLeft, insetRight;
+    private int insetTop, insetBottom, insetLeft, insetRight, imeBottom;
 
     // ---- lifecycle ------------------------------------------------------------------------------
 
@@ -119,6 +119,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         store = new BoardStore(this);
+        com.infinink.app.render.Fonts.init(this);
         tools = new ToolBox(this);
         String id = getIntent().getStringExtra(EXTRA_ID);
         try {
@@ -142,6 +143,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     protected void onPause() {
         super.onPause();
         if (board == null) return;
+        finishText(true);
         canvas.storeView();
         tools.save();
         save(true);
@@ -157,6 +159,10 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
 
     @Override
     public void onBackPressed() {
+        if (textBar != null) {
+            finishText(true);
+            return;
+        }
         if (panelFor >= 0) {
             hidePanel();
             return;
@@ -264,7 +270,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             selectTool(t);
             return;
         }
-        boolean show = !selection.isEmpty() && tools.tool == ToolBox.LASSO;
+        boolean show = !selection.isEmpty() && tools.tool == ToolBox.LASSO && textBar == null;
         selBar.setVisibility(show ? View.VISIBLE : View.GONE);
         if (show) {
             selLabel.setText(selection.size() == 1 ? "1 item" : selection.size() + " items");
@@ -384,6 +390,10 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             @Override
             public boolean onTouch(View v, MotionEvent e) {
                 // A tap on the page closes an open panel, and does not also draw.
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN && textBar != null) {
+                    finishText(true);
+                    return true;
+                }
                 if (e.getActionMasked() == MotionEvent.ACTION_DOWN && panelFor >= 0) {
                     hidePanel();
                     return true;
@@ -430,13 +440,15 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     private void readInsets(WindowInsets in) {
         if (Build.VERSION.SDK_INT >= 30) {
             Insets i = in.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+            imeBottom = in.getInsets(WindowInsets.Type.ime()).bottom;
             insetTop = i.top;
             insetBottom = i.bottom;
             insetLeft = i.left;
             insetRight = i.right;
         } else {
             insetTop = in.getSystemWindowInsetTop();
-            insetBottom = in.getSystemWindowInsetBottom();
+            insetBottom = in.getStableInsetBottom();
+            imeBottom = Math.max(0, in.getSystemWindowInsetBottom() - in.getStableInsetBottom());
             insetLeft = in.getSystemWindowInsetLeft();
             insetRight = in.getSystemWindowInsetRight();
         }
@@ -456,6 +468,11 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         FrameLayout.LayoutParams pp = (FrameLayout.LayoutParams) panelHolder.getLayoutParams();
         pp.setMargins(insetLeft + side, insetTop + dp(72), insetRight + side, insetBottom + dp(82));
         panelHolder.setLayoutParams(pp);
+        if (textBar != null) {
+            FrameLayout.LayoutParams xp = (FrameLayout.LayoutParams) textBar.getLayoutParams();
+            xp.setMargins(insetLeft + side, 0, insetRight + side, Math.max(insetBottom, imeBottom) + dp(8));
+            textBar.setLayoutParams(xp);
+        }
         FrameLayout.LayoutParams hp = (FrameLayout.LayoutParams) hint.getLayoutParams();
         hp.setMargins(insetLeft + dp(20), insetTop + dp(74), insetRight + dp(20), 0);
         hint.setLayoutParams(hp);
@@ -640,6 +657,14 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             }
         });
         selBar.addView(selEdit);
+        final IconButton layers = button(Icons.LAYERS, "Layers: bring to front or send behind", null);
+        layers.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showLayersMenu(layers);
+            }
+        });
+        selBar.addView(layers);
         selBar.addView(button(Icons.DUPLICATE, "Duplicate", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -1059,54 +1084,160 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
 
     // ---- notes ----------------------------------------------------------------------------------
 
-    private void editNote(final Note existing, final float bx, final float by, final int style) {
+    // ---- text and sticky notes: the live editing bar --------------------------------------------
+
+    private LinearLayout textBar;
+    private EditText textEdit;
+    private Note textOriginal, textDraft;
+    private int textStyle, textColor, textFmt;
+    private float textBx, textBy, textFs;
+    private String textFont = "";
+    private final List<TextView> fontChips = new ArrayList<>();
+    private final List<TextView> sizeChips = new ArrayList<>();
+
+    /**
+     * Opens the text bar for a new note at (bx, by) or for an existing one. The note on the page
+     * changes as you type and pick fonts, colours and sizes; the page scrolls so it stays above
+     * the keyboard.
+     */
+    private void editNote(Note existing, float bx, float by, int style) {
+        if (textBar != null) finishText(true);
+        hidePanel();
+        canvas.setSelection(new ArrayList<Item>());
+        textOriginal = existing;
+        textStyle = existing != null ? existing.style : style;
+        textBx = bx;
+        textBy = by;
+        float density = getResources().getDisplayMetrics().density;
+        int tool = textStyle == Note.STICKY ? ToolBox.NOTE : ToolBox.TEXT;
+        textColor = existing != null ? (textStyle == Note.STICKY ? existing.paper : existing.ink) : tools.color(tool) | 0xFF000000;
+        textFs = existing != null ? existing.fontSize : tools.size(tool) * density * canvas.boardPerPixel();
+        textFont = existing != null ? existing.font : tools.textFont;
+        textFmt = existing != null ? existing.fmt : tools.textFmt;
+        buildTextBar(existing != null ? existing.text : "");
+        updateDraft();
+    }
+
+    private void buildTextBar(String initial) {
         final float density = getResources().getDisplayMetrics().density;
-        final float scale = canvas.viewport().scale;
-        LinearLayout col = new LinearLayout(this);
-        col.setOrientation(LinearLayout.VERTICAL);
-        col.setPadding(dp(20), dp(8), dp(20), 0);
+        textBar = new LinearLayout(this);
+        textBar.setOrientation(LinearLayout.VERTICAL);
+        textBar.setBackground(Ui.glass(this, 24));
+        textBar.setPadding(dp(12), dp(12), dp(12), dp(10));
+        textBar.setElevation(dp(10));
+        textBar.setClickable(true); // touches on the bar never reach the page
 
-        final EditText edit = new EditText(this);
-        edit.setText(existing != null ? existing.text : "");
-        edit.setSelection(edit.getText().length());
-        edit.setHint(style == Note.STICKY ? "Write a note…" : "Type here…");
-        edit.setMinLines(3);
-        edit.setMaxLines(10);
-        edit.setGravity(Gravity.TOP | Gravity.START);
-        edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        edit.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
-        edit.setTextSize(17);
-        edit.setTextColor(Ui.TEXT);
-        edit.setHintTextColor(Ui.TEXT_2);
-        edit.setBackground(Ui.round(Ui.SURFACE_2, dp(14)));
-        edit.setPadding(dp(14), dp(12), dp(14), dp(12));
-        col.addView(edit, new LinearLayout.LayoutParams(-1, -2));
-
-        final int[] look = {
-                existing != null ? (style == Note.STICKY ? existing.paper : existing.ink)
-                        : tools.color(style == Note.STICKY ? ToolBox.NOTE : ToolBox.TEXT) | 0xFF000000
-        };
-        TextView cl = Ui.text(this, style == Note.STICKY ? "Note colour" : "Colour", 13, Ui.TEXT_2, true);
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-2, -2);
-        clp.setMargins(0, dp(14), 0, dp(4));
-        col.addView(cl, clp);
-        col.addView(swatches(style == Note.STICKY ? Ui.NOTE_COLORS : Ui.PALETTE, look[0], style != Note.STICKY, new ColorPick() {
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        textEdit = new EditText(this);
+        textEdit.setText(initial);
+        textEdit.setSelection(textEdit.getText().length());
+        textEdit.setHint(textStyle == Note.STICKY ? "Write a note…" : "Type here…");
+        textEdit.setMaxLines(4);
+        textEdit.setGravity(Gravity.TOP | Gravity.START);
+        textEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        textEdit.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        textEdit.setTextSize(17);
+        textEdit.setTextColor(Ui.TEXT);
+        textEdit.setHintTextColor(Ui.TEXT_2);
+        textEdit.setBackground(Ui.round(Ui.SURFACE_2, dp(14)));
+        textEdit.setPadding(dp(12), dp(10), dp(12), dp(10));
+        textEdit.addTextChangedListener(new android.text.TextWatcher() {
             @Override
-            public void picked(int rgb) {
-                look[0] = rgb | 0xFF000000;
-            }
-        }));
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
 
-        // Text size: relative to the screen now; an existing note keeps its own until changed.
-        final float[] chosenDp = {-1};
-        final float currentDp = existing != null ? existing.fontSize * scale / density
-                : tools.size(style == Note.STICKY ? ToolBox.NOTE : ToolBox.TEXT);
-        TextView sl = Ui.text(this, "Text size", 13, Ui.TEXT_2, true);
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-2, -2);
-        slp.setMargins(0, dp(12), 0, dp(6));
-        col.addView(sl, slp);
-        LinearLayout sizes = new LinearLayout(this);
-        final List<TextView> chips = new ArrayList<>();
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                updateDraft();
+            }
+        });
+        top.addView(textEdit, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView done = Ui.chip(this, "Done", true);
+        done.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                finishText(true);
+            }
+        });
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
+        dl.setMargins(dp(8), 0, 0, 0);
+        top.addView(done, dl);
+        textBar.addView(top);
+
+        // Fonts, each shown in itself.
+        fontChips.clear();
+        LinearLayout fonts = new LinearLayout(this);
+        fonts.setGravity(Gravity.CENTER_VERTICAL);
+        for (final com.infinink.app.render.Fonts.Font f : com.infinink.app.render.Fonts.ALL) {
+            final TextView chip = Ui.chip(this, f.name, f.id.equals(textFont));
+            chip.setTypeface(com.infinink.app.render.Fonts.typeface(f.id, 0));
+            chip.setTextSize(15);
+            chip.setTag(f.id);
+            chip.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    textFont = f.id;
+                    for (TextView c : fontChips) Ui.styleChip(c, c == chip);
+                    updateDraft();
+                }
+            });
+            fontChips.add(chip);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+            lp.setMargins(fonts.getChildCount() == 0 ? 0 : dp(6), 0, 0, 0);
+            fonts.addView(chip, lp);
+        }
+        textBar.addView(scroller(fonts, 10));
+
+        // Colours.
+        LinearLayout colours = new LinearLayout(this);
+        colours.setGravity(Gravity.CENTER_VERTICAL);
+        int[] base = textStyle == Note.STICKY ? Ui.NOTE_COLORS : Ui.PALETTE;
+        List<Integer> list = new ArrayList<>();
+        for (int c : base) list.add(c);
+        if (textStyle != Note.STICKY) for (int c : tools.recentColors()) if (!list.contains(c)) list.add(c);
+        final List<Swatch> swatches = new ArrayList<>();
+        for (final int c : list) {
+            final Swatch s = new Swatch(this, c, false);
+            s.setPicked((c & 0xFFFFFF) == (textColor & 0xFFFFFF));
+            s.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    textColor = c | 0xFF000000;
+                    for (Swatch o : swatches) o.setPicked(o == s);
+                    updateDraft();
+                }
+            });
+            swatches.add(s);
+            colours.addView(s);
+        }
+        if (textStyle != Note.STICKY) {
+            Swatch custom = new Swatch(this, 0, true);
+            custom.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    customColor(textColor, new ColorPick() {
+                        @Override
+                        public void picked(int c) {
+                            tools.addRecent(c);
+                            textColor = c | 0xFF000000;
+                            for (Swatch o : swatches) o.setPicked(false);
+                            updateDraft();
+                        }
+                    });
+                }
+            });
+            colours.addView(custom);
+        }
+        textBar.addView(scroller(colours, 6));
+
+        // Size, bold / italic / underline, alignment, delete.
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        sizeChips.clear();
+        float currentDp = textFs * canvas.viewport().scale / density;
         int nearest = 0;
         for (int i = 1; i < NOTE_SIZES.length; i++) {
             if (Math.abs(NOTE_SIZES[i] - currentDp) < Math.abs(NOTE_SIZES[nearest] - currentDp)) nearest = i;
@@ -1114,53 +1245,164 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         for (int i = 0; i < NOTE_SIZES.length; i++) {
             final int k = i;
             final TextView chip = Ui.chip(this, NOTE_SIZE_NAMES[i], i == nearest);
-            chips.add(chip);
             chip.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    chosenDp[0] = NOTE_SIZES[k];
-                    for (TextView c : chips) Ui.styleChip(c, c == chip);
+                    textFs = NOTE_SIZES[k] * density * canvas.boardPerPixel();
+                    tools.setSize(textStyle == Note.STICKY ? ToolBox.NOTE : ToolBox.TEXT, NOTE_SIZES[k]);
+                    for (TextView c : sizeChips) Ui.styleChip(c, c == chip);
+                    updateDraft();
                 }
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
-            lp.setMargins(i == 0 ? 0 : dp(6), 0, 0, 0);
-            sizes.addView(chip, lp);
+            sizeChips.add(chip);
+            row.addView(chip, chipGap(row));
         }
-        col.addView(sizes, new LinearLayout.LayoutParams(-1, -2));
-
-        AlertDialog.Builder b = new AlertDialog.Builder(this)
-                .setTitle(existing == null ? (style == Note.STICKY ? "New sticky note" : "New text") : "Edit")
-                .setView(col)
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Done", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int w) {
-                        String text = edit.getText().toString().replaceAll("\\s+$", "");
-                        if (text.isEmpty()) {
-                            if (existing != null) canvas.applyNote(existing, null);
-                            return;
-                        }
-                        float fontPx = chosenDp[0] > 0 ? chosenDp[0] * density / scale : -1;
-                        if (style == Note.STICKY) tools.setHue(ToolBox.NOTE, look[0]);
-                        else tools.setHue(ToolBox.TEXT, look[0]);
-                        if (chosenDp[0] > 0) tools.setSize(style == Note.STICKY ? ToolBox.NOTE : ToolBox.TEXT, chosenDp[0]);
-                        refreshDock();
-                        canvas.applyNote(existing, buildNote(existing, style, text, look[0], fontPx, bx, by));
-                    }
-                });
-        if (existing != null) {
-            b.setNeutralButton("Delete", new DialogInterface.OnClickListener() {
+        row.addView(formatChip("B", Note.BOLD), chipGap(row));
+        row.addView(formatChip("I", Note.ITALIC), chipGap(row));
+        row.addView(formatChip("U", Note.UNDERLINE), chipGap(row));
+        final TextView align = Ui.chip(this, alignName(), false);
+        align.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // Left -> centre -> right -> left.
+                int a = textFmt & (Note.CENTER | Note.RIGHT);
+                int next = a == 0 ? Note.CENTER : a == Note.CENTER ? Note.RIGHT : 0;
+                textFmt = (textFmt & ~(Note.CENTER | Note.RIGHT)) | next;
+                align.setText(alignName());
+                updateDraft();
+            }
+        });
+        row.addView(align, chipGap(row));
+        if (textOriginal != null) {
+            IconButton del = new IconButton(this, Icons.TRASH, 40, 20, "Delete");
+            del.setInk(0xFFFF8A8E);
+            del.setOnClickListener(new View.OnClickListener() {
                 @Override
-                public void onClick(DialogInterface d, int w) {
-                    canvas.applyNote(existing, null);
+                public void onClick(View v) {
+                    Note gone = textOriginal;
+                    textOriginal = null;
+                    finishText(false);
+                    canvas.applyNote(gone, null);
                 }
             });
+            row.addView(del, chipGap(row));
         }
-        AlertDialog dlg = b.create();
-        dlg.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
-                | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        dlg.show();
-        edit.requestFocus();
+        textBar.addView(scroller(row, 10));
+
+        root.addView(textBar, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+        textBar.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
+                keepDraftVisible();
+            }
+        });
+        dockWrap.setVisibility(View.GONE);
+        selBar.setVisibility(View.GONE);
+        layoutChrome();
+        textEdit.requestFocus();
+        textEdit.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                android.view.inputmethod.InputMethodManager imm =
+                        (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null && textEdit != null) imm.showSoftInput(textEdit, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            }
+        }, 120);
+    }
+
+    private HorizontalScrollView scroller(View content, float topDp) {
+        HorizontalScrollView s = new HorizontalScrollView(this);
+        s.setHorizontalScrollBarEnabled(false);
+        s.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        s.addView(content);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(topDp), 0, 0);
+        s.setLayoutParams(lp);
+        return s;
+    }
+
+    private LinearLayout.LayoutParams chipGap(LinearLayout row) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.setMargins(row.getChildCount() == 0 ? 0 : dp(6), 0, 0, 0);
+        return lp;
+    }
+
+    private TextView formatChip(String label, final int bit) {
+        final TextView chip = Ui.chip(this, label, (textFmt & bit) != 0);
+        chip.setMinWidth(dp(44));
+        if (bit == Note.ITALIC) chip.setTypeface(android.graphics.Typeface.create("serif", android.graphics.Typeface.ITALIC));
+        if (bit == Note.UNDERLINE) chip.setPaintFlags(chip.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
+        chip.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                textFmt ^= bit;
+                Ui.styleChip(chip, (textFmt & bit) != 0);
+                updateDraft();
+            }
+        });
+        return chip;
+    }
+
+    private String alignName() {
+        return (textFmt & Note.CENTER) != 0 ? "Centre" : (textFmt & Note.RIGHT) != 0 ? "Right" : "Left";
+    }
+
+    /** The note as it stands in the bar right now. */
+    private Note currentNote() {
+        String text = textEdit.getText().toString();
+        Note n = buildNote(textOriginal, textStyle, text, textColor, textFs, textBx, textBy).withFont(textFont, textFmt);
+        return n.withSize(n.w, canvas.renderer().measureNoteHeight(n));
+    }
+
+    private void updateDraft() {
+        if (textBar == null) return;
+        textDraft = currentNote();
+        canvas.setDraft(textOriginal, textDraft);
+        textEdit.setTypeface(com.infinink.app.render.Fonts.typeface(textFont, textFmt & (Note.BOLD | Note.ITALIC)));
+        keepDraftVisible();
+    }
+
+    private void keepDraftVisible() {
+        if (textBar == null || textDraft == null || textBar.getHeight() == 0) return;
+        canvas.keepInView(textDraft.bounds(), insetTop + dp(72), textBar.getTop() - dp(14));
+    }
+
+    /** Closes the text bar, putting the note on the page (commit) or leaving the page as it was. */
+    private void finishText(boolean commit) {
+        if (textBar == null) return;
+        Note result = commit && textEdit.getText().toString().trim().length() > 0 ? currentNote() : null;
+        String trimmed = textEdit.getText().toString().replaceAll("\\s+$", "");
+        if (result != null) result = result.withText(trimmed, result.h);
+        android.view.inputmethod.InputMethodManager imm =
+                (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(textEdit.getWindowToken(), 0);
+        root.removeView(textBar);
+        textBar = null;
+        canvas.clearDraft();
+        dockWrap.setVisibility(View.VISIBLE);
+        Note original = textOriginal;
+        textOriginal = null;
+        textDraft = null;
+        if (commit) {
+            int tool = textStyle == Note.STICKY ? ToolBox.NOTE : ToolBox.TEXT;
+            tools.setHue(tool, textColor);
+            tools.textFont = textFont;
+            tools.textFmt = textFmt;
+            tools.save();
+            refreshDock();
+            if (result == null) {
+                if (original != null) canvas.applyNote(original, null); // emptied: the note goes
+            } else if (original == null || !sameNote(original, result)) {
+                result = result.withSize(result.w, canvas.renderer().measureNoteHeight(result));
+                canvas.applyNote(original, result);
+            }
+        }
+        onSelectionChanged(canvas.selection());
+    }
+
+    private static boolean sameNote(Note a, Note b) {
+        return a.text.equals(b.text) && a.font.equals(b.font) && a.fmt == b.fmt && a.paper == b.paper
+                && a.ink == b.ink && a.fontSize == b.fontSize && a.w == b.w;
     }
 
     private Note buildNote(Note existing, int style, String text, int color, float fontSize, float bx, float by) {
@@ -1190,9 +1432,30 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         // Dark sticky colours get light text.
         if (n.style == Note.STICKY) {
             int ink2 = Board.isDark(n.paper) ? 0xFFF2F2F5 : 0xFF1C1C1E;
-            n = new Note(n.style, n.x, n.y, n.w, n.h, n.fontSize, n.paper, ink2, n.text);
+            n = new Note(n.style, n.x, n.y, n.w, n.h, n.fontSize, n.paper, ink2, n.text, n.font, n.fmt);
         }
         return n.withSize(n.w, ink.measureNoteHeight(n));
+    }
+
+    /** Stacking order for the selection: in front of or behind everything else. */
+    private void showLayersMenu(View anchor) {
+        PopupMenu pm = new PopupMenu(this, anchor, Gravity.TOP);
+        Menu m = pm.getMenu();
+        m.add(0, com.infinink.app.model.Arrange.FRONT, 0, "Bring to front");
+        m.add(0, com.infinink.app.model.Arrange.FORWARD, 0, "Bring forward");
+        m.add(0, com.infinink.app.model.Arrange.BACKWARD, 0, "Send backward");
+        m.add(0, com.infinink.app.model.Arrange.BACK, 0, "Send to back");
+        pm.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(MenuItem item) {
+                canvas.arrange(item.getItemId());
+                String[] said = {"In front of everything", "Moved up one", "Moved down one", "Behind everything"};
+                showHint(said[item.getItemId()]
+                        + ". To pick something hidden behind a picture, draw a lasso loop round it.");
+                return true;
+            }
+        });
+        pm.show();
     }
 
     // ---- menu -----------------------------------------------------------------------------------
@@ -1290,6 +1553,8 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                 + "• Hold still at the end of a line to snap it into a clean line, circle, triangle, box or polygon.\n\n"
                 + "• With a pen, your palm and fingers are ignored while writing. The pen's button (or eraser end) erases.\n\n"
                 + "• Press and hold on anything you've put down (a picture, a note, a drawing) to pick it up. Tap it again to edit it. Tap empty paper to put it down and get your pen back.\n\n"
+                + "• Text and notes: pick fonts, colours, sizes and bold / italic / underline in the bar at the bottom while you type; the note changes on the page as you go.\n\n"
+                + "• Layers: select something and tap the layers button to send it behind or bring it in front of other things.\n\n"
                 + "• Lasso: draw round things to select them, then drag, resize, recolour, duplicate or delete. Corner dots resize, side dots stretch, and two fingers on the selection turn it.\n\n"
                 + "• Tap the zoom number to jump between 100% and seeing everything.\n\n"
                 + "• Everything saves by itself, on your device only.";

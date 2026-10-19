@@ -17,7 +17,7 @@ public final class Icons {
             UNDO = 20, REDO = 21, BACK = 22, MORE = 23, TRASH = 24, DUPLICATE = 25, PLUS = 26, CHECK = 27,
             CLOSE = 28, SHARE = 29, EDIT = 30, FIT = 31, PALETTE = 32,
             S_LINE = 40, S_ARROW = 41, S_RECT = 42, S_ELLIPSE = 43, S_TRIANGLE = 44, S_DIAMOND = 45, FILL = 46,
-            ROTATE = 50, FLIP = 51, EYEDROPPER = 52, CROP = 53, WAND = 54, CUTOUT = 55;
+            ROTATE = 50, FLIP = 51, EYEDROPPER = 52, CROP = 53, WAND = 54, CUTOUT = 55, LAYERS = 56;
 
     private static final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -406,6 +406,28 @@ public final class Icons {
                 p.cubicTo(6.5f, 15f, 17.5f, 15f, 18.5f, 21f);
                 p.close();
                 c.drawPath(p, fill);
+                break;
+            case LAYERS:
+                // Three sheets stacked; the top one in the accent colour.
+                p.moveTo(12f, 15.5f);
+                p.lineTo(21f, 11f);
+                p.moveTo(3f, 11f);
+                p.lineTo(12f, 15.5f);
+                c.drawPath(p, line);
+                p.rewind();
+                p.moveTo(3f, 15f);
+                p.lineTo(12f, 19.5f);
+                p.lineTo(21f, 15f);
+                c.drawPath(p, line);
+                p.rewind();
+                p.moveTo(12f, 3f);
+                p.lineTo(21f, 7.5f);
+                p.lineTo(12f, 12f);
+                p.lineTo(3f, 7.5f);
+                p.close();
+                fill.setColor(accent);
+                c.drawPath(p, fill);
+                c.drawPath(p, line);
                 break;
             case FILL:
                 r.set(4f, 4f, 20f, 20f);

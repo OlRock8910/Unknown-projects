@@ -21,6 +21,7 @@ import com.infinink.app.ink.FloatList;
 import com.infinink.app.ink.Geometry;
 import com.infinink.app.ink.ShapeRecognizer;
 import com.infinink.app.ink.Shapes;
+import com.infinink.app.model.Arrange;
 import com.infinink.app.model.Board;
 import com.infinink.app.model.Box;
 import com.infinink.app.model.Brush;
@@ -139,6 +140,9 @@ public final class CanvasView extends View implements ImageCache.Listener {
     // Press and hold on something to pick it up; tap a picked-up picture or note to edit it.
     private static final long PRESS_FINGER_MS = 450, PRESS_PEN_MS = 650;
     private Item pressItem;
+
+    // A note being typed: drawn live in place of the one it will replace (if any).
+    private Note draft, draftOf;
     private boolean pickedByPress;
     private boolean tapToEdit;
     private int twId0 = -1, twId1 = -1;
@@ -295,7 +299,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
         if (scene != null && c.isHardwareAccelerated()) {
             if (sceneDirty) {
                 ink.setViewScale(vp.scale);
-                scene.record(board.items, selection.isEmpty() ? null : selectionSet, ink);
+                scene.record(board.items, hiddenFromScene(), ink);
                 sceneDirty = false;
             }
             scene.draw(c);
@@ -304,7 +308,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
             Box visible = vp.visible(w, h);
             for (int i = 0, n = board.items.size(); i < n; i++) {
                 Item it = board.items.get(i);
-                if (!selectionSet.contains(it) && it.bounds().intersects(visible)) ink.draw(c, it);
+                if (!selectionSet.contains(it) && it != draftOf && it.bounds().intersects(visible)) ink.draw(c, it);
             }
         }
 
@@ -322,6 +326,8 @@ public final class CanvasView extends View implements ImageCache.Listener {
             for (Item it : selection) ink.draw(c, it);
             c.restore();
         }
+
+        if (draft != null) ink.draw(c, draft);
 
         if (mode == M_DRAW && live.size() > 0) {
             ink.setViewScale(vp.scale);
@@ -386,6 +392,56 @@ public final class CanvasView extends View implements ImageCache.Listener {
             ui.setStrokeWidth(1.2f * density);
             c.drawCircle(sx, sy, eraseScreenR, ui);
         }
+    }
+
+    /** Items the display list leaves out because they are drawn separately on top. */
+    private Set<Item> hiddenFromScene() {
+        if (draftOf == null) return selection.isEmpty() ? null : selectionSet;
+        Set<Item> s = Collections.newSetFromMap(new IdentityHashMap<Item, Boolean>());
+        s.addAll(selectionSet);
+        s.add(draftOf);
+        return s;
+    }
+
+    /** Shows a note being typed, live, in place of original (null for a new note). */
+    public void setDraft(Note original, Note note) {
+        if (original != draftOf) sceneDirty = true;
+        draftOf = original;
+        draft = note;
+        invalidate();
+    }
+
+    public void clearDraft() {
+        if (draftOf != null) sceneDirty = true;
+        draft = null;
+        draftOf = null;
+        invalidate();
+    }
+
+    /** Moves the page, if needed, so box is on screen between top and bottom (screen pixels). */
+    public void keepInView(Box b, float top, float bottom) {
+        float st = vp.toScreenY(b.minY), sb = vp.toScreenY(b.maxY);
+        float sl = vp.toScreenX(b.minX), sr = vp.toScreenX(b.maxX);
+        float dy = 0, dx = 0, m = 16 * density;
+        if (sb > bottom) dy = bottom - sb;
+        if (st + dy < top) dy = top - st; // too tall to fit: show its top
+        if (sr > getWidth() - m) dx = getWidth() - m - sr;
+        if (sl + dx < m) dx = m - sl;
+        if (dx != 0 || dy != 0) {
+            vp.panBy(dx, dy);
+            invalidate();
+            viewChanged();
+        }
+    }
+
+    /** Restacks the selection: Arrange.FRONT, FORWARD, BACKWARD or BACK. */
+    public void arrange(int how) {
+        if (selection.isEmpty()) return;
+        Change c = new Change();
+        c.reorder(board.items, Arrange.order(board.items, selection, how));
+        if (c.isEmpty()) return;
+        history.push(c);
+        contentChanged();
     }
 
     /** Arms the eyedropper: the next touch on the page picks the colour under it. */
