@@ -13,7 +13,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=${OUT:-$HERE/build}
 ANDROID_JAR=${ANDROID_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}
 DX=${DX:-$(command -v dalvik-exchange || command -v dx)}
-VERSION_NAME=${VERSION_NAME:-1.0}
+VERSION_NAME=${VERSION_NAME:-1.1}
 # The version code is minutes since 2020 at the last commit, so every newer
 # build installs over an older one, whichever repository it was built in.
 COMMIT_TIME=$(git -C "$HERE" log -1 --format=%ct 2>/dev/null || date +%s)

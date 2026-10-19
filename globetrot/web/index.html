@@ -14,15 +14,21 @@
   <section id="view-map" class="view active" aria-label="Map">
     <svg id="map" role="img" aria-label="World map"></svg>
     <div id="labels" aria-hidden="true"></div>
+    <div id="photo-layer" aria-hidden="true"></div>
     <header class="map-top">
       <button class="brand" data-a="tab" data-tab="stats">
         <span class="brand-globe">🌍</span>
         <span class="brand-count"><b id="top-count">0</b> <span id="top-label">countries</span></span>
         <span class="brand-pct" id="top-pct">0%</span>
       </button>
-      <button class="round" data-a="search" aria-label="Find a country">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-      </button>
+      <div class="top-btns">
+        <button class="round" id="photo-btn" data-a="photos" aria-label="Photos">
+          <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </button>
+        <button class="round" data-a="search" aria-label="Find a country">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        </button>
+      </div>
     </header>
     <div class="map-tools">
       <div class="legend">
@@ -39,7 +45,7 @@
       </div>
     </div>
     <div id="hint" class="hint" hidden>
-      <b>Tap a country</b> to mark it. <b>Long-press</b> to pin a place. Pinch to zoom.
+      <b>Tap a country</b> to mark it. <b>Long-press</b> to pin a place. Tap 📷 to put your photos on the map.
       <button data-a="hint-ok">Got it</button>
     </div>
   </section>
@@ -78,11 +84,15 @@
     <div id="search-results"></div>
   </div>
 
+  <div id="gallery" class="overlay" hidden></div>
+  <div id="viewer" class="overlay" hidden></div>
   <div id="modal" class="overlay modal" hidden></div>
   <div id="toast" role="status"></div>
   <input id="file-in" type="file" accept="application/json,.json,text/plain" hidden>
+  <input id="photo-in" type="file" accept="image/*" multiple hidden>
 
   <script src="js/world.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/photos.js"></script>
 </body>
 </html>

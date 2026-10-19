@@ -6,8 +6,10 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Vibrator;
 import android.util.Base64;
@@ -16,25 +18,36 @@ import android.view.Window;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Hosts the map (plain HTML/JS in assets/) in a full-screen WebView and lends
- * it what a WebView lacks: the share sheet, the clipboard, vibration and a
- * file picker for restoring backups. No internet permission; everything stays
- * on the phone.
+ * it what a WebView lacks: the share sheet, the clipboard, vibration, a file
+ * picker, and the phone's photos (see Photos). No internet permission;
+ * everything stays on the phone.
  */
 public class MainActivity extends Activity {
     private static final int BG = Color.rgb(10, 15, 30);
     private static final int PICK_FILE = 1;
+    private static final int ASK_PHOTOS = 2;
 
     private WebView web;
     private ValueCallback<Uri[]> pending;
+    private Photos photos;
+    private volatile String scanResult = "[]";
+    private volatile boolean scanning;
+    private boolean scanAfterAsking;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,17 +76,29 @@ public class MainActivity extends Activity {
         s.setTextZoom(100);
         s.setSupportZoom(false);
 
-        web.setWebViewClient(new WebViewClient());
+        photos = new Photos(this);
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                Uri u = req.getUrl();
+                if (Photos.HOST.equals(u.getHost())) return photos.serve(u);
+                return null;
+            }
+        });
         web.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (pending != null) pending.onReceiveValue(null);
                 pending = callback;
+                String[] accept = params.getAcceptTypes();
+                boolean images = accept != null && accept.length > 0 && accept[0].startsWith("image/");
                 Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
                 pick.addCategory(Intent.CATEGORY_OPENABLE);
-                pick.setType("*/*"); // backups saved to Drive often lose their .json type
+                // Backups saved to Drive often lose their .json type, so those accept anything.
+                pick.setType(images ? "image/*" : "*/*");
+                if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 try {
-                    startActivityForResult(Intent.createChooser(pick, "Restore a Globetrot backup"), PICK_FILE);
+                    startActivityForResult(Intent.createChooser(pick, images ? "Add photos" : "Restore a Globetrot backup"), PICK_FILE);
                 } catch (ActivityNotFoundException e) {
                     pending = null;
                     return false;
@@ -89,11 +114,98 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == PICK_FILE && pending != null) {
-            pending.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            Uri[] picked = null;
+            // parseResult only knows about one file; several come back as ClipData.
+            if (resultCode == RESULT_OK && data != null && data.getClipData() != null) {
+                ClipData clip = data.getClipData();
+                picked = new Uri[clip.getItemCount()];
+                for (int i = 0; i < picked.length; i++) picked[i] = clip.getItemAt(i).getUri();
+            } else {
+                picked = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+            }
+            pending.onReceiveValue(picked);
             pending = null;
             return;
         }
         super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    // ------------------------------------------------------------ photo access
+
+    private boolean granted(String permission) {
+        return Build.VERSION.SDK_INT < 23 || checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** Can we see at least some photos? (Android 14 lets people share just a few.) */
+    private boolean canSeePhotos() {
+        if (Build.VERSION.SDK_INT >= 34) {
+            return granted("android.permission.READ_MEDIA_IMAGES") || granted("android.permission.READ_MEDIA_VISUAL_USER_SELECTED");
+        }
+        if (Build.VERSION.SDK_INT >= 33) return granted("android.permission.READ_MEDIA_IMAGES");
+        return granted("android.permission.READ_EXTERNAL_STORAGE");
+    }
+
+    /** Everything a full scan wants: all photos, and their locations on Android 10+. */
+    private String[] missingPermissions() {
+        List<String> want = new ArrayList<String>();
+        if (Build.VERSION.SDK_INT >= 33) {
+            want.add("android.permission.READ_MEDIA_IMAGES");
+            if (Build.VERSION.SDK_INT >= 34) want.add("android.permission.READ_MEDIA_VISUAL_USER_SELECTED");
+        } else {
+            want.add("android.permission.READ_EXTERNAL_STORAGE");
+        }
+        if (Build.VERSION.SDK_INT >= 29) want.add("android.permission.ACCESS_MEDIA_LOCATION");
+        List<String> missing = new ArrayList<String>();
+        for (String p : want) if (!granted(p)) missing.add(p);
+        // On Android 14 a partial choice leaves READ_MEDIA_IMAGES ungranted; asking
+        // again lets the person pick more photos or allow all of them.
+        if (Build.VERSION.SDK_INT >= 34 && !granted("android.permission.READ_MEDIA_IMAGES")
+                && !missing.contains("android.permission.READ_MEDIA_VISUAL_USER_SELECTED")) {
+            missing.add("android.permission.READ_MEDIA_VISUAL_USER_SELECTED");
+        }
+        return missing.toArray(new String[0]);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        if (requestCode != ASK_PHOTOS || !scanAfterAsking) return;
+        scanAfterAsking = false;
+        if (canSeePhotos()) startScan();
+        else emit("{\"state\":\"denied\"}");
+    }
+
+    private void startScan() {
+        if (scanning) return;
+        scanning = true;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String result = "[]";
+                try {
+                    result = photos.scan(new Photos.Progress() {
+                        @Override
+                        public void update(int done, int total) {
+                            emit("{\"state\":\"progress\",\"done\":" + done + ",\"total\":" + total + "}");
+                        }
+                    });
+                } finally {
+                    scanResult = result;
+                    scanning = false;
+                    boolean location = Build.VERSION.SDK_INT < 29 || granted("android.permission.ACCESS_MEDIA_LOCATION");
+                    emit("{\"state\":\"done\",\"total\":" + photos.lastTotal + ",\"location\":" + location + "}");
+                }
+            }
+        }, "photo-scan").start();
+    }
+
+    /** Tells the page how a scan is going (see window.onPhotoScan in photos.js). */
+    private void emit(final String json) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                web.evaluateJavascript("window.onPhotoScan && window.onPhotoScan(" + JSONObject.quote(json) + ")", null);
+            }
+        });
     }
 
     private void open(Intent i) {
@@ -162,6 +274,45 @@ public class MainActivity extends Activity {
                     if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Globetrot", text));
                 }
             });
+        }
+
+        @JavascriptInterface
+        public String hasPhotoAccess() {
+            return canSeePhotos() ? "yes" : "no";
+        }
+
+        /** Finds photos with a location; ask=true may show Android's permission prompt first. */
+        @JavascriptInterface
+        public void scanPhotos(final boolean ask) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    String[] missing = missingPermissions();
+                    if (ask && missing.length > 0 && Build.VERSION.SDK_INT >= 23) {
+                        scanAfterAsking = true;
+                        requestPermissions(missing, ASK_PHOTOS);
+                    } else if (canSeePhotos()) {
+                        startScan();
+                    } else {
+                        emit("{\"state\":\"denied\"}");
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String photoScanResult() {
+            return scanResult;
+        }
+
+        @JavascriptInterface
+        public void savePhoto(String name, String base64) {
+            photos.save(name, base64);
+        }
+
+        @JavascriptInterface
+        public void deletePhoto(String name) {
+            photos.delete(name);
         }
 
         @JavascriptInterface

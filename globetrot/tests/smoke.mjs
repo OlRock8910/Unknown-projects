@@ -182,6 +182,127 @@ await page.evaluate(() => openSheet('JP'));
 check(await page.evaluate(() => window.appBack() === true && !sheetId), 'back closes the sheet');
 check(await page.evaluate(() => window.appBack() === false), 'back on the map leaves the app');
 
+// ---- photos: the map projection puts places in the right countries
+const places = await page.evaluate(() => [[2.35, 48.86], [-74.0, 40.71], [151.21, -33.87], [135.77, 35.01], [-43.21, -22.95], [37.62, 55.75], [103.85, 1.29], [-160, -30]]
+  .map(([lon, lat]) => countryAt(...project(lon, lat))));
+check(places.join(' ') === 'FR US AU JP BR RU SG ', `photo locations land in the right country (${places.join(' ')})`);
+
+// ---- photos added by hand: ones with GPS go where they were taken
+const fx = (n) => path.join(here, 'fixtures', n);
+await page.evaluate(() => { closeSheet(); showTab('map'); });
+await page.setInputFiles('#photo-in', [fx('kyoto.jpg'), fx('rio.jpg'), fx('no-location.jpg')]);
+await page.waitForFunction(() => photoDb.a.length === 2, null, { timeout: 10000 });
+const added = await page.evaluate(() => allPhotos().map((p) => [p.cc, new Date(p.t).getFullYear(), p.gps]));
+check(JSON.stringify(added) === JSON.stringify([['JP', 2024, true], ['BR', 2022, true]]), `GPS photos placed in Japan and Brazil, newest first (${JSON.stringify(added)})`);
+check(await page.evaluate(() => /no location/.test(document.querySelector('#toast').textContent)), 'the photo without a location is skipped with a note');
+// From a country, a photo without GPS joins that country.
+await page.evaluate(() => openSheet('PE', { expand: true }));
+await page.click('#sheet [data-a="add-photos"]').catch(() => {});
+await page.setInputFiles('#photo-in', [fx('no-location.jpg')]);
+await page.waitForFunction(() => photoDb.a.length === 3, null, { timeout: 10000 });
+check(await page.evaluate(() => photosIn('PE').length === 1 && !photosIn('PE')[0].gps), 'a photo with no location goes in the country it was added to');
+check(await page.locator('#sheet .ph-strip .ph').count() === 1, 'the country card shows its photo');
+await page.click('#sheet .ph-strip .ph');
+await page.waitForSelector('#viewer .vw-img');
+check(await page.evaluate(() => document.querySelector('#viewer .vw-img').src.startsWith('blob:')), 'the viewer opens the photo');
+await page.click('#viewer [data-v="close"]');
+await page.evaluate(() => closeSheet());
+// Markers on the map, and tapping one opens it.
+await page.evaluate(() => { flyTo('JP'); });
+await page.waitForTimeout(900);
+const pm = await page.evaluate(() => { const el = [...document.querySelectorAll('.pm')].find((m) => m._cluster.photos[0].cc === 'JP'); return el && { x: el._sx, y: el._sy }; });
+check(!!pm, 'a photo marker sits on Japan');
+if (pm) {
+  await page.touchscreen.tap(pm.x, pm.y);
+  await page.waitForTimeout(350);
+  check(await page.evaluate(() => !viewerEl.hidden && viewList[viewIndex].cc === 'JP'), 'tapping the marker opens the photo');
+  await shot('6-photo');
+  check(await page.evaluate(() => window.appBack() && viewerEl.hidden), 'back closes the photo');
+}
+// Added photos survive a reload (IndexedDB).
+await page.reload();
+await page.waitForSelector('.country');
+await page.waitForFunction(() => Object.keys(blobUrls).length === 6, null, { timeout: 5000 }).catch(() => {});
+check(await page.evaluate(() => allPhotos().length === 3 && allPhotos().every((p) => photoUrl(p).startsWith('blob:'))), 'added photos survive a reload');
+// Removing one, then undo.
+await page.evaluate(() => openViewer(photosIn('BR'), 0));
+await page.click('#viewer [data-v="hide"]');
+check(await page.evaluate(() => photosIn('BR').length === 0), 'remove a photo');
+await page.click('#toast button');
+check(await page.evaluate(() => photosIn('BR').length === 1), 'undo brings it back');
+await page.evaluate(() => closeViewer());
+
+// ---- the Android app: scanning the phone's gallery (Native stand-in)
+const phone = await browser.newPage({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2, hasTouch: true });
+phone.on('pageerror', (e) => errors.push('phone: ' + e.message));
+const jpg = fs.readFileSync(fx('kyoto.jpg'));
+await phone.route('https://globetrot.local/**', (r) => r.fulfill({ status: 200, contentType: 'image/jpeg', body: jpg }));
+await phone.addInitScript(() => {
+  const t = Date.UTC(2023, 6, 1);
+  window.__granted = false;
+  window.Native = {
+    share() {}, copy() {}, vibrate() {}, shareFile() {},
+    savePhoto(name) { (window.__saved ||= []).push(name); },
+    deletePhoto() {},
+    hasPhotoAccess: () => (window.__granted ? 'yes' : 'no'),
+    scanPhotos(ask) {
+      if (!ask && !window.__granted) return;
+      window.__granted = true;
+      setTimeout(() => window.onPhotoScan(JSON.stringify({ state: 'progress', done: 50, total: 120 })), 10);
+      setTimeout(() => window.onPhotoScan(JSON.stringify({ state: 'done', total: 120, location: true })), 60);
+    },
+    // Kyoto ×3, the Eiffel Tower, Machu Picchu, mid-Pacific.
+    photoScanResult: () => JSON.stringify([[11, 35.0116, 135.7681, t], [12, 35.0, 135.77, t - 1], [13, 34.99, 135.78, t - 2], [21, 48.8584, 2.2945, t], [31, -13.1631, -72.545, t], [41, -30, -160, t]]),
+  };
+});
+await phone.goto(url);
+await phone.waitForSelector('.country');
+await phone.evaluate(() => { state.hint = true; save(true); });
+await phone.click('[data-a="photos"]');
+await phone.click('#modal [data-m="scan"]');
+await phone.waitForSelector('#modal .flag-row', { timeout: 5000 });
+check(await phone.evaluate(() => document.querySelector('#modal .flag-row').textContent === ['JP', 'FR', 'PE'].map(flag).join('')), 'the scan offers Japan, France and Peru');
+await phone.click('#modal [data-m="ok"]');
+check(await phone.evaluate(() => ['JP', 'FR', 'PE'].every(visited) && photoDb.g.length === 6), 'scan marks them and keeps 6 photos');
+check(await phone.evaluate(() => photoDb.g.find((r) => r[0] === 41)[4] === ''), 'a photo at sea belongs to no country');
+check(await phone.evaluate(() => photoUrl(allPhotos()[0]).startsWith('https://globetrot.local/g/')), 'gallery photos load from the app');
+await phone.evaluate(() => { cam.k = kMin * 1.3; cam.x = vw / 2 - 1700 * cam.k; clampCam(); render(); });
+await phone.waitForTimeout(400);
+const cluster = await phone.evaluate(() => [...document.querySelectorAll('.pm')].map((m) => m._cluster.photos.length).sort().join(','));
+check(cluster.includes('3'), `the three Kyoto photos group into one marker (${cluster})`);
+await phone.waitForTimeout(300);
+if (shots) await phone.screenshot({ path: path.join(shotDir, '7-photos-map.png') });
+await phone.evaluate(() => openSheet('JP'));
+await phone.waitForTimeout(400);
+check(await phone.locator('#sheet .ph-strip .ph').count() === 3, 'Japan’s card shows its three photos');
+if (shots) await phone.screenshot({ path: path.join(shotDir, '8-photos-sheet.png') });
+// Hiding a gallery photo keeps it hidden after the next scan.
+await phone.evaluate(() => { closeSheet(); openViewer(photosIn('FR'), 0); });
+await phone.click('#viewer [data-v="hide"]');
+await phone.evaluate(() => scanPhone(true));
+await phone.waitForTimeout(200);
+check(await phone.evaluate(() => photoDb.g.length === 5 && !photosIn('FR').length), 'hidden photos stay hidden after a rescan');
+// A big gallery opens a screenful at a time.
+const counts = await phone.evaluate(async () => {
+  const keep = photoDb.g;
+  photoDb.g = Array.from({ length: 500 }, (_, i) => [1000 + i, 1500, 400, i, 'JP']);
+  photoList = null;
+  openGallery(allPhotos(), 'All');
+  const first = document.querySelectorAll('.gal-grid .ph').length;
+  const grid = document.querySelector('.gal-grid');
+  grid.scrollTop = grid.scrollHeight;
+  grid.dispatchEvent(new Event('scroll'));
+  const second = document.querySelectorAll('.gal-grid .ph').length;
+  closeGallery();
+  photoDb.g = keep;
+  photoList = null;
+  return [first, second];
+});
+check(counts[0] === 180 && counts[1] === 360, `big galleries load in pages (${counts})`);
+await phone.click('.tabbar [data-tab="stats"]');
+check(await phone.locator('.photo-card .ph').count() > 0, 'stats show the photos');
+if (shots) { await phone.waitForTimeout(300); await phone.screenshot({ path: path.join(shotDir, '9-photos-stats.png') }); }
+
 if (errors.length) fail('page errors:\n  ' + errors.join('\n  '));
 await browser.close();
 if (!process.exitCode) console.log('all good');

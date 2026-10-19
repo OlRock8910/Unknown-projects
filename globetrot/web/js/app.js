@@ -289,6 +289,7 @@ function render() {
     const p = pinById(g.dataset.pin);
     if (p) g.setAttribute('transform', `translate(${(p.x * cam.k + cam.x).toFixed(1)} ${(p.y * cam.k + cam.y).toFixed(1)})`);
   }
+  placePhotos();
   scheduleLabels();
   saveCam();
 }
@@ -554,6 +555,11 @@ svg.addEventListener('wheel', (e) => {
 
 function onMapTap(t) {
   if (t.pin) { openPin(t.pin); return; }
+  if (!quickMark) {
+    const r = svg.getBoundingClientRect();
+    const hit = photoAt(t.x - r.left, t.y - r.top);
+    if (hit) { openCluster(hit); return; }
+  }
   if (!t.id) { closeSheet(); return; }
   if (quickMark) {
     setStatus(t.id, visited(t.id) ? '' : 'been');
@@ -581,6 +587,7 @@ $('#view-map').addEventListener('click', (e) => {
   else if (a === 'quick') setQuick(!quickMark);
   else if (a === 'hint-ok') { state.hint = true; save(); $('#hint').hidden = true; }
   else if (a === 'search') openSearch();
+  else if (a === 'photos') photoMenu();
 });
 
 let quickMark = false;
@@ -722,6 +729,7 @@ function renderSheet() {
   const s = e.s || '';
   const sub = [c.c, c.s ? `Part of ${c.s}` : c.u ? '' : 'Territory', c.a >= 1 ? `${fmt(c.a)} km²` : ''].filter(Boolean).join(' · ');
   const pins = state.pins.filter((p) => p.cc === id);
+  const pics = photosIn(id);
   const st = (k) => `<button class="st ${k}${s === k ? ' on' : ''}" data-s="${k}" aria-pressed="${s === k}"><i>${STATUS[k].icon}</i>${STATUS[k].label}</button>`;
   let html = `<div class="grip"></div>
     <div class="sh-head">
@@ -730,15 +738,20 @@ function renderSheet() {
       <button class="icon-btn fav" data-a="fav" aria-pressed="${!!e.f}" aria-label="Favourite">${ICON.star}</button>
       <button class="icon-btn" data-a="close" aria-label="Close">${ICON.close}</button>
     </div>
-    <div class="status-row">${st('been')}${st('lived')}${st('want')}</div>`;
+    <div class="status-row">${st('been')}${st('lived')}${st('want')}</div>
+    ${photoStrip(pics, 6)}`;
   if (!sheetExpanded) {
-    const extra = [e.y?.length ? e.y.join(', ') : '', pins.length ? `${pins.length} place${pins.length > 1 ? 's' : ''}` : '', e.n ? 'notes' : ''].filter(Boolean).join(' · ');
-    html += `<button class="more-btn" data-a="expand">${extra ? esc(extra) + ' · ' : ''}Years, places & notes ${ICON.down}</button>`;
+    const extra = [e.y?.length ? e.y.join(', ') : '', pics.length ? `${fmt(pics.length)} photo${pics.length > 1 ? 's' : ''}` : '', pins.length ? `${pins.length} place${pins.length > 1 ? 's' : ''}` : '', e.n ? 'notes' : ''].filter(Boolean).join(' · ');
+    html += `<button class="more-btn" data-a="expand">${extra ? esc(extra) + ' · ' : ''}Years, photos & notes ${ICON.down}</button>`;
   } else {
     html += `<div class="sh-sec"><h3>${s === 'want' ? 'Hoping to go in' : 'Years visited'}</h3><div class="years">
         ${(e.y || []).map((y) => `<span class="year">${y}<button data-a="rm-year" data-y="${y}" aria-label="Remove ${y}">${ICON.close}</button></span>`).join('')}
         <span class="year-add"><input id="year-in" inputmode="numeric" maxlength="4" placeholder="${new Date().getFullYear()}" aria-label="Year"><button data-a="add-year">Add</button></span>
       </div></div>
+      <div class="sh-sec"><h3>Photos${pics.length ? ' · ' + fmt(pics.length) : ''}</h3>
+        ${pics.length ? '' : '<p class="muted" style="margin-bottom:8px">Photos you took here show up on the map and in this card.</p>'}
+        <div class="years">${pics.length > 5 ? '<button class="chip-btn" data-a="all-photos">See all</button>' : ''}<button class="chip-btn" data-a="add-photos">＋ Add photos</button></div>
+      </div>
       <div class="sh-sec"><h3>Places</h3><div class="places">
         ${pins.length ? pins.map((p) => `<div class="place"><span>📍 ${esc(p.name)}</span><button class="go" data-a="go-pin" data-pin="${esc(p.id)}">Show</button><button class="icon-btn" data-a="rm-pin" data-pin="${esc(p.id)}" aria-label="Remove ${esc(p.name)}">${ICON.close}</button></div>`).join('')
           : '<p class="muted">Long-press the map to pin a city or spot you loved.</p>'}
@@ -754,6 +767,11 @@ function renderSheet() {
 sheet.addEventListener('click', (ev) => {
   const id = sheetId;
   if (!id) return;
+  const ph = ev.target.closest('[data-ph]');
+  if (ph) {
+    stripTap(ph, photosIn(id), `${flag(id)} ${BY_ID[id].n}`, id);
+    return;
+  }
   const sb = ev.target.closest('[data-s]');
   if (sb) {
     const k = sb.dataset.s;
@@ -775,6 +793,8 @@ sheet.addEventListener('click', (ev) => {
     vibrate(10);
     changed(id);
   } else if (a === 'add-year') addYear();
+  else if (a === 'add-photos') pickPhotos(id);
+  else if (a === 'all-photos') openGallery(photosIn(id), `${flag(id)} ${BY_ID[id].n}`, id);
   else if (a === 'rm-year') {
     const e = entry(id);
     e.y = (e.y || []).filter((y) => y !== +b.dataset.y);
@@ -939,6 +959,21 @@ $('#list-body').addEventListener('click', (e) => {
 
 // ---------------------------------------------------------------- stats
 
+function photoCard() {
+  const { n, countries } = photoSummary();
+  if (!n) {
+    return `<div class="card photo-card"><h3>Photos</h3>
+      <p class="muted">${canScan() ? 'Find the photos on your phone that have a location and see them on the map, where you took them.' : 'Add your travel photos and see them on the map, where you took them.'}</p>
+      <div class="actions" style="margin-top:12px">${canScan() ? '<button class="btn primary" data-a="scan">📷 Find my photos</button>' : '<button class="btn primary" data-a="add-photos">📷 Add photos</button>'}</div></div>`;
+  }
+  return `<div class="card photo-card"><h3>Photos · ${fmt(n)} from ${countries} ${countries === 1 ? 'country' : 'countries'}</h3>
+    ${photoStrip(allPhotos(), 8)}
+    <div class="actions" style="margin-top:10px">
+      ${canScan() ? '<button class="btn" data-a="scan">Look for new</button>' : ''}
+      <button class="btn" data-a="add-photos"${canScan() ? '' : ' style="grid-column:span 2"'}>＋ Add photos</button>
+    </div></div>`;
+}
+
 function renderStats() {
   dirty.stats = false;
   const s = stats();
@@ -987,6 +1022,7 @@ function renderStats() {
         <p>${next ? `${next[0] - s.un} more to reach ${next[1]} ${next[2]}` : 'You have been everywhere. Incredible.'}</p>
         <div class="bar"><i style="width:${(toNext * 100).toFixed(1)}%"></i></div></div>
     </div>
+    ${photoCard()}
     <div class="tiles">${tiles.map(([v, l]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('')}</div>
     <div class="card"><h3>Continents</h3>${conts}</div>
     <div class="card"><h3>Badges · ${gotCount} of ${ACHIEVEMENTS.length}</h3><div class="badges">${badges.join('')}</div></div>
@@ -1005,6 +1041,8 @@ function renderStats() {
 }
 
 $('#stats-body').addEventListener('click', (e) => {
+  const ph = e.target.closest('[data-ph]');
+  if (ph) { stripTap(ph, allPhotos(), 'All photos'); return; }
   const b = e.target.closest('[data-a]');
   if (!b) return;
   const a = b.dataset.a;
@@ -1013,6 +1051,8 @@ $('#stats-body').addEventListener('click', (e) => {
   else if (a === 'export') exportBackup();
   else if (a === 'import') importBackup();
   else if (a === 'reset') resetAll();
+  else if (a === 'scan') { scanPhone(false); showScanProgress(0, 0); }
+  else if (a === 'add-photos') pickPhotos('');
 });
 
 // ---------------------------------------------------------------- sharing & backup
@@ -1240,6 +1280,7 @@ function resetAll() {
 const searchEl = $('#search');
 function openSearch() {
   closeSheet();
+  closeGallery();
   searchEl.hidden = false;
   $('#search-q').value = '';
   renderSearch();
@@ -1317,14 +1358,14 @@ modalEl.addEventListener('keydown', (e) => {
 
 const toastEl = $('#toast');
 let toastTimer = 0;
-function toast(msg, onUndo) {
-  toastEl.innerHTML = `<span>${esc(msg)}</span>${onUndo ? '<button>Undo</button>' : ''}`;
+function toast(msg, onUndo, label = 'Undo', ms) {
+  toastEl.innerHTML = `<span>${esc(msg)}</span>${onUndo ? `<button>${esc(label)}</button>` : ''}`;
   toastEl.classList.toggle('undo', !!onUndo);
   toastEl.classList.add('show');
   const b = $('button', toastEl);
   if (b) b.onclick = () => { onUndo(); hideToast(); vibrate(8); };
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, onUndo ? 3800 : 2200);
+  toastTimer = setTimeout(hideToast, ms || (onUndo ? 3800 : 2200));
 }
 function hideToast() {
   toastEl.classList.remove('show');
@@ -1339,7 +1380,7 @@ function vibrate(ms) {
 
 // Android back button: close whatever is open, then go back to the map.
 window.appBack = () => {
-  if (closeModal() || closeSearch() || closeSheet()) return true;
+  if (closeModal() || closeViewer() || closeGallery() || closeSearch() || closeSheet()) return true;
   if (quickMark) { setQuick(false); return true; }
   if (currentTab !== 'map') { showTab('map'); return true; }
   return false;
@@ -1352,8 +1393,11 @@ window.addEventListener('resize', () => { measure(); draw(); });
 
 // ---------------------------------------------------------------- start
 
-buildMap();
-measure();
-initialView();
-updateCounter();
-if (!state.hint) $('#hint').hidden = false;
+// After photos.js has loaded too, since the map draws its photos.
+document.addEventListener('DOMContentLoaded', () => {
+  buildMap();
+  measure();
+  initialView();
+  updateCounter();
+  if (!state.hint) $('#hint').hidden = false;
+});
