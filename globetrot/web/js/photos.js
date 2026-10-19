@@ -381,12 +381,17 @@ function finishScan(ev) {
 function offerCountries(ids, quiet) {
   const missing = ids.filter((id) => BY_ID[id] && !visited(id) && !(quiet && photoDb.skip.includes(id)));
   if (!missing.length) return;
+  // With "add countries automatically" on, new photos just add theirs (with Undo).
+  if (quiet && walkDb.autoMark) { markBeen(missing, true); return; }
   const names = missing.length === 1 ? BY_ID[missing[0]].n : `${missing.length} countries`;
   toast(`📷 Photos from ${names}. Add to your map?`, () => markBeen(missing), 'Add', 6000);
   if (quiet) { photoDb.skip.push(...missing); savePhotoDb(); }
 }
 
-function markBeen(ids) {
+// Marks countries as been. auto: found by Globetrot rather than chosen, so
+// say which and offer Undo.
+function markBeen(ids, auto) {
+  const before = ids.map((id) => [id, state.c[id] ? { ...state.c[id] } : null]);
   for (const id of ids) {
     const e = entry(id);
     e.s = 'been';
@@ -394,7 +399,15 @@ function markBeen(ids) {
     paintCountry(id, true);
   }
   changed('');
-  toast(`${ids.map(flag).join('')} added to your map`);
+  const names = ids.length === 1 ? `${flag(ids[0])} ${BY_ID[ids[0]].n}` : ids.map(flag).join('');
+  if (!auto) { toast(`${names} added to your map`); return; }
+  toast(`${names} added to your map: you were there`, () => {
+    for (const [id, e] of before) {
+      if (e) state.c[id] = e; else delete state.c[id];
+      paintCountry(id);
+    }
+    changed('');
+  }, 'Undo', 6000);
 }
 
 // ---------------------------------------------------------------- the map layer

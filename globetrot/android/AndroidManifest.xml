@@ -10,13 +10,18 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
-    <!-- Only asked for when you tap "Record walks" or "find me": where you are, while
-         recording, so the squares you walk through light up. -->
+    <!-- Only asked for when you turn on "Map where I go": where you are, in the
+         background, so every square you pass through lights up. "All the time"
+         lets mapping carry on by itself after a restart. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- So phones that stop background apps to save battery can be asked not to. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Only for street map pictures on the Walks map, and only when you switch them on.
          Nothing you record is ever sent anywhere. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -39,9 +44,17 @@
             </intent-filter>
         </activity>
         <service
-            android:name=".WalkService"
+            android:name=".TrackService"
             android:exported="false"
             android:foregroundServiceType="location" />
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <provider
             android:name=".ShareProvider"
             android:authorities="com.olrock.globetrot.share"

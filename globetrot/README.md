@@ -2,10 +2,11 @@
 
 # Globetrot
 
-Your own world travel map. Tap the countries you've been to and watch the world fill in. See
-**the photos you took, on the map where you took them**, and **every street you've walked, to the
-nearest kilometre**. Keep a wish list, pin the cities you loved, and see how much of the world
-you've seen. Free, with no ads and no account. Everything you record stays on your phone.
+Your own world travel map, which fills itself in. Globetrot quietly follows where you go and looks
+at where your photos were taken, then lights up **every street you've been on, to the nearest
+kilometre**, and marks the countries for you. You can also tap countries yourself, see **your
+photos on the map where you took them**, keep a wish list and pin the places you loved. Free,
+with no ads and no account. Everything it learns about you stays on your phone.
 
 | The map | A country | Every country | Your stats | Badges |
 |:---:|:---:|:---:|:---:|:---:|
@@ -53,14 +54,26 @@ you can mark them all in one tap. When you open the app again it quietly picks u
 - Your camera has to save the location. Most phones do this when location is turned on in the
   camera settings.
 
-**Every street you've walked, to the nearest kilometre.** Going to Brazil once doesn't mean you've
-seen Brazil. The **Walks** tab cuts the world into squares about 1 km across and lights up only the
-ones you've actually been in. Everywhere else stays under a fog that clears as you explore. A
-weekend wandering around Manhattan lights up the blocks you walked, not all of New York.
+**Every street you've been on, to the nearest kilometre.** Going to Brazil once doesn't mean
+you've seen Brazil. The **Walks** tab cuts the world into squares about 1 km across and lights up
+only the ones you've actually been in. Everywhere else stays under a fog that clears as you explore.
+A weekend wandering around Manhattan lights up the blocks you walked, not all of New York.
 
-- **Record a walk** and walk. Recording keeps going with the screen off or the app in the
-  background (there's a notification with a Stop button), and the button shows how far you've
-  walked today. Anything faster than walking or cycling pace (a car, a train) is left out.
+- **It maps where you go by itself.** The first time you open Globetrot it offers to follow you
+  in the background and look at your photos. After that there's nothing to press. It keeps
+  going with the app closed and the screen off, and it starts again by itself after the phone
+  restarts. It uses the phone's low-power location (Wi-Fi and cell towers, about 100 m, which is
+  plenty for 1 km squares), and lets the phone batch fixes, so the battery cost is small.
+  **Sharper trails** switches to GPS if you'd rather.
+- Android shows a quiet notification while Globetrot follows you (it requires one), with today's
+  distance on foot and a **Pause** button.
+- For it to carry on after a restart, allow location **All the time**. Globetrot points you to
+  the setting. Some phones (Samsung, Xiaomi, Huawei, OnePlus) also stop background apps to save
+  battery, so it offers to switch that off for Globetrot.
+- When you turn up somewhere new, that country is **added to your map automatically** (with an
+  Undo). New photos do the same each time you open the app. You can switch this off.
+- Anything faster than walking or cycling pace (a car, a train, a flight) is left out of your
+  trails, unless you choose to count it.
 - **Import your history** to light up years of walks at once: your Google Maps Timeline (on the
   phone: Settings → Location → Location services → Timeline → Export Timeline data), Google
   Takeout location history, or GPX and KML files from Strava, Garmin, Komoot and other trackers.
@@ -73,8 +86,8 @@ weekend wandering around Manhattan lights up the blocks you walked, not all of N
   uses the internet for. Without it, the Walks map draws the country outlines.
 - The world map shows your walked squares as small white specks. Each country's card and the
   Stats tab say how many km² you've explored there, and two badges reward 100 km² and 1,000 km².
-- Recording asks for **precise** location. Approximate location is only good to a few km, which
-  is too rough for 1 km squares.
+- It needs **precise** location. Approximate location is only good to a few km, which is too
+  rough for 1 km squares.
 
 **Quick mark.** Turn it on and every tap ticks a country off, or unticks it, without opening
 anything. It's the fastest way to fill in your map the first time. Made a mistake? Every change
@@ -116,9 +129,13 @@ older Android, and from the photo itself on Android 10 and later, with the resul
 later scans are quick). It also gives the map its thumbnails at `https://globetrot.local/`. In a
 browser, added photos are kept in IndexedDB instead.
 
-Walks are recorded by `WalkService.java`, a foreground service (type `location`) that writes GPS
-fixes to a file. The page collects them, joins points less than 1.5 km apart, and adds each
-1 km square to a set that's saved as compact, delta-encoded text. `web/js/walks.js` draws the
+Your whereabouts are followed by `TrackService.java`, a foreground service (type `location`).
+On Android 12+ it uses the framework's fused provider at balanced power with batching; on older
+phones it uses network positioning plus the passive provider; GPS only for sharper trails. It
+writes fixes to a file. `BootReceiver.java` starts it again after a reboot or update; without
+"all the time" permission, Android won't give it locations from there, so it posts a tap-to-resume
+notification instead. The page collects the fixes, joins points less than 1.5 km and 20 minutes
+apart, and adds each 1 km square to a set that's saved as compact, delta-encoded text. `web/js/walks.js` draws the
 Walks map in Web Mercator. The street map uses CARTO's dark tiles; offline, it uses the country
 outlines from `world.js`, converted from the Natural Earth projection. Location history files are
 read with one regular-expression pass that understands Timeline, Takeout, GPX and KML.

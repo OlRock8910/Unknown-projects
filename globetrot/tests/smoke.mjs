@@ -18,6 +18,8 @@ const shot = async (name) => { if (shots) await page.screenshot({ path: path.joi
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2, hasTouch: true });
+const skipSetup = () => { if (!localStorage.getItem('globetrot.walks')) localStorage.setItem('globetrot.walks', '{"setup":true}'); };
+await page.addInitScript(skipSetup);
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -235,6 +237,7 @@ await page.evaluate(() => closeViewer());
 // ---- the Android app: scanning the phone's gallery (Native stand-in)
 const phone = await browser.newPage({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2, hasTouch: true });
 phone.on('pageerror', (e) => errors.push('phone: ' + e.message));
+await phone.addInitScript(skipSetup);
 const jpg = fs.readFileSync(fx('kyoto.jpg'));
 await phone.route('https://globetrot.local/**', (r) => r.fulfill({ status: 200, contentType: 'image/jpeg', body: jpg }));
 await phone.addInitScript(() => {
@@ -428,47 +431,94 @@ await page.evaluate(() => { walkDb.cells = new Set(); walkChanged(); });
 await page.evaluate((w) => restoreFrom(JSON.stringify({ app: 'globetrot', c: state.c, pins: state.pins, walks: w })), withWalks);
 check(walkedBefore > 10 && await page.evaluate(() => exploredCount()) === walkedBefore, `restoring a backup brings walks back (${walkedBefore})`);
 
-// ---- recording a walk (Android stand-in)
+// ---- following where you go, all the time (Android stand-in)
 const walker = await browser.newPage({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2, hasTouch: true });
 walker.on('pageerror', (e) => errors.push('walker: ' + e.message));
 await walker.addInitScript(() => {
-  let on = false, queue = [];
-  window.__walk = { push: (lines) => queue.push(...lines) };
+  // A phone where location is allowed only while the app is in use, and battery saving is on.
+  const st = JSON.parse(sessionStorage.getItem('fakeTrack') || '{"enabled":false,"running":false,"precise":true,"background":false,"battery":false,"highAccuracy":false}');
+  const keep = () => sessionStorage.setItem('fakeTrack', JSON.stringify(st));
+  let queue = [];
+  window.__calls = [];
+  window.__track = { st, keep, push: (lines) => queue.push(...lines) };
+  const call = (name) => window.__calls.push(name);
   window.Native = {
     share() {}, copy() {}, vibrate() {}, shareFile() {}, savePhoto() {}, deletePhoto() {},
-    hasPhotoAccess: () => 'no', scanPhotos() {}, photoScanResult: () => '[]',
-    walkStart() { on = true; setTimeout(() => window.onWalkEvent('{"state":"on"}'), 10); },
-    walkStop() { on = false; },
-    walkState: () => (on ? 'on' : 'off'),
+    hasPhotoAccess: () => 'no', photoScanResult: () => '[]',
+    scanPhotos() { call('scanPhotos'); setTimeout(() => window.onPhotoScan('{"state":"done","total":0,"location":true}'), 20); },
+    trackStart(gps) { call('trackStart'); st.enabled = st.running = true; keep(); setTimeout(() => window.onWalkEvent('{"state":"on"}'), 10); },
+    trackStop() { call('trackStop'); st.enabled = st.running = false; keep(); },
+    trackState: () => JSON.stringify(st),
+    setHighAccuracy(on) { call('gps:' + on); st.highAccuracy = on; keep(); },
+    askBackground() { call('askBackground'); },
+    askBattery() { call('askBattery'); },
+    openAppSettings() { call('settings'); },
     walkTake() { const t = queue.join('\n'); queue = []; return t; },
     locate() { setTimeout(() => window.onWalkEvent('{"state":"here","lat":38.7139,"lon":-9.1394,"acc":8}'), 10); },
   };
 });
 await walker.goto(url);
 await walker.waitForSelector('.country');
+// First run: Globetrot offers to fill the map in by itself.
+await walker.waitForSelector('#modal .dialog.setup', { timeout: 3000 });
+check(await walker.locator('#modal #su-track').isChecked(), 'first run offers to map where you go, ticked');
+await walker.click('#modal [data-m="ok"]');
+await walker.waitForFunction(() => window.__calls.includes('scanPhotos'), null, { timeout: 3000 });
+check(await walker.evaluate(() => window.__calls.slice(0, 2).join() === 'trackStart,scanPhotos' && walkDb.track && walkDb.setup), 'Turn on starts tracking, then looks at the photos');
+await walker.waitForFunction(() => /No photos/.test($('#modal').textContent), null, { timeout: 3000 });
+await walker.evaluate(() => closeModal());
 await walker.click('.tabbar [data-tab="walks"]');
-await walker.click('[data-w="intro-rec"]');
-await walker.waitForFunction(() => walkDb.rec);
-check(await walker.evaluate(() => $('#rec-btn').classList.contains('on')), 'Record turns on');
-// 2 km across Lisbon at walking pace, one fix every 20 s, then a 30 km jump in five minutes (a car).
+await walker.click('[data-w="intro-ok"]');
+check(await walker.evaluate(() => $('#track-btn').dataset.mode === 'on'), 'the Walks map shows mapping is on');
+// The phone walked 2 km across Lisbon while Globetrot was in the background, then took a car 30 km.
 const now = Date.now();
-const lisbon = line([38.7139, -9.1394], [38.7223, -9.1180], 40).map(([la, lo], i) => `${now + i * 20000},${la},${lo},6`);
-await walker.evaluate((l) => window.__walk.push(l), [...lisbon, `${now + 41 * 20000 + 300000},38.98,-9.42,6`]);
+const lisbon = line([38.7139, -9.1394], [38.7223, -9.1180], 40).map(([la, lo], i) => `${now + i * 20000},${la},${lo},40`);
+await walker.evaluate((l) => window.__track.push(l), [...lisbon, `${now + 41 * 20000 + 300000},38.98,-9.42,30`]);
 await walker.evaluate(() => window.onAppResume());
-const rec = await walker.evaluate(() => ({ km: walkDb.dayKm, n: exploredCount(), btn: $('#rec-btn').textContent }));
-check(rec.km > 1.8 && rec.km < 2.4 && rec.n >= 3 && rec.n <= 8, `a recorded 2 km walk lights up its squares (${rec.km.toFixed(2)} km, ${rec.n} km²)`);
-check(/2\.\d km today/.test(rec.btn), `the button shows today's distance (${rec.btn})`);
+const rec = await walker.evaluate(() => ({ km: walkDb.dayKm, n: exploredCount(), btn: $('#track-btn').textContent, pt: visited('PT'), toast: $('#toast').textContent }));
+check(rec.km > 1.8 && rec.km < 2.4 && rec.n >= 3 && rec.n <= 8, `2 km walked in the background lights up its squares, not the drive (${rec.km.toFixed(2)} km, ${rec.n} km²)`);
+check(/Mapping where you go · 2\.\d km today/.test(rec.btn), `the button shows today's distance (${rec.btn})`);
+check(rec.pt && /Portugal added to your map/.test(rec.toast), `being in Portugal adds it to the map (${rec.toast})`);
+await walker.click('#toast button');
+check(await walker.evaluate(() => !visited('PT')), 'and Undo takes it off again');
+// Points hours apart aren't joined into a straight line.
+const gapCells = await walker.evaluate(() => {
+  const before = exploredCount(), t = Date.now();
+  addLive([{ lat: 38.75, lon: -9.20, t: t + 3600e3 * 5 }, { lat: 38.759, lon: -9.20, t: t + 3600e3 * 7 }]);
+  return exploredCount() - before;
+});
+check(gapCells === 2, `points hours apart aren't joined (${gapCells} squares)`);
+// The most useful missing permission is offered, and fixed in one tap.
+check(await walker.evaluate(() => !$('#track-warn').hidden && /all the time/.test($('#track-warn').textContent)), 'it asks for "all the time" location');
+await walker.click('#track-warn');
+check(await walker.evaluate(() => window.__calls.includes('askBackground')), 'the warning opens the permission');
+await walker.evaluate(() => { window.__track.st.background = true; updateTrackButton(); });
+check(await walker.evaluate(() => /doesn’t stop it/.test($('#track-warn').textContent) && $('#track-warn').dataset.fix === 'battery'), 'then the battery setting');
 await walker.click('[data-w="locate"]');
 await walker.waitForTimeout(900);
 check(await walker.evaluate(() => here && here.lat === 38.7139 && wcam.z >= 13.9), 'find me centres the map on you');
-await walker.click('#rec-btn');
-check(await walker.evaluate(() => !walkDb.rec && !recording()), 'Stop ends recording');
-// Stopped from the notification while the app was in the background.
-await walker.click('#rec-btn');
-await walker.waitForFunction(() => walkDb.rec);
-await walker.evaluate(() => { Native.walkStop(); window.onAppResume(); });
-check(await walker.evaluate(() => !walkDb.rec && !$('#rec-btn').classList.contains('on')), 'stopping from the notification is noticed');
-if (shots) { await walker.waitForTimeout(300); await walker.screenshot({ path: path.join(shotDir, '11-recording.png') }); }
+if (shots) { await walker.waitForTimeout(300); await walker.screenshot({ path: path.join(shotDir, '11-tracking.png') }); }
+// Settings and turning it off.
+await walker.click('#track-btn');
+await walker.waitForSelector('#modal .perms');
+await walker.click('#opt-gps');
+await walker.click('#opt-auto');
+await walker.click('#modal [data-m="ok"]');
+check(await walker.evaluate(() => window.__calls.includes('gps:true') && !walkDb.autoMark), 'settings: GPS and automatic countries');
+// Paused from the notification while Globetrot was in the background.
+await walker.evaluate(() => { Object.assign(window.__track.st, { enabled: false, running: false }); window.__track.keep(); window.onAppResume(); });
+check(await walker.evaluate(() => !walkDb.track && $('#track-btn').dataset.mode === 'off'), 'pausing from the notification is noticed');
+// Wanted but stopped by Android: opening the app starts it again.
+await walker.evaluate(() => { walkDb.track = true; saveWalks(true); Object.assign(window.__track.st, { enabled: true, running: false }); window.__track.keep(); window.__calls = []; });
+await walker.waitForTimeout(400);
+await walker.reload();
+await walker.waitForSelector('.country');
+await walker.waitForFunction(() => window.__calls.includes('trackStart'), null, { timeout: 3000 });
+check(true, 'if Android stopped it, opening Globetrot starts mapping again');
+await walker.click('.tabbar [data-tab="walks"]');
+await walker.click('#track-btn');
+await walker.click('#modal [data-m="pause"]');
+check(await walker.evaluate(() => !walkDb.track && window.__calls.includes('trackStop') && $('#track-btn').dataset.mode === 'off'), 'Turn off stops it');
 
 if (errors.length) fail('page errors:\n  ' + errors.join('\n  '));
 await browser.close();

@@ -69,17 +69,18 @@
       </div>
     </header>
     <div id="wk-intro" class="hint" hidden>
-      <b>Clear the fog.</b> Every 1 km square you walk through lights up. Not the whole country, just the streets you've really been on.
+      <b>Clear the fog.</b> Every 1 km square you pass through lights up. Not the whole country, just the streets you've really been on. Globetrot can map where you go by itself, in the background.
       <div class="intro-btns">
-        <button data-w="intro-rec">Record a walk</button>
+        <button data-w="intro-track">Map where I go</button>
         <button data-w="intro-import" class="ghost">Import my history</button>
         <button data-w="intro-streets" class="ghost">Show streets</button>
         <button data-w="intro-ok" class="ghost">Got it</button>
       </div>
     </div>
     <button id="wk-streets" class="street-chip" data-w="streets-on" hidden>🗺️ Show streets</button>
+    <button id="track-warn" class="track-warn" data-w="fix" hidden></button>
     <div class="wk-bottom">
-      <button class="rec-btn" id="rec-btn" data-w="rec"><i></i><span>Record a walk</span></button>
+      <button class="track-btn" id="track-btn" data-w="track" data-mode="off"><i></i><span>Map where I go, automatically</span></button>
     </div>
     <div class="wk-attr" id="wk-attr" hidden>© OpenStreetMap contributors © CARTO</div>
   </section>

@@ -1,9 +1,9 @@
 // Walks: the places you've actually been, to the nearest kilometre. The
-// world is cut into squares about 1 km across; every square you walk
-// through lights up. Squares come from walks you record (Android's
-// WalkService, or the browser's geolocation), from where your photos were
-// taken, and from imported location history (Google Maps Timeline, Google
-// Takeout, GPX, KML).
+// world is cut into squares about 1 km across; every square you pass through
+// lights up. Squares come from following where you go in the background
+// (Android's TrackService, or the browser's geolocation while the page is
+// open), from where your photos were taken, and from imported location
+// history (Google Maps Timeline, Google Takeout, GPX, KML).
 //
 // The Walks tab shows them on a Web Mercator map under a "fog" that clears
 // where you've been, with street map pictures underneath if you switch them
@@ -14,7 +14,8 @@
 const WALK_KEY = 'globetrot.walks';
 const KM_LAT = 1 / 111.32; // degrees of latitude in 1 km
 const WALK_KMH = 25; // faster than this is a car or a train, not a walk
-const JOIN_KM = 1.5; // fill in the squares between points closer than this
+const JOIN_KM = 1.5; // fill in the squares between points closer than this…
+const JOIN_GAP_H = 1 / 3; // …and less than 20 minutes apart
 const DEG = Math.PI / 180;
 const TILE_URL = (z, x, y, retina) => `https://${'abcd'[(x + y) % 4]}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}${retina ? '@2x' : ''}.png`;
 
@@ -70,13 +71,18 @@ function decodeCells(str) {
   return set;
 }
 function loadWalks() {
-  const out = { cells: new Set(), last: null, day: '', dayKm: 0, totalKm: 0, streets: false, photos: true, cam: null, intro: false, rec: false };
+  // track: the person wants their whereabouts followed. walkOnly: leave out
+  // driving and trains. autoMark: mark countries as been when you're seen there.
+  const out = { cells: new Set(), last: null, day: '', dayKm: 0, totalKm: 0, streets: false, photos: true, cam: null, intro: false, track: false, walkOnly: true, autoMark: true, setup: false };
   try {
     const s = JSON.parse(localStorage.getItem(WALK_KEY));
     if (s && typeof s === 'object') {
       out.cells = decodeCells(s.cells);
-      for (const k of ['day', 'intro', 'rec', 'streets']) if (s[k] != null) out[k] = s[k];
+      for (const k of ['day', 'intro', 'streets', 'setup']) if (s[k] != null) out[k] = s[k];
+      out.track = !!(s.track ?? s.rec);
       out.photos = s.photos !== false;
+      out.walkOnly = s.walkOnly !== false;
+      out.autoMark = s.autoMark !== false;
       out.dayKm = +s.dayKm || 0;
       out.totalKm = +s.totalKm || 0;
       if (s.last && isFinite(s.last.lat)) out.last = s.last;
@@ -86,14 +92,21 @@ function loadWalks() {
   return out;
 }
 let walkSaveTimer = 0;
-function saveWalks() {
+let walkDirty = false;
+function saveWalks(now) {
   clearTimeout(walkSaveTimer);
-  walkSaveTimer = setTimeout(() => {
+  walkDirty = true;
+  const write = () => {
+    walkDirty = false;
     try {
       localStorage.setItem(WALK_KEY, JSON.stringify({ ...walkDb, cells: encodeCells(walkDb.cells) }));
     } catch (e) { toast('Not enough room to save your walks'); }
-  }, 300);
+  };
+  if (now) write(); else walkSaveTimer = setTimeout(write, 300);
 }
+// Points taken from the service exist nowhere else, so never lose a pending save.
+window.addEventListener('pagehide', () => { if (walkDirty) saveWalks(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && walkDirty) saveWalks(true); });
 function walkChanged() {
   walkVersion++;
   saveWalks();
@@ -170,28 +183,36 @@ function exploredByCountry() {
 // Lights up the squares along a track. Points close together are joined, so a
 // walk with a fix every few hundred metres becomes a continuous trail. With
 // walkingOnly, stretches faster than walking pace (driving, trains, planes)
-// are left out. ctx.last carries the previous point between batches.
+// are left out. ctx.last carries the previous point between batches; with
+// ctx.added set to an array, the keys of newly lit squares are pushed to it.
 function addTrack(pts, walkingOnly, ctx = {}) {
   const cells = walkDb.cells;
+  const added = ctx.added;
+  const light = (key) => {
+    if (cells.has(key)) return;
+    cells.add(key);
+    if (added) added.push(key);
+  };
   let prev = ctx.last || null, km = 0;
   for (const p of pts) {
     if (!(Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180) || (!p.lat && !p.lon)) continue;
-    let d = 0, fast = false;
+    let d = 0, fast = false, gap = false;
     if (prev) {
       d = kmBetween(prev, p);
       const hours = prev.t && p.t && p.t > prev.t ? (p.t - prev.t) / 3.6e6 : 0;
       fast = hours > 0 && d / hours > WALK_KMH;
+      gap = hours > JOIN_GAP_H;
     }
     if (walkingOnly && fast) { prev = p; continue; }
-    if (prev && d > 0 && d <= JOIN_KM && !fast) {
+    if (prev && d > 0 && d <= JOIN_KM && !fast && !gap) {
       const steps = Math.ceil(d / 0.25);
       for (let i = 1; i < steps; i++) {
         const f = i / steps;
-        cells.add(cellOf(prev.lat + (p.lat - prev.lat) * f, prev.lon + (p.lon - prev.lon) * f));
+        light(cellOf(prev.lat + (p.lat - prev.lat) * f, prev.lon + (p.lon - prev.lon) * f));
       }
       km += d;
     }
-    cells.add(cellOf(p.lat, p.lon));
+    light(cellOf(p.lat, p.lon));
     prev = p;
   }
   ctx.last = prev;
@@ -341,63 +362,97 @@ $('#history-in').addEventListener('change', (e) => {
   if (f) importHistory(f, importWalkingOnly);
 });
 
-// ---------------------------------------------------------------- recording
+// ---------------------------------------------------------------- following where you go
 
+// On Android a foreground service (TrackService) follows you all the time,
+// using the phone's low-power location, and restarts itself after a reboot.
+// It writes fixes to a file; the page collects them whenever it's open. In a
+// browser, the page can only follow you while it's open.
 let geoWatch = null;
-let recPoll = 0;
+let trackPoll = 0;
 let here = null; // {lat, lon, acc, t}
+let photosAfterTracking = false;
 
-const recording = () => (Native?.walkState ? Native.walkState() === 'on' : geoWatch !== null);
+// {enabled, running, precise, background, notifications, battery, highAccuracy, todayKm}
+function trackState() {
+  if (Native?.trackState) {
+    try { return JSON.parse(Native.trackState()) || {}; } catch (e) { return {}; }
+  }
+  return { enabled: walkDb.track, running: geoWatch !== null, precise: true, background: true, notifications: true, battery: true, browser: true };
+}
 
-function startRecording() {
-  walkDb.last = null; // don't join today's walk to wherever the last one ended
+function startTracking() {
+  walkDb.track = true;
   saveWalks();
-  if (Native?.walkStart) {
-    Native.walkStart();
-  } else if (navigator.geolocation) {
-    geoWatch = navigator.geolocation.watchPosition(
-      (pos) => {
-        const p = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: pos.timestamp || Date.now() };
-        here = { ...p, acc: pos.coords.accuracy };
-        if (!(pos.coords.accuracy > 60)) addLive([p]);
-        else wkDraw();
-      },
-      () => { stopRecording(); toast('Globetrot needs your location to record walks'); },
-      { enableHighAccuracy: true, maximumAge: 3000 },
-    );
-    recStarted(true);
-  } else {
-    toast('This browser can’t record walks');
+  if (Native?.trackStart) {
+    Native.trackStart(!!walkDb.highAccuracy);
+    return;
+  }
+  if (!navigator.geolocation) {
+    toast('This browser can’t follow where you go');
+    return;
+  }
+  watchInBrowser();
+  trackOn(true);
+}
+function watchInBrowser() {
+  if (geoWatch !== null) return;
+  geoWatch = navigator.geolocation.watchPosition(
+    (pos) => {
+      const p = { lat: pos.coords.latitude, lon: pos.coords.longitude, t: pos.timestamp || Date.now() };
+      here = { ...p, acc: pos.coords.accuracy };
+      if (!(pos.coords.accuracy > 150)) addLive([p]);
+      else wkDraw();
+    },
+    () => { stopTracking(); toast('Globetrot needs your location to map where you go'); },
+    { enableHighAccuracy: true, maximumAge: 10000 },
+  );
+}
+// Tracking is running: collect points every few seconds while the page is open.
+function trackOn(announce) {
+  clearInterval(trackPoll);
+  trackPoll = setInterval(() => { if (!document.hidden) collectPoints(); }, 5000);
+  updateTrackButton();
+  if (announce) toast('Globetrot is mapping where you go. Squares light up as you move');
+  if (photosAfterTracking) {
+    photosAfterTracking = false;
+    scanPhone(false);
+    showScanProgress(0, 0);
   }
 }
-function recStarted(announce) {
-  walkDb.rec = true;
+function stopTracking() {
+  walkDb.track = false;
   saveWalks();
-  updateRecButton();
-  clearInterval(recPoll);
-  recPoll = setInterval(() => { if (!document.hidden) collectPoints(); }, 4000);
-  if (announce) toast('Recording. The squares you walk through will light up');
-}
-function stopRecording() {
-  if (Native?.walkStop) Native.walkStop();
+  if (Native?.trackStop) Native.trackStop();
   if (geoWatch !== null) { navigator.geolocation.clearWatch(geoWatch); geoWatch = null; }
   collectPoints();
-  clearInterval(recPoll);
-  walkDb.rec = false;
-  saveWalks();
-  updateRecButton();
+  clearInterval(trackPoll);
+  updateTrackButton();
 }
 
 window.onWalkEvent = (json) => {
   let ev;
   try { ev = JSON.parse(json); } catch (e) { return; }
-  if (ev.state === 'on') recStarted(true);
-  else if (ev.state === 'denied') toast('Globetrot needs your location to record walks');
+  const afterRefusal = () => {
+    walkDb.track = false;
+    saveWalks();
+    updateTrackButton();
+    if (photosAfterTracking) { photosAfterTracking = false; scanPhone(false); showScanProgress(0, 0); }
+  };
+  if (ev.state === 'on') trackOn(true);
+  else if (ev.state === 'off') { clearInterval(trackPoll); updateTrackButton(); }
+  else if (ev.state === 'denied') { afterRefusal(); toast('Globetrot needs your location to map where you go'); }
   else if (ev.state === 'coarse') {
+    afterRefusal();
     modal(`<div class="dialog"><h2>Precise location needed</h2>
       <p>With approximate location Android only says roughly where you are (a few km), which isn't enough to light up the right squares. Allow <b>precise</b> location for Globetrot in its app settings.</p>
-      <div class="row-btns"><button class="btn primary" data-m="ok">OK</button></div></div>`, {});
-  } else if (ev.state === 'error') toast('Couldn’t start recording');
+      <div class="row-btns"><button class="btn" data-m="cancel">Not now</button><button class="btn primary" data-m="ok">Open settings</button></div></div>`, {
+      ok: () => { Native?.openAppSettings?.(); return true; },
+    });
+  } else if (ev.state === 'background') {
+    toast(ev.granted ? 'Globetrot will keep mapping, even after a restart' : 'Mapping works while Globetrot was opened since the last restart');
+    updateTrackButton();
+  } else if (ev.state === 'error') { afterRefusal(); toast('Couldn’t start following your location'); }
   else if (ev.state === 'here') {
     here = { lat: ev.lat, lon: ev.lon, acc: ev.acc, t: Date.now() };
     if (locating) { locating = false; wkGoTo(here.lat, here.lon, Math.max(wcam.z, 14)); }
@@ -413,39 +468,141 @@ function collectPoints() {
   const pts = [];
   for (const line of text.split('\n')) {
     const [t, lat, lon, acc] = line.split(',').map(Number);
-    if (isFinite(lat) && isFinite(lon)) pts.push({ lat, lon, t });
-    if (isFinite(lat)) here = { lat, lon, acc, t };
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    pts.push({ lat, lon, t });
+    here = { lat, lon, acc, t };
   }
   addLive(pts);
 }
 
+// Today's distance only counts points from today; the trail itself is kept whatever the date.
 function addLive(pts) {
   if (!pts.length) return;
-  const ctx = addTrack(pts, true, { last: walkDb.last });
+  const ctx = addTrack(pts, walkDb.walkOnly, { last: walkDb.last, added: [] });
   walkDb.last = ctx.last && { lat: ctx.last.lat, lon: ctx.last.lon, t: ctx.last.t };
   const today = new Date().toDateString();
   if (walkDb.day !== today) { walkDb.day = today; walkDb.dayKm = 0; }
-  walkDb.dayKm += ctx.km;
+  const lastT = ctx.last?.t;
+  if (!lastT || new Date(lastT).toDateString() === today) walkDb.dayKm += ctx.km;
   walkDb.totalKm += ctx.km;
   walkChanged();
-  updateRecButton();
+  updateTrackButton();
+  if (walkDb.autoMark && ctx.added.length) autoMarkFrom(ctx.added);
+}
+
+// Being seen somewhere marks that country as been, with a way back.
+function autoMarkFrom(keys) {
+  const fresh = new Set();
+  for (const k of keys) {
+    const [s, w, n, e] = cellBounds(k);
+    const cc = countryAt(...project((w + e) / 2, (s + n) / 2));
+    if (cc && !visited(cc)) fresh.add(cc);
+  }
+  if (fresh.size) markBeen([...fresh], true);
 }
 
 window.onAppResume = () => {
   collectPoints();
-  // The notification's Stop button ends recording without the page knowing.
-  if (walkDb.rec && !recording()) { walkDb.rec = false; saveWalks(); clearInterval(recPoll); }
-  if (!walkDb.rec && recording()) recStarted();
-  updateRecButton();
+  const st = trackState();
+  // Paused from the notification, or stopped by Android, while the page was away.
+  if (!Native) return;
+  if (st.running) trackOn(false); else clearInterval(trackPoll);
+  if (!st.enabled && walkDb.track) { walkDb.track = false; saveWalks(); }
+  updateTrackButton();
+  photosOnResume();
 };
 
-function updateRecButton() {
-  const b = $('#rec-btn');
+function updateTrackButton() {
+  const b = $('#track-btn');
   if (!b) return;
-  const on = walkDb.rec;
-  b.classList.toggle('on', on);
+  const st = trackState();
   const today = walkDb.day === new Date().toDateString() ? walkDb.dayKm : 0;
-  $('span', b).textContent = on ? `Stop · ${today.toFixed(1)} km today` : 'Record a walk';
+  const mode = st.running ? 'on' : walkDb.track ? 'paused' : 'off';
+  b.dataset.mode = mode;
+  $('span', b).textContent = mode === 'on' ? `Mapping where you go · ${today.toFixed(1)} km today`
+    : mode === 'paused' ? 'Mapping paused · tap to resume' : 'Map where I go, automatically';
+  // The one thing most worth fixing, if any.
+  const warn = $('#track-warn');
+  if (warn) {
+    let msg = '';
+    if (mode === 'on' && st.background === false) msg = '⚠️ Allow location <b>all the time</b> so mapping carries on after a restart';
+    else if (mode === 'on' && st.battery === false) msg = '🔋 Let Globetrot run in the background so your phone doesn’t stop it';
+    warn.innerHTML = msg;
+    warn.hidden = !msg || currentTab !== 'walks';
+    warn.dataset.fix = st.background === false ? 'background' : 'battery';
+  }
+}
+
+function trackSheet() {
+  const st = trackState();
+  const row = (ok, text, fix) => `<div class="perm${ok ? ' ok' : ''}"><span>${ok ? '✓' : '!'}</span><p>${text}</p>${!ok && fix ? `<button class="chip-btn" data-m="${fix}">Fix</button>` : ''}</div>`;
+  modal(`<div class="dialog">
+    <h2>📍 Mapping where you go</h2>
+    <p>Globetrot follows your location in the background with the phone's low-power location, and lights up every 1 km square you pass through. It never leaves your phone.</p>
+    ${Native ? `<div class="perms">
+      ${row(st.precise !== false, 'Precise location', 'settings')}
+      ${row(st.background !== false, 'Allowed all the time (keeps going after a restart)', 'background')}
+      ${row(st.battery !== false, 'Not stopped to save battery', 'battery')}
+    </div>` : '<p class="fine">In a browser Globetrot can only follow you while this page is open.</p>'}
+    <label class="check"><input type="checkbox" id="opt-walk" ${walkDb.walkOnly ? 'checked' : ''}> Only walking and cycling (leave out cars, trains and flights)</label>
+    <label class="check"><input type="checkbox" id="opt-auto" ${walkDb.autoMark ? 'checked' : ''}> Add countries to my map when I'm there</label>
+    ${Native ? `<label class="check"><input type="checkbox" id="opt-gps" ${st.highAccuracy ? 'checked' : ''}> Use GPS for sharper trails (uses more battery)</label>` : ''}
+    <div class="row-btns"><button class="btn danger" data-m="pause">Turn off</button><button class="btn primary" data-m="ok">Done</button></div>
+  </div>`, {
+    ok: () => { saveTrackOptions(); return true; },
+    pause: () => { saveTrackOptions(); stopTracking(); toast('Mapping turned off'); return true; },
+    background: () => { Native.askBackground?.(); return true; },
+    battery: () => { Native.askBattery?.(); return true; },
+    settings: () => { Native.openAppSettings?.(); return true; },
+  });
+}
+function saveTrackOptions() {
+  walkDb.walkOnly = $('#opt-walk').checked;
+  walkDb.autoMark = $('#opt-auto').checked;
+  const gps = $('#opt-gps');
+  if (gps && gps.checked !== !!walkDb.highAccuracy) {
+    walkDb.highAccuracy = gps.checked;
+    Native?.setHighAccuracy?.(gps.checked);
+  }
+  saveWalks();
+}
+
+// First run: offer to fill the map in by itself.
+function setupDialog() {
+  modal(`<div class="dialog setup">
+    <h2>🌍 Let Globetrot fill in your map</h2>
+    <p>It can work out where you've been by itself. Everything stays on your phone.</p>
+    <label class="check"><input type="checkbox" id="su-track" checked> <span><b>Map where I go.</b> Follows you in the background and lights up every street you walk, 1 km at a time. Uses the phone's low-power location.</span></label>
+    ${canScan() ? `<label class="check"><input type="checkbox" id="su-photos" checked> <span><b>Look at my photos.</b> Puts every photo with a location on the map and lights up where it was taken.</span></label>` : ''}
+    <label class="check"><input type="checkbox" id="su-auto" checked> <span><b>Add countries automatically</b> when you're seen there.</span></label>
+    <div class="row-btns"><button class="btn" data-m="later">Not now</button><button class="btn primary" data-m="ok">Turn on</button></div>
+  </div>`, {
+    ok: () => {
+      const track = $('#su-track').checked, photos = !!$('#su-photos')?.checked;
+      walkDb.autoMark = $('#su-auto').checked;
+      walkDb.setup = true;
+      saveWalks();
+      if (track) {
+        photosAfterTracking = photos;
+        startTracking();
+      } else if (photos) {
+        scanPhone(false);
+        showScanProgress(0, 0);
+        return false;
+      }
+      return true;
+    },
+    later: () => { walkDb.setup = true; saveWalks(); return true; },
+  });
+}
+
+// Photos are looked at again whenever the app comes back, at most every 15 minutes.
+let lastPhotoLook = Date.now();
+function photosOnResume() {
+  if (!canScan() || !photoDb.scanned || Date.now() - lastPhotoLook < 15 * 60000) return;
+  if (Native.hasPhotoAccess?.() !== 'yes') return;
+  lastPhotoLook = Date.now();
+  scanPhone(true);
 }
 
 let locating = false;
@@ -778,8 +935,8 @@ function wkOpen() {
   wkClamp();
   $('#wk-km').textContent = fmt(exploredCount());
   $('#wk-intro').hidden = walkDb.intro;
-  updateRecButton();
   collectPoints();
+  updateTrackButton();
   wkRender();
 }
 window.addEventListener('resize', () => { if (currentTab === 'walks') { wkMeasure(); wkClamp(); wkDraw(); } });
@@ -788,7 +945,12 @@ wkView.addEventListener('click', (e) => {
   const b = e.target.closest('[data-w]');
   if (!b) return;
   const a = b.dataset.w;
-  if (a === 'rec') { if (walkDb.rec) stopRecording(); else startRecording(); }
+  if (a === 'track') {
+    const mode = $('#track-btn').dataset.mode;
+    if (mode === 'on') trackSheet(); else startTracking();
+  } else if (a === 'fix') {
+    if ($('#track-warn').dataset.fix === 'background') Native?.askBackground?.(); else Native?.askBattery?.();
+  }
   else if (a === 'locate') locateMe();
   else if (a === 'streets-on') {
     modal(`<div class="dialog"><h2>🗺️ Show streets?</h2>
@@ -798,12 +960,12 @@ wkView.addEventListener('click', (e) => {
     });
   }
   else if (a === 'menu') walkMenu();
-  else if (a === 'fit') { if (!wkFitRects(exploredMerc())) toast('Nothing explored yet. Record a walk or import your history'); }
-  else if (a === 'intro-ok' || a === 'intro-rec' || a === 'intro-import' || a === 'intro-streets') {
+  else if (a === 'fit') { if (!wkFitRects(exploredMerc())) toast('Nothing explored yet. Turn on mapping or import your history'); }
+  else if (a === 'intro-ok' || a === 'intro-track' || a === 'intro-import' || a === 'intro-streets') {
     walkDb.intro = true;
     saveWalks();
     $('#wk-intro').hidden = true;
-    if (a === 'intro-rec') startRecording();
+    if (a === 'intro-track') startTracking();
     if (a === 'intro-import') importDialog();
     if (a === 'intro-streets') { walkDb.streets = true; saveWalks(); wkDraw(); }
   }
@@ -812,8 +974,9 @@ wkView.addEventListener('click', (e) => {
 function walkMenu() {
   modal(`<div class="dialog">
     <h2>🥾 Walks</h2>
-    <p>${fmt(exploredCount())} km² explored${walkDb.totalKm ? ` · ${walkDb.totalKm.toFixed(1)} km recorded` : ''}.</p>
+    <p>${fmt(exploredCount())} km² explored${walkDb.totalKm ? ` · ${walkDb.totalKm.toFixed(1)} km travelled on foot` : ''}.</p>
     <div class="menu">
+      <button class="btn" data-m="track">${trackState().running ? 'Mapping settings' : 'Map where I go, automatically'}</button>
       <button class="btn" data-m="import">Import location history</button>
       <button class="btn" data-m="streets">${walkDb.streets ? 'Hide street map' : 'Show street map (uses the internet)'}</button>
       <button class="btn" data-m="photos">${walkDb.photos ? 'Don’t count photo locations' : 'Count photo locations'}</button>
@@ -822,11 +985,12 @@ function walkMenu() {
     <p class="fine">The street map is drawn from OpenStreetMap by CARTO and downloaded only while it's switched on. Where you've walked never leaves your phone.</p>
   </div>`, {
     import: () => { importDialog(); return false; },
+    track: () => { if (trackState().running) trackSheet(); else { closeModal(); startTracking(); } return false; },
     streets: () => { walkDb.streets = !walkDb.streets; saveWalks(); wkDraw(); return true; },
     photos: () => { walkDb.photos = !walkDb.photos; saveWalks(); walkChanged(); return true; },
     clear: () => {
       modal(`<div class="dialog"><h2>Clear explored areas?</h2>
-        <p>This forgets every square from recorded walks and imports. Squares from your photos come back while photo locations are counted.</p>
+        <p>This forgets every square from where you’ve been followed and from imports. Squares from your photos come back while photo locations are counted.</p>
         <div class="row-btns"><button class="btn" data-m="cancel">Keep them</button><button class="btn primary" style="background:#ff6b6b;color:#2a0505" data-m="ok">Clear</button></div></div>`, {
         ok: () => { walkDb.cells = new Set(); walkDb.last = null; walkDb.totalKm = 0; walkDb.dayKm = 0; walkChanged(); return true; },
       });
@@ -886,8 +1050,8 @@ function walkCard() {
   const n = exploredCount();
   if (!n) {
     return `<div class="card"><h3>Walks</h3>
-      <p class="muted">Light up the places you've actually been, 1 km square by square: record your walks, or import your Google Maps Timeline.</p>
-      <div class="actions" style="margin-top:12px"><button class="btn primary" data-a="walks">🥾 Open the Walks map</button></div></div>`;
+      <p class="muted">Light up the places you've actually been, 1 km square by square: let Globetrot map where you go, or import your Google Maps Timeline.</p>
+      <div class="actions" style="margin-top:12px">${walkDb.track ? '' : '<button class="btn primary" data-a="track-on">📍 Map where I go</button>'}<button class="btn${walkDb.track ? ' primary' : ''}" data-a="walks"${walkDb.track ? '' : ' style="grid-column:span 2"'}>🥾 Open the Walks map</button></div></div>`;
   }
   const by = [...exploredByCountry().entries()].sort((a, b) => b[1] - a[1]);
   const top = by.slice(0, 5);
@@ -896,7 +1060,8 @@ function walkCard() {
     ${top.map(([cc, k]) => `<div class="cont-row"><span class="ce">${flag(cc)}</span><span class="cn">${esc(BY_ID[cc].n)}</span>
       <span class="cc">${fmt(k)} km²</span><div class="bar"><i style="width:${(k / max * 100).toFixed(1)}%"></i></div></div>`).join('')}
     ${by.length > 5 ? `<p class="muted">and ${by.length - 5} more ${by.length - 5 === 1 ? 'country' : 'countries'}</p>` : ''}
-    <div class="actions" style="margin-top:10px"><button class="btn primary" data-a="walks">🥾 Open the Walks map</button></div></div>`;
+    <p class="muted" style="margin-top:8px">${walkDb.track ? '<span style="color:var(--been)">●</span> Globetrot is mapping where you go.' : 'Mapping where you go is off.'}</p>
+    <div class="actions" style="margin-top:10px">${walkDb.track ? '' : '<button class="btn" data-a="track-on">📍 Map where I go</button>'}<button class="btn primary" data-a="walks">🥾 Open the Walks map</button></div></div>`;
 }
 
 function walkBackup() {
@@ -908,9 +1073,20 @@ function walkRestore(str) {
 }
 
 function startWalks() {
-  // Recording may have been started (or stopped from the notification) while the page was closed.
-  if (recording()) recStarted(); else if (walkDb.rec) { walkDb.rec = false; saveWalks(); }
   collectPoints();
+  const st = trackState();
+  if (st.running) trackOn(false);
+  else if (walkDb.track && Native) {
+    // Wanted but not running (stopped by Android, or after a restart without
+    // "all the time" permission): starting it again from the open app is allowed.
+    if (st.enabled !== false) startTracking();
+    else { walkDb.track = false; saveWalks(); }
+  } else if (walkDb.track && !Native && navigator.permissions) {
+    // A browser that already allowed location can carry on following without asking.
+    navigator.permissions.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') { watchInBrowser(); trackOn(false); } }).catch(() => {});
+  }
+  updateTrackButton();
   draw();
+  if (!walkDb.setup) setTimeout(() => { if (modalEl.hidden) setupDialog(); }, 600);
 }
 document.addEventListener('DOMContentLoaded', startWalks);

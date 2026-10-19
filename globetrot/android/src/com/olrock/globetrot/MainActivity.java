@@ -15,7 +15,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.Vibrator;
+import android.provider.Settings;
 import android.util.Base64;
 import android.view.View;
 import android.view.Window;
@@ -38,16 +40,17 @@ import java.util.List;
 /**
  * Hosts the map (plain HTML/JS in assets/) in a full-screen WebView and lends
  * it what a WebView lacks: the share sheet, the clipboard, vibration, a file
- * picker, the phone's photos (see Photos) and walk recording (see
- * WalkService). Your data stays on the phone; the internet is only used for
+ * picker, the phone's photos (see Photos) and following where you go (see
+ * TrackService). Your data stays on the phone; the internet is only used for
  * street map pictures, when that's switched on.
  */
 public class MainActivity extends Activity {
     private static final int BG = Color.rgb(10, 15, 30);
     private static final int PICK_FILE = 1;
     private static final int ASK_PHOTOS = 2;
-    private static final int ASK_WALK = 3;
+    private static final int ASK_TRACK = 3;
     private static final int ASK_LOCATE = 4;
+    private static final int ASK_BACKGROUND = 5;
 
     private WebView web;
     private ValueCallback<Uri[]> pending;
@@ -175,9 +178,13 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
-        if (requestCode == ASK_WALK) {
-            if (preciseLocation()) startWalk();
+        if (requestCode == ASK_TRACK) {
+            if (preciseLocation()) startTracking();
             else walkEvent(granted("android.permission.ACCESS_COARSE_LOCATION") ? "{\"state\":\"coarse\"}" : "{\"state\":\"denied\"}");
+            return;
+        }
+        if (requestCode == ASK_BACKGROUND) {
+            walkEvent("{\"state\":\"background\",\"granted\":" + TrackService.backgroundAllowed(this) + "}");
             return;
         }
         if (requestCode == ASK_LOCATE) {
@@ -191,29 +198,45 @@ public class MainActivity extends Activity {
         else emit("{\"state\":\"denied\"}");
     }
 
-    // ------------------------------------------------------------ walks
+    // ------------------------------------------------------------ following where you go
 
     private boolean preciseLocation() {
         return granted("android.permission.ACCESS_FINE_LOCATION");
     }
 
-    private String[] walkPermissions() {
+    private String[] locationPermissions() {
         List<String> want = new ArrayList<String>();
         want.add("android.permission.ACCESS_FINE_LOCATION");
         want.add("android.permission.ACCESS_COARSE_LOCATION");
+        // Android 10 still lets "all the time" be offered in the same dialog; 11+ needs a second step.
+        if (Build.VERSION.SDK_INT == 29) want.add("android.permission.ACCESS_BACKGROUND_LOCATION");
         if (Build.VERSION.SDK_INT >= 33) want.add("android.permission.POST_NOTIFICATIONS");
         return want.toArray(new String[0]);
     }
 
-    private void startWalk() {
-        Intent i = new Intent(this, WalkService.class);
-        try {
-            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
-            else startService(i);
-            walkEvent("{\"state\":\"on\"}");
-        } catch (Exception e) {
-            walkEvent("{\"state\":\"error\"}");
+    private void startTracking() {
+        TrackService.setEnabled(this, true);
+        // Started while the app is on screen, so Android lets it use location from here on.
+        if (TrackService.start(this, null)) walkEvent("{\"state\":\"on\"}");
+        else walkEvent("{\"state\":\"error\"}");
+    }
+
+    private boolean ignoringBatteryOptimizations() {
+        if (Build.VERSION.SDK_INT < 23) return true;
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+    }
+
+    private boolean notificationsAllowed() {
+        if (Build.VERSION.SDK_INT >= 24) {
+            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            return nm == null || nm.areNotificationsEnabled();
         }
+        return true;
+    }
+
+    private void openAppSettings() {
+        open(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
     }
 
     /** Where you are right now, for the "find me" button: the last fix at once, then a fresh one. */
@@ -294,32 +317,99 @@ public class MainActivity extends Activity {
 
     /** Exposed to JavaScript as window.Native. */
     private class Bridge {
-        /** Starts recording, asking for location (and notification) permission first if needed. */
+        /** Turns on following, asking for location (and notification) permission first if needed. */
         @JavascriptInterface
-        public void walkStart() {
+        public void trackStart(final boolean gps) {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    if (preciseLocation()) startWalk();
-                    else if (Build.VERSION.SDK_INT >= 23) requestPermissions(walkPermissions(), ASK_WALK);
+                    TrackService.prefs(MainActivity.this).edit().putBoolean("gps", gps).apply();
+                    if (preciseLocation()) startTracking();
+                    else if (Build.VERSION.SDK_INT >= 23) requestPermissions(locationPermissions(), ASK_TRACK);
+                    else walkEvent("{\"state\":\"denied\"}");
                 }
             });
         }
 
         @JavascriptInterface
-        public void walkStop() {
-            stopService(new Intent(MainActivity.this, WalkService.class));
+        public void trackStop() {
+            TrackService.setEnabled(MainActivity.this, false);
+            stopService(new Intent(MainActivity.this, TrackService.class));
+        }
+
+        /** {enabled, running, precise, background, notifications, battery, highAccuracy, todayKm} */
+        @JavascriptInterface
+        public String trackState() {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("enabled", TrackService.enabled(MainActivity.this));
+                o.put("running", TrackService.running);
+                o.put("precise", preciseLocation());
+                o.put("background", TrackService.backgroundAllowed(MainActivity.this));
+                o.put("notifications", notificationsAllowed());
+                o.put("battery", ignoringBatteryOptimizations());
+                o.put("highAccuracy", TrackService.highAccuracy(MainActivity.this));
+                o.put("todayKm", TrackService.todayKm(MainActivity.this));
+                return o.toString();
+            } catch (Exception e) {
+                return "{}";
+            }
         }
 
         @JavascriptInterface
-        public String walkState() {
-            return WalkService.running ? "on" : "off";
+        public void setHighAccuracy(boolean on) {
+            TrackService.prefs(MainActivity.this).edit().putBoolean("gps", on).apply();
+            if (TrackService.running) TrackService.start(MainActivity.this, TrackService.ACTION_RESUBSCRIBE);
+        }
+
+        /** "Allow all the time": Android 11+ takes the person to the app's location settings for it. */
+        @JavascriptInterface
+        public void askBackground() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (Build.VERSION.SDK_INT < 29 || TrackService.backgroundAllowed(MainActivity.this)) {
+                        walkEvent("{\"state\":\"background\",\"granted\":true}");
+                    } else if (!preciseLocation()) {
+                        requestPermissions(locationPermissions(), ASK_TRACK);
+                    } else {
+                        requestPermissions(new String[] { "android.permission.ACCESS_BACKGROUND_LOCATION" }, ASK_BACKGROUND);
+                    }
+                }
+            });
+        }
+
+        /** Asks to be left out of battery optimisation, which some phones use to stop background apps. */
+        @JavascriptInterface
+        public void askBattery() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (Build.VERSION.SDK_INT < 23) return;
+                    Intent ask = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName()));
+                    try {
+                        startActivity(ask);
+                    } catch (Exception e) {
+                        open(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void openAppSettings() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    MainActivity.this.openAppSettings();
+                }
+            });
         }
 
         /** Points recorded since the last call: "time,lat,lon,accuracy" lines. */
         @JavascriptInterface
         public String walkTake() {
-            return WalkService.take(MainActivity.this);
+            return TrackService.take(MainActivity.this);
         }
 
         @JavascriptInterface
@@ -328,7 +418,7 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     if (preciseLocation() || granted("android.permission.ACCESS_COARSE_LOCATION")) locateNow();
-                    else if (Build.VERSION.SDK_INT >= 23) requestPermissions(walkPermissions(), ASK_LOCATE);
+                    else if (Build.VERSION.SDK_INT >= 23) requestPermissions(locationPermissions(), ASK_LOCATE);
                 }
             });
         }

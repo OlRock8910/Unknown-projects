@@ -1063,6 +1063,7 @@ $('#stats-body').addEventListener('click', (e) => {
   else if (a === 'scan') { scanPhone(false); showScanProgress(0, 0); }
   else if (a === 'add-photos') pickPhotos('');
   else if (a === 'walks') showTab('walks');
+  else if (a === 'track-on') { startTracking(); dirty.stats = true; }
 });
 
 // ---------------------------------------------------------------- sharing & backup
