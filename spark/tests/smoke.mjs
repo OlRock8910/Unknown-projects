@@ -1,6 +1,8 @@
 // Opens Spark in a real browser against a stand-in for the Claude API and
-// walks through it: adding a key, chatting, photos, a refusal, a backup-model
-// reply, an error, reopening a saved chat and asking for a new answer.
+// walks through it: adding a key, upgrading itself to a newer model (which
+// fails and is undone), chatting, photos, a refusal, a backup-model reply,
+// learning and forgetting notes, an error, reopening a saved chat and asking
+// for a new answer.
 // Fails on any page error or on a request the real API would reject.
 //
 //   node spark/tests/smoke.mjs [--shots]
@@ -16,6 +18,7 @@ const web = path.join(here, '..', 'web');
 const shots = process.argv.includes('--shots');
 const shotDir = path.join(here, '..', 'docs');
 const MODEL = 'claude-opus-5-5';
+const NEW_MODEL = 'claude-opus-9'; // a pretend newer model that rejects Spark's requests
 
 // ---- a static server for web/ (ES modules don't load from file://)
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
@@ -31,8 +34,8 @@ const url = `http://127.0.0.1:${server.address().port}/`;
 // ---- the stand-in Claude API
 const sse = (events) => events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
 
-// blocks: [{ type: 'thinking', thinking } | { type: 'text', text } | { type: 'fallback', from, to }]
-function reply(blocks, { model = MODEL, stop = 'end_turn' } = {}) {
+// blocks: [{ type: 'thinking', thinking } | { type: 'text', text } | { type: 'tool_use', id, name, input } | { type: 'fallback', from, to }]
+function reply(blocks, { model = MODEL, stop = blocks.some((b) => b.type === 'tool_use') ? 'tool_use' : 'end_turn' } = {}) {
   const ev = [{ type: 'message_start', message: { id: 'msg_' + Math.random().toString(36).slice(2), type: 'message', role: 'assistant', model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 12, output_tokens: 0 } } }];
   blocks.forEach((b, index) => {
     if (b.type === 'thinking') {
@@ -42,6 +45,9 @@ function reply(blocks, { model = MODEL, stop = 'end_turn' } = {}) {
     } else if (b.type === 'text') {
       ev.push({ type: 'content_block_start', index, content_block: { type: 'text', text: '' } });
       for (const piece of b.text.match(/[\s\S]{1,12}/g)) ev.push({ type: 'content_block_delta', index, delta: { type: 'text_delta', text: piece } });
+    } else if (b.type === 'tool_use') {
+      ev.push({ type: 'content_block_start', index, content_block: { type: 'tool_use', id: b.id, name: b.name, input: {} } });
+      for (const piece of JSON.stringify(b.input).match(/[\s\S]{1,9}/g)) ev.push({ type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: piece } });
     } else {
       ev.push({ type: 'content_block_start', index, content_block: b });
     }
@@ -62,8 +68,12 @@ function checkRequest(req, body) {
   const h = req.headers();
   if (h['x-api-key'] !== 'sk-ant-test-key-1234567890') problems.push('wrong or missing api key header');
   if (h['anthropic-dangerous-direct-browser-access'] !== 'true') problems.push('missing direct browser access header');
-  if (!(h['anthropic-beta'] || '').split(',').includes('server-side-fallback-2026-07-01')) problems.push('missing fallback beta header: ' + h['anthropic-beta']);
-  if (body.model !== MODEL) problems.push('wrong model ' + body.model);
+  const betas = (h['anthropic-beta'] || '').split(',');
+  if (!betas.includes('server-side-fallback-2026-07-01')) problems.push('missing fallback beta header: ' + h['anthropic-beta']);
+  if (!betas.includes('thinking-binding-controls-2026-08-01')) problems.push('missing thinking binding beta header');
+  if (body.thinking?.block_binding?.prefix_mismatch_behavior !== 'drop_block') problems.push('thinking.block_binding not set');
+  if (![MODEL, NEW_MODEL].includes(body.model)) problems.push('wrong model ' + body.model);
+  if (body.tools && !body.tools.every((t) => t.eager_input_streaming === true && t.input_schema)) problems.push('tools without eager input streaming');
   if (body.fallbacks !== 'default') problems.push('fallbacks not "default"');
   if (body.thinking?.type !== 'adaptive') problems.push('thinking not adaptive');
   if (!['low', 'medium', 'high'].includes(body.output_config?.effort)) problems.push('bad effort');
@@ -73,6 +83,10 @@ function checkRequest(req, body) {
   if (!m.length || m[0].role !== 'user') problems.push('first message is not from the user');
   for (const [k, msg] of m.entries()) {
     if (!msg.content.length) problems.push(`messages.${k} is empty`);
+    // Every tool call must be answered in the very next message.
+    for (const b of msg.content) {
+      if (b.type === 'tool_use' && !m[k + 1]?.content.some((r) => r.type === 'tool_result' && r.tool_use_id === b.id)) problems.push(`messages.${k}: tool call ${b.id} has no result`);
+    }
     for (const b of msg.content) if (b.type === 'fallback') problems.push(`messages.${k} replays a fallback block`);
   }
   // Append-only: everything this chat sent before must come back byte for byte.
@@ -96,18 +110,40 @@ async function claude(route) {
       body: JSON.stringify(ok ? { type: 'model', id: MODEL, display_name: 'Claude', created_at: '2026-09-01T00:00:00Z' } : { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }),
     });
   }
+  if (u.pathname === '/v1/models') {
+    const data = [
+      { type: 'model', id: NEW_MODEL, display_name: 'Claude Opus 9', created_at: '2027-05-01T00:00:00Z' },
+      { type: 'model', id: MODEL, display_name: 'Claude Opus 5.5', created_at: '2026-09-01T00:00:00Z' },
+      { type: 'model', id: 'claude-sonnet-9', display_name: 'Claude Sonnet 9', created_at: '2027-06-01T00:00:00Z' },
+    ];
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ data, has_more: false, first_id: data[0].id, last_id: data.at(-1).id }) });
+  }
   if (u.pathname !== '/v1/messages') return route.fulfill({ status: 404 });
   const body = JSON.parse(req.postData());
   checkRequest(req, body);
   requests.push({ body, headers: req.headers() });
+  if (body.model === NEW_MODEL) {
+    return route.fulfill({ status: 400, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'fallbacks: not supported for this model' } }) });
+  }
   if (fail) {
     const status = fail;
     fail = null;
     return route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) });
   }
   const last = body.messages.at(-1).content.filter((b) => b.type === 'text').map((b) => b.text).join(' ');
+  const memoryId = body.system.match(/\[(toolu_[\w-]+)\]/)?.[1];
   let stream;
-  if (/how do black holes/i.test(last)) stream = reply([{ type: 'thinking', thinking: 'They want a simple explanation.' }, { type: 'text', text: HELLO }]);
+  if (body.messages.at(-1).content.every((b) => b.type === 'tool_result')) stream = reply([{ type: 'text', text: 'Got it!' }]);
+  else if (/my name is sam/i.test(last))
+    stream = reply([
+      { type: 'thinking', thinking: 'Worth remembering.' },
+      { type: 'text', text: 'Nice to meet you, Sam!' },
+      { type: 'tool_use', id: 'toolu_sam1', name: 'save_memory', input: { note: 'Name is Sam and loves football.', kind: 'about_them' } },
+      { type: 'tool_use', id: 'toolu_bad1', name: 'save_memory', input: { kind: 'about_them' } },
+    ]);
+  else if (/short answers please/i.test(last)) stream = reply([{ type: 'tool_use', id: 'toolu_short', name: 'save_memory', input: { note: 'Likes short answers.', kind: 'how_to_help' } }]);
+  else if (/forget my name/i.test(last)) stream = reply([{ type: 'tool_use', id: 'toolu_forget', name: 'forget_memory', input: { id: memoryId } }]);
+  else if (/how do black holes/i.test(last)) stream = reply([{ type: 'thinking', thinking: 'They want a simple explanation.' }, { type: 'text', text: HELLO }]);
   else if (/forbidden/i.test(last)) stream = reply([], { stop: 'refusal' });
   else if (/backup/i.test(last))
     stream = reply(
@@ -158,8 +194,8 @@ const page = await browser.newPage({ viewport: { width: 400, height: 860 }, devi
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => {
-  // The 401 the test asks for shows up as a failed resource load.
-  if (m.type() === 'error' && !/status of 401/.test(m.text())) errors.push(m.text());
+  // The 400 and 401 the test asks for show up as failed resource loads.
+  if (m.type() === 'error' && !/status of 40[01]/.test(m.text())) errors.push(m.text());
 });
 await page.route('https://api.anthropic.com/**', claude);
 
@@ -187,6 +223,11 @@ await page.click('#key-form button');
 await page.waitForSelector('#welcome', { state: 'hidden' });
 await page.waitForSelector('.chip');
 if (shots) await page.screenshot({ path: path.join(shotDir, '2-home.jpg'), quality: 85 });
+const stored = () => page.evaluate(() => ({ settings: JSON.parse(localStorage.getItem('spark.settings')), memories: JSON.parse(localStorage.getItem('spark.memories') || '[]') }));
+
+step('it finds a newer model and upgrades itself');
+await page.waitForFunction(() => JSON.parse(localStorage.getItem('spark.settings')).model === 'claude-opus-9');
+await page.waitForFunction(() => /upgraded itself to Claude Opus 9/.test(document.querySelector('#toast').textContent));
 
 step('a suggestion, with markdown and thinking');
 await page.locator('.chip').first().click();
@@ -200,6 +241,11 @@ expect((await lastReply().locator('b').first().textContent()) === 'three', 'bold
 expect((await lastReply().locator('details.thought').count()) === 1, 'thinking summary missing');
 expect((await page.textContent('#top-title')).startsWith('How do black holes'), 'chat title not set');
 expect(requests[0].body.output_config.effort === 'medium', 'default effort should be medium');
+expect(requests[0].body.model === NEW_MODEL && requests[1].body.model === MODEL, 'should try the new model, then go back');
+{
+  const { settings } = await stored();
+  expect(settings.model === '' && settings.badModels.includes(NEW_MODEL), 'a model that failed should be undone and never retried');
+}
 
 step('second turn replays the first reply unchanged');
 await say('Thanks!');
@@ -254,6 +300,19 @@ await page.locator('[data-a="regenerate"]').click();
 await waitIdle();
 expect(requests.length === n + 1 && requests.at(-1).body.messages.at(-1).role === 'user', 'regenerate should resend ending on the user turn');
 
+step('it learns something');
+await say('My name is Sam and I love football');
+{
+  const results = requests.at(-1).body.messages.at(-1).content;
+  expect(results.length === 2 && results[0].tool_use_id === 'toolu_sam1' && !results[0].is_error, 'save_memory result missing');
+  expect(results[1].tool_use_id === 'toolu_bad1' && results[1].is_error && results[1].content.includes('INVALID_JSON'), 'a bad tool input should come back as an error');
+  const { memories } = await stored();
+  expect(memories.length === 1 && memories[0].note === 'Name is Sam and loves football.' && memories[0].id === 'toolu_sam1', 'memory not saved');
+}
+expect((await page.locator('.learned').count()) === 1 && (await page.locator('.learned').textContent()).includes('Name is Sam'), 'learned note not shown in the chat');
+expect((await lastReply().textContent()).includes('Got it!'), 'reply after saving missing');
+expect((await page.locator('.msg-ai .actions').last().count()) === 1, 'actions missing after a tool reply');
+
 step('settings');
 await page.click('[data-a="drawer"]');
 await page.click('#drawer [data-a="settings"]');
@@ -265,6 +324,32 @@ await say('New chat here');
 expect(requests.at(-1).body.output_config.effort === 'high', 'effort setting not used');
 expect(requests.at(-1).body.system.includes('I like short answers.'), 'about me not in the new chat');
 expect(requests.at(-1).body.messages.length === 1, 'new chat should start empty');
+expect(requests.at(-1).body.system.includes('[toolu_sam1] (about them) Name is Sam and loves football.'), 'memories not in the new chat');
+expect(requests.at(-1).body.model === MODEL, 'new chat should use the working model');
+
+step('it forgets when asked, and notes can be deleted in Settings');
+await say('Please forget my name');
+expect((await stored()).memories.length === 0, 'forget_memory did not forget');
+await say('Short answers please');
+expect((await stored()).memories.length === 1, 'second note not saved');
+await page.click('[data-a="drawer"]');
+await page.click('#drawer [data-a="settings"]');
+expect((await page.locator('#memories li').first().textContent()).includes('Likes short answers.'), 'note not listed in Settings');
+if (shots) {
+  await page.waitForTimeout(400);
+  await page.locator('#forget-all').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(shotDir, '5-memory.jpg'), quality: 85 });
+  await page.click('[data-a="close-settings"]');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(shotDir, '6-learned.jpg'), quality: 85 });
+  await page.click('[data-a="drawer"]');
+  await page.click('#drawer [data-a="settings"]');
+}
+await page.click('#memories [data-a="unlearn"]');
+expect((await stored()).memories.length === 0, 'deleting a note in Settings did not work');
+await page.click('[data-a="close-settings"]');
+expect((await page.locator('.learned em').last().textContent()) === 'forgotten', 'chat should show the note as forgotten');
+expect(requests.filter((r) => r.body.model === NEW_MODEL).length === 1, 'the failed model should only be tried once');
 
 step('chats survive a reload');
 await page.reload();
@@ -286,13 +371,6 @@ step('delete a chat');
 await page.click('[data-a="drawer"]');
 await page.locator('.chat-item .del').first().click();
 expect((await page.locator('.chat-item').count()) === 1, 'chat not deleted');
-
-if (shots) {
-  await page.emulateMedia({ colorScheme: 'light' });
-  await page.locator('.chat-item .open').first().click();
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: path.join(shotDir, '5-light.jpg'), quality: 85 });
-}
 
 await browser.close();
 server.close();

@@ -7,6 +7,7 @@
 
 const SETTINGS = 'spark.settings';
 const INDEX = 'spark.chats';
+const MEMORIES = 'spark.memories';
 const CHAT = (id) => `spark.chat.${id}`;
 
 function read(key, fallback) {
@@ -29,7 +30,19 @@ function write(key, value) {
 }
 
 export function loadSettings() {
-  return { key: '', effort: 'medium', about: '', ...read(SETTINGS, {}) };
+  return {
+    key: '',
+    effort: 'medium',
+    about: '',
+    learn: true, // let Spark save notes about you between chats
+    autoUpgrade: true, // move to newer Claude models when they come out
+    model: '', // the model new chats use; '' means the built-in default
+    modelName: '',
+    modelCreated: '', // when that model was released, to spot newer ones
+    badModels: [], // newer models that didn't work with Spark
+    lastCheck: 0, // when Spark last looked for a newer model
+    ...read(SETTINGS, {}),
+  };
 }
 
 export function saveSettings(settings) {
@@ -57,6 +70,15 @@ export function saveChat(chat) {
 export function deleteChat(id) {
   try { localStorage.removeItem(CHAT(id)); } catch { /* nothing to remove */ }
   write(INDEX, listChats().filter((c) => c.id !== id));
+}
+
+// What Spark has learned: [{ id, note, kind: 'about_them' | 'how_to_help', created }].
+export function loadMemories() {
+  return read(MEMORIES, []);
+}
+
+export function saveMemories(memories) {
+  return write(MEMORIES, memories);
 }
 
 export function deleteAllChats() {

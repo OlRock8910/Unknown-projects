@@ -10,12 +10,13 @@
 
 # Spark ✨
 
-**Your own AI to chat with.** Ask it anything, get help with homework, plans,
-writing or code, or show it a photo. Spark runs on **Claude**, Anthropic's AI.
+**Your own AI to chat with, and it gets better the more you use it.** Ask
+it anything, get help with homework, plans, writing or code, or show it a
+photo. Spark runs on **Claude**, Anthropic's AI.
 
-| **Get started** | **Ask anything** | **Answers** | **Your chats** | **Light mode** |
-|:---:|:---:|:---:|:---:|:---:|
-| <img src="docs/1-welcome.jpg" width="170"> | <img src="docs/2-home.jpg" width="170"> | <img src="docs/3-chat.jpg" width="170"> | <img src="docs/4-chats.jpg" width="170"> | <img src="docs/5-light.jpg" width="170"> |
+| **Get started** | **Ask anything** | **Answers** | **It learns** | **Its memory** | **Your chats** |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| <img src="docs/1-welcome.jpg" width="150"> | <img src="docs/2-home.jpg" width="150"> | <img src="docs/3-chat.jpg" width="150"> | <img src="docs/6-learned.jpg" width="150"> | <img src="docs/5-memory.jpg" width="150"> | <img src="docs/4-chats.jpg" width="150"> |
 
 - **Replies stream in as they're written**, with lists, tables and code
   blocks laid out properly (code has a copy button).
@@ -30,6 +31,37 @@ writing or code, or show it a photo. Spark runs on **Claude**, Anthropic's AI.
   delete it.
 - **Stop** a reply partway through, **copy** any answer, or tap **↻** for a
   different answer.
+
+## How Spark upgrades itself (safely)
+
+**It learns about you.** As you chat, Spark saves short notes about you
+("Name is Sam, loves football") and how you like answers ("likes short
+answers"), and reads them at the start of every new chat. Each time it
+saves one, a **✨ Learned** card appears in the chat with an **Undo**
+button. Ask it to forget something and it will.
+
+**It moves to newer Claude models.** About twice a day Spark checks
+Anthropic's list of models. When a newer Claude Opus comes out, new chats
+use it (**Settings › Spark's brain**). If the new model doesn't work with
+Spark, it goes straight back to the one that does and never tries that
+model again.
+
+**Why it won't go off the rails:**
+
+- **Its rules are fixed.** The instructions that make Spark *Spark* are
+  written into the app. Its notes are given to it as information about
+  you, labelled as something that can't change its rules, so a note can
+  never rewrite how it behaves.
+- **You can see everything it learns.** Every note is listed in
+  **Settings › What Spark has learned**, where you can delete any of them,
+  wipe the lot, or switch learning off.
+- **Its memory is small and limited.** It's up to 40 short notes, it's told
+  not to save private things like health, addresses or passwords, and the
+  app refuses notes that look like passwords or keys.
+- **It can't change its own code or its own "brain."** Spark's values come
+  from Claude, which Anthropic trains to be honest and safe. Spark can
+  only choose which official Claude model to use, and only ones Anthropic
+  publishes. It never edits the app itself.
 
 ## You need an Anthropic API key
 
@@ -67,7 +99,7 @@ Or use it in any browser at
 
 ```
 web/              The whole app: plain HTML, CSS and JavaScript, no build step
-  js/app.js         Screens, chats, and talking to Claude
+  js/app.js         Screens, chats, memory, upgrades, and talking to Claude
   js/markdown.js    Lays out Claude's replies (escaped, so replies can't inject HTML)
   js/store.js       Saves settings and chats on the device
   js/vendor/        Anthropic's official TypeScript SDK, bundled into one file by vendor.mjs
@@ -90,10 +122,15 @@ your own device). The requests:
 - turn on server-side fallbacks (`fallbacks: "default"`): if Claude's safety
   checks decline a harmless message by mistake, Anthropic answers it with a
   backup model instead of failing, and Spark notes it under the reply;
+- give Claude two tools, `save_memory` and `forget_memory`. Their input is
+  checked before anything is saved; a malformed call goes back to Claude
+  as an error instead;
 - cache the conversation, so long chats cost less;
 - send each chat's history back exactly as it came, thinking blocks
-  included. Every chat keeps the system prompt it started with, so
-  changing **About you** only affects new chats.
+  included. Every chat keeps the system prompt, tools and model it started
+  with, so changing **About you**, the memory or the model only affects
+  new chats. (Notes saved partway through a chat are already in that chat
+  as tool calls.)
 
 If Claude declines a message, Spark takes it out of the chat and puts it back
 in the box to reword.

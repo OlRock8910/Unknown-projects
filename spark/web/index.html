@@ -92,9 +92,28 @@
         </div>
         <p class="hint">Deeper thinking gives better answers to hard questions, but is slower and uses more credit.</p>
 
+        <h3>Spark’s brain</h3>
+        <div class="key-row">
+          <span id="model-name"></span>
+        </div>
+        <label class="switch-row">
+          <span>Upgrade itself when a newer Claude comes out</span>
+          <input type="checkbox" id="auto-upgrade" role="switch" />
+        </label>
+        <p class="hint">New chats use the newest model. If one doesn’t work with Spark, it goes back to the one that does.</p>
+
         <h3>About you</h3>
         <textarea id="about" rows="4" placeholder="E.g. I'm 15, I live in Leeds, keep answers short and funny."></textarea>
         <p class="hint">Spark reads this at the start of every new chat.</p>
+
+        <h3>What Spark has learned</h3>
+        <label class="switch-row">
+          <span>Let Spark learn about me</span>
+          <input type="checkbox" id="learn" role="switch" />
+        </label>
+        <p class="hint">Spark saves short notes as you chat, so it gets better at helping you. Notes can’t change its rules, and you can delete any of them.</p>
+        <ul class="memories" id="memories"></ul>
+        <button class="btn btn-danger btn-sm" id="forget-all" data-a="forget-all">Forget everything</button>
 
         <h3>API key</h3>
         <div class="key-row">

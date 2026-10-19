@@ -226,6 +226,34 @@ details.thought .thought-body { margin-top: 6px; }
 .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 3px; }
 .seg button { border: 0; background: none; padding: 9px 0; border-radius: 11px; font-weight: 600; color: var(--text-2); }
 .seg button.on { background: var(--grad); color: #fff; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 10px; font-size: 15px; cursor: pointer; }
+.switch-row input {
+  appearance: none; flex: none; width: 46px; height: 28px; margin: 0; border-radius: 14px;
+  background: var(--bg-3); border: 1px solid var(--line); position: relative; cursor: pointer; transition: background .15s;
+}
+.switch-row input::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s;
+}
+.switch-row input:checked { background: var(--accent); border-color: var(--accent); }
+.switch-row input:checked::after { transform: translateX(18px); }
+.memories { list-style: none; margin: 12px 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.memories:has(.none) { border-style: dashed; }
+.memories li { display: flex; align-items: center; gap: 6px; padding: 8px 4px 8px 12px; font-size: 14px; }
+.memories li + li { border-top: 1px solid var(--line); }
+.memories li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.memories small { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); }
+.memories .del { width: 36px; height: 36px; color: var(--text-2); }
+.memories .del svg { width: 16px; height: 16px; }
+.memories .none { color: var(--text-2); padding: 12px; }
+.learned {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 0;
+  padding: 8px 8px 8px 12px; border-radius: 14px; font-size: 14px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.learned span { min-width: 0; overflow-wrap: anywhere; }
+.learned button { flex: none; border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 13px; padding: 4px 6px; }
+.learned em { flex: none; color: var(--text-2); font-size: 12px; padding-right: 6px; }
 .key-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .key-row code { color: var(--text-2); font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
 
