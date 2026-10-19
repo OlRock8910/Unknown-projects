@@ -1,8 +1,9 @@
 // Opens Spark in a real browser against a stand-in for the Claude API and
 // walks through it: adding a key, upgrading itself to a newer model (which
 // fails and is undone), chatting, photos, a refusal, a backup-model reply,
-// learning and forgetting notes, an error, reopening a saved chat and asking
-// for a new answer.
+// learning and forgetting notes, an error, reopening a saved chat, asking
+// for a new answer, holding lots of data, searching notes and old chats, and
+// a chat long enough to need summarising.
 // Fails on any page error or on a request the real API would reject.
 //
 //   node spark/tests/smoke.mjs [--shots]
@@ -35,8 +36,8 @@ const url = `http://127.0.0.1:${server.address().port}/`;
 const sse = (events) => events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
 
 // blocks: [{ type: 'thinking', thinking } | { type: 'text', text } | { type: 'tool_use', id, name, input } | { type: 'fallback', from, to }]
-function reply(blocks, { model = MODEL, stop = blocks.some((b) => b.type === 'tool_use') ? 'tool_use' : 'end_turn' } = {}) {
-  const ev = [{ type: 'message_start', message: { id: 'msg_' + Math.random().toString(36).slice(2), type: 'message', role: 'assistant', model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 12, output_tokens: 0 } } }];
+function reply(blocks, { model = MODEL, stop = blocks.some((b) => b.type === 'tool_use') ? 'tool_use' : 'end_turn', input = 12 } = {}) {
+  const ev = [{ type: 'message_start', message: { id: 'msg_' + Math.random().toString(36).slice(2), type: 'message', role: 'assistant', model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: input, output_tokens: 0 } } }];
   blocks.forEach((b, index) => {
     if (b.type === 'thinking') {
       ev.push({ type: 'content_block_start', index, content_block: { type: 'thinking', thinking: '', signature: '' } });
@@ -45,6 +46,9 @@ function reply(blocks, { model = MODEL, stop = blocks.some((b) => b.type === 'to
     } else if (b.type === 'text') {
       ev.push({ type: 'content_block_start', index, content_block: { type: 'text', text: '' } });
       for (const piece of b.text.match(/[\s\S]{1,12}/g)) ev.push({ type: 'content_block_delta', index, delta: { type: 'text_delta', text: piece } });
+    } else if (b.type === 'compaction') {
+      ev.push({ type: 'content_block_start', index, content_block: { type: 'compaction', content: null, encrypted_content: null } });
+      ev.push({ type: 'content_block_delta', index, delta: { type: 'compaction_delta', content: b.content, encrypted_content: 'enc-summary' } });
     } else if (b.type === 'tool_use') {
       ev.push({ type: 'content_block_start', index, content_block: { type: 'tool_use', id: b.id, name: b.name, input: {} } });
       for (const piece of JSON.stringify(b.input).match(/[\s\S]{1,9}/g)) ev.push({ type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: piece } });
@@ -73,6 +77,8 @@ function checkRequest(req, body) {
   if (!betas.includes('thinking-binding-controls-2026-08-01')) problems.push('missing thinking binding beta header');
   if (body.thinking?.block_binding?.prefix_mismatch_behavior !== 'drop_block') problems.push('thinking.block_binding not set');
   if (![MODEL, NEW_MODEL].includes(body.model)) problems.push('wrong model ' + body.model);
+  const compacting = (h['anthropic-beta'] || '').includes('compact-2026-01-12') && body.context_management?.edits?.[0]?.type === 'compact_20260112';
+  if (body.messages.some((m) => m.content.some((b) => b.type === 'compaction')) && !compacting) problems.push('a summarised chat must keep compaction on');
   if (body.tools && !body.tools.every((t) => t.eager_input_streaming === true && t.input_schema)) problems.push('tools without eager input streaming');
   if (body.fallbacks !== 'default') problems.push('fallbacks not "default"');
   if (body.thinking?.type !== 'adaptive') problems.push('thinking not adaptive');
@@ -142,6 +148,10 @@ async function claude(route) {
       { type: 'tool_use', id: 'toolu_bad1', name: 'save_memory', input: { kind: 'about_them' } },
     ]);
   else if (/short answers please/i.test(last)) stream = reply([{ type: 'tool_use', id: 'toolu_short', name: 'save_memory', input: { note: 'Likes short answers.', kind: 'how_to_help' } }]);
+  else if (/football team/i.test(last)) stream = reply([{ type: 'tool_use', id: 'toolu_search1', name: 'search_memory', input: { query: 'football team support' } }]);
+  else if (/said about short answers/i.test(last)) stream = reply([{ type: 'tool_use', id: 'toolu_search2', name: 'search_chats', input: { query: 'short answers' } }]);
+  else if (/make this chat long/i.test(last)) stream = reply([{ type: 'text', text: 'That was a lot of words.' }], { input: 130000 });
+  else if (/keep going/i.test(last) && body.context_management) stream = reply([{ type: 'compaction', content: 'Summary of the chat so far.' }, { type: 'text', text: 'Still here.' }], { input: 2000 });
   else if (/forget my name/i.test(last)) stream = reply([{ type: 'tool_use', id: 'toolu_forget', name: 'forget_memory', input: { id: memoryId } }]);
   else if (/how do black holes/i.test(last)) stream = reply([{ type: 'thinking', thinking: 'They want a simple explanation.' }, { type: 'text', text: HELLO }]);
   else if (/forbidden/i.test(last)) stream = reply([], { stop: 'refusal' });
@@ -223,7 +233,13 @@ await page.click('#key-form button');
 await page.waitForSelector('#welcome', { state: 'hidden' });
 await page.waitForSelector('.chip');
 if (shots) await page.screenshot({ path: path.join(shotDir, '2-home.jpg'), quality: 85 });
-const stored = () => page.evaluate(() => ({ settings: JSON.parse(localStorage.getItem('spark.settings')), memories: JSON.parse(localStorage.getItem('spark.memories') || '[]') }));
+const stored = () =>
+  page.evaluate(async () => {
+    const db = await new Promise((ok) => (indexedDB.open('spark').onsuccess = (e) => ok(e.target.result)));
+    const memories = await new Promise((ok) => (db.transaction('memories').objectStore('memories').getAll().onsuccess = (e) => ok(e.target.result)));
+    db.close();
+    return { settings: JSON.parse(localStorage.getItem('spark.settings')), memories };
+  });
 
 step('it finds a newer model and upgrades itself');
 await page.waitForFunction(() => JSON.parse(localStorage.getItem('spark.settings')).model === 'claude-opus-9');
@@ -371,6 +387,54 @@ step('delete a chat');
 await page.click('[data-a="drawer"]');
 await page.locator('.chat-item .del').first().click();
 expect((await page.locator('.chat-item').count()) === 1, 'chat not deleted');
+
+step('it holds lots of data');
+// 300 notes and a chat far bigger than localStorage could ever hold (~5 MB).
+await page.evaluate(async () => {
+  const db = await new Promise((ok) => (indexedDB.open('spark').onsuccess = (e) => ok(e.target.result)));
+  const t = db.transaction(['memories', 'chats'], 'readwrite');
+  t.objectStore('memories').put({ id: 'note-leeds', note: 'Supports Leeds United.', kind: 'about_them', created: 1 });
+  for (let k = 0; k < 299; k++) t.objectStore('memories').put({ id: `note-${k}`, note: `Fact number ${k} about topic ${k}.`, kind: 'about_them', created: 10 + k });
+  const big = 'All work and no play. '.repeat(1000);
+  const messages = [];
+  for (let k = 0; k < 300; k++) messages.push({ role: 'user', content: [{ type: 'text', text: `Part ${k}: ${big}` }] }, { role: 'assistant', content: [{ type: 'text', text: `Reply ${k}` }] });
+  t.objectStore('chats').put({ id: 'big', title: 'Big chat', created: Date.now(), updated: Date.now(), system: 'Spark', messages });
+  await new Promise((ok) => (t.oncomplete = ok));
+  db.close();
+  localStorage.setItem('spark.chats', JSON.stringify([{ id: 'big', title: 'Big chat', updated: Date.now() }, ...JSON.parse(localStorage.getItem('spark.chats'))]));
+});
+await page.reload();
+await page.waitForSelector('.chip');
+await page.click('[data-a="drawer"]');
+await page.locator('.chat-item .open', { hasText: 'Big chat' }).click();
+await page.locator('.msg-ai', { hasText: 'Reply 299' }).waitFor();
+expect((await page.locator('.msg-user').count()) === 300, 'big chat did not open fully');
+
+step('it searches its memory and old chats');
+await page.click('header [data-a="new"]');
+await say('What football team do I support?');
+const firstOfSearch = requests.findLast((r) => r.body.messages.length === 1).body;
+expect(firstOfSearch.system.includes('your 150 newest of 300 notes') && !firstOfSearch.system.includes('Leeds'), 'only the newest notes should be in the prompt');
+expect(requests.at(-1).body.messages.at(-1).content[0].content.includes('Supports Leeds United.'), 'search_memory did not find the old note');
+expect((await page.locator('.learned', { hasText: 'Checked memory' }).count()) === 1, 'memory search not shown');
+await say('Remember what we said about short answers?');
+expect(requests.at(-1).body.messages.at(-1).content[0].content.includes('"New chat here"') && requests.at(-1).body.messages.at(-1).content[0].content.includes('they said: Short answers please'), 'search_chats did not find the old chat');
+await page.click('[data-a="drawer"]');
+await page.click('#drawer [data-a="settings"]');
+expect((await page.textContent('#memory-count')) === '300 notes', 'note count wrong');
+await page.fill('#memory-filter', 'leeds');
+expect((await page.locator('#memories li').count()) === 1, 'note search in Settings did not filter');
+await page.waitForFunction(() => /Spark is using/.test(document.querySelector('#storage').textContent));
+await page.click('[data-a="close-settings"]');
+
+step('a chat long enough to need summarising');
+await say('Make this chat long');
+await say('Keep going');
+const compactReq = requests.at(-1).body;
+expect(compactReq.context_management?.edits?.[0]?.type === 'compact_20260112', 'long chat should turn summarising on');
+expect((await page.locator('.compacted').count()) === 1, 'summary note not shown');
+await say('And more');
+expect(requests.at(-1).body.messages.some((m) => m.content.some((b) => b.type === 'compaction' && b.encrypted_content === 'enc-summary')), 'compaction block not sent back');
 
 await browser.close();
 server.close();

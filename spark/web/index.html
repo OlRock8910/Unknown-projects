@@ -106,12 +106,13 @@
         <textarea id="about" rows="4" placeholder="E.g. I'm 15, I live in Leeds, keep answers short and funny."></textarea>
         <p class="hint">Spark reads this at the start of every new chat.</p>
 
-        <h3>What Spark has learned</h3>
+        <h3>What Spark has learned <span class="count" id="memory-count"></span></h3>
         <label class="switch-row">
           <span>Let Spark learn about me</span>
           <input type="checkbox" id="learn" role="switch" />
         </label>
-        <p class="hint">Spark saves short notes as you chat, so it gets better at helping you. Notes can’t change its rules, and you can delete any of them.</p>
+        <p class="hint">Spark saves short notes as you chat, so it gets better at helping you, and it can look back through all your old chats. Notes can’t change its rules, and you can delete any of them.</p>
+        <input class="filter" id="memory-filter" type="search" placeholder="Search notes" aria-label="Search notes" hidden />
         <ul class="memories" id="memories"></ul>
         <button class="btn btn-danger btn-sm" id="forget-all" data-a="forget-all">Forget everything</button>
 
@@ -123,6 +124,7 @@
 
         <h3>Chats</h3>
         <button class="btn btn-danger btn-sm" data-a="delete-all">Delete all chats</button>
+        <p class="hint" id="storage"></p>
 
         <p class="fine">Answers come from Claude, Anthropic's AI. Your key and chats are saved only on this device; each message is sent to Anthropic to get a reply. Spark can make mistakes, so check anything important.</p>
       </div>

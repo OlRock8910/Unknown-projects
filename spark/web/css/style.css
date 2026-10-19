@@ -237,6 +237,12 @@ details.thought .thought-body { margin-top: 6px; }
 }
 .switch-row input:checked { background: var(--accent); border-color: var(--accent); }
 .switch-row input:checked::after { transform: translateX(18px); }
+.sheet h3 .count { font-weight: 500; float: right; }
+.filter {
+  width: 100%; margin-top: 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--text); font: inherit; font-size: 15px; padding: 9px 12px;
+}
+.note.compacted { margin: 0 0 10px; }
 .memories { list-style: none; margin: 12px 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .memories:has(.none) { border-style: dashed; }
 .memories li { display: flex; align-items: center; gap: 6px; padding: 8px 4px 8px 12px; font-size: 14px; }

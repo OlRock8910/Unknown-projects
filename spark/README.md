@@ -27,8 +27,13 @@ photo. Spark runs on **Claude**, Anthropic's AI.
   **Balanced** or **Deep** thinking.
 - **About you:** tell Spark about yourself and how you like answers
   ("I'm 15, keep it short") and it remembers in every new chat.
-- **Chats are saved** on your phone. Open the menu to go back to one, or
-  delete it.
+- **Room for a lot.** Chats, photos and memory are saved in your phone's
+  database, which can use gigabytes of free space, and Spark asks the phone
+  never to clear it. **Settings** shows how much it's using. Open the menu
+  to go back to any chat, or delete it.
+- **Chats that never run out.** When a chat gets very long, Claude
+  summarises the oldest part so the chat can keep going for ever (a 📚 note
+  shows where).
 - **Stop** a reply partway through, **copy** any answer, or tap **↻** for a
   different answer.
 
@@ -38,7 +43,11 @@ photo. Spark runs on **Claude**, Anthropic's AI.
 ("Name is Sam, loves football") and how you like answers ("likes short
 answers"), and reads them at the start of every new chat. Each time it
 saves one, a **✨ Learned** card appears in the chat with an **Undo**
-button. Ask it to forget something and it will.
+button. Ask it to forget something and it will. It can keep thousands of
+notes: the newest 150 are read at the start of each chat, and it searches
+the rest when they'd help (🧠 **Checked memory**). It can also search
+everything you've said in your old chats (🔎 **Looked back**), so it can
+pick up where you left off.
 
 **It moves to newer Claude models.** About twice a day Spark checks
 Anthropic's list of models. When a newer Claude Opus comes out, new chats
@@ -55,9 +64,10 @@ model again.
 - **You can see everything it learns.** Every note is listed in
   **Settings › What Spark has learned**, where you can delete any of them,
   wipe the lot, or switch learning off.
-- **Its memory is small and limited.** It's up to 40 short notes, it's told
-  not to save private things like health, addresses or passwords, and the
-  app refuses notes that look like passwords or keys.
+- **Its memory is short notes only.** Each note is at most 300 characters
+  (up to 5,000 notes), it's told not to save private things like health,
+  addresses or passwords, and the app refuses notes that look like
+  passwords or keys.
 - **It can't change its own code or its own "brain."** Spark's values come
   from Claude, which Anthropic trains to be honest and safe. Spark can
   only choose which official Claude model to use, and only ones Anthropic
@@ -101,7 +111,7 @@ Or use it in any browser at
 web/              The whole app: plain HTML, CSS and JavaScript, no build step
   js/app.js         Screens, chats, memory, upgrades, and talking to Claude
   js/markdown.js    Lays out Claude's replies (escaped, so replies can't inject HTML)
-  js/store.js       Saves settings and chats on the device
+  js/store.js       Saves chats and memory in IndexedDB, settings in localStorage
   js/vendor/        Anthropic's official TypeScript SDK, bundled into one file by vendor.mjs
 android/          A WebView wrapper with a photo picker and the back button
 build-apk.sh      Builds and signs the APK without Gradle
@@ -122,9 +132,12 @@ your own device). The requests:
 - turn on server-side fallbacks (`fallbacks: "default"`): if Claude's safety
   checks decline a harmless message by mistake, Anthropic answers it with a
   backup model instead of failing, and Spark notes it under the reply;
-- give Claude two tools, `save_memory` and `forget_memory`. Their input is
-  checked before anything is saved; a malformed call goes back to Claude
-  as an error instead;
+- give Claude four tools: `save_memory`, `forget_memory`, `search_memory`
+  and `search_chats` (word search on the device; only the matching
+  passages are sent). Their input is checked before anything runs; a
+  malformed call goes back to Claude as an error instead;
+- once a chat passes 120,000 tokens, turn on server-side compaction, which
+  summarises older turns when the chat nears the limit;
 - cache the conversation, so long chats cost less;
 - send each chat's history back exactly as it came, thinking blocks
   included. Every chat keeps the system prompt, tools and model it started
