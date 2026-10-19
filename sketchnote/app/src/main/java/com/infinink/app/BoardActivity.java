@@ -889,7 +889,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             case ToolBox.ERASER:
                 return "Precise rubs out just what you touch. The button on a pen, or its eraser end, erases with any tool.";
             case ToolBox.LASSO:
-                return "Draw a loop around things to select them, or tap one thing. Drag to move. Pull a corner dot to resize, or a side dot to stretch one way. Select a picture and tap the pencil to crop it or cut out its background.";
+                return "Draw a loop around things to select them, or tap one thing. Drag to move. Pull a corner dot to resize, or a side dot to stretch one way. Two fingers on it turn it. Select a picture and tap the pencil to crop it or cut out its background.";
             case ToolBox.SHAPE:
                 return "Drag on the page to draw. Lines snap to level, upright and 45°.";
             case ToolBox.TEXT:
@@ -1253,7 +1253,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                 + "• Tap with two fingers to undo, three fingers to redo.\n\n"
                 + "• Hold still at the end of a line to snap it into a clean line, circle, triangle, box or polygon.\n\n"
                 + "• With a pen, your palm and fingers are ignored while writing. The pen's button (or eraser end) erases.\n\n"
-                + "• Lasso: draw round things to select them, then drag, resize, recolour, duplicate or delete. Corner dots resize, side dots stretch.\n\n"
+                + "• Lasso: draw round things to select them, then drag, resize, recolour, duplicate or delete. Corner dots resize, side dots stretch, and two fingers on the selection turn it.\n\n"
                 + "• Tap the zoom number to jump between 100% and seeing everything.\n\n"
                 + "• Everything saves by itself, on your device only.";
         new AlertDialog.Builder(this).setTitle("Gestures & tips").setMessage(msg).setPositiveButton("Got it", null).show();
@@ -1438,10 +1438,14 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             float nw = w * k, nh = h * k;
             Picture p;
             if (data.getBooleanExtra(ImageEditActivity.RESULT_TURNED, false)) {
-                p = new Picture(name, old.x + old.w / 2 - nw / 2, old.y + old.h / 2 - nh / 2, nw, nh);
+                p = new Picture(name, old.centerX() - nw / 2, old.centerY() - nh / 2, nw, nh, old.angle);
             } else {
+                // Where the kept part's centre sits in the picture's own frame, turned with it.
                 float cx = data.getFloatExtra(ImageEditActivity.RESULT_CROP_X, 0), cy = data.getFloatExtra(ImageEditActivity.RESULT_CROP_Y, 0);
-                p = new Picture(name, old.x + cx * k, old.y + cy * k, nw, nh);
+                float lx = old.x + cx * k + nw / 2 - old.centerX(), ly = old.y + cy * k + nh / 2 - old.centerY();
+                float cos = (float) Math.cos(old.angle), sin = (float) Math.sin(old.angle);
+                float mx = old.centerX() + lx * cos - ly * sin, my = old.centerY() + lx * sin + ly * cos;
+                p = new Picture(name, mx - nw / 2, my - nh / 2, nw, nh, old.angle);
             }
             selectTool(ToolBox.LASSO);
             canvas.replaceItem(old, p);

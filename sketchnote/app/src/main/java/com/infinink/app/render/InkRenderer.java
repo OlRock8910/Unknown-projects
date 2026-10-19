@@ -333,12 +333,18 @@ public final class InkRenderer {
     public void drawPicture(Canvas c, Picture p) {
         Bitmap b = cache ? images.get(p.file) : images.getNow(p.file);
         rect.set(p.x, p.y, p.x + p.w, p.y + p.h);
+        boolean turned = p.angle != 0f;
+        if (turned) {
+            c.save();
+            c.rotate((float) Math.toDegrees(p.angle), p.centerX(), p.centerY());
+        }
         if (b == null) {
             card.setColor(0x22808080);
             c.drawRect(rect, card);
-            return;
+        } else {
+            c.drawBitmap(b, null, rect, image);
         }
-        c.drawBitmap(b, null, rect, image);
+        if (turned) c.restore();
     }
 
     public float viewScale() {

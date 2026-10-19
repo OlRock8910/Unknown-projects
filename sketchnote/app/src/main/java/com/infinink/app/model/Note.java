@@ -55,6 +55,14 @@ public final class Note extends Item {
     }
 
     @Override
+    public Note rotated(float angle, float px, float py) {
+        float c = (float) Math.cos(angle), s = (float) Math.sin(angle);
+        float dx = x + w / 2 - px, dy = y + h / 2 - py;
+        float cx = px + dx * c - dy * s, cy = py + dx * s + dy * c;
+        return new Note(style, cx - w / 2, cy - h / 2, w, h, fontSize, paper, ink, text);
+    }
+
+    @Override
     public Note recolored(int argb) {
         if (style == STICKY) return new Note(style, x, y, w, h, fontSize, argb | 0xFF000000, ink, text);
         return new Note(style, x, y, w, h, fontSize, paper, argb | 0xFF000000, text);

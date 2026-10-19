@@ -24,6 +24,12 @@ public abstract class Item {
      */
     public abstract Item transformed(float sx, float sy, float dx, float dy);
 
+    /**
+     * A copy turned by angle radians (clockwise on screen) about (px, py). Text stays upright and
+     * only its position turns.
+     */
+    public abstract Item rotated(float angle, float px, float py);
+
     /** A copy in another colour (the opacity of the original is kept where it has one). */
     public abstract Item recolored(int argb);
 

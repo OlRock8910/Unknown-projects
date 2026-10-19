@@ -74,6 +74,19 @@ public final class Stroke extends Item {
     }
 
     @Override
+    public Stroke rotated(float angle, float px, float py) {
+        float c = (float) Math.cos(angle), s = (float) Math.sin(angle);
+        float[] p = new float[pts.length];
+        for (int i = 0; i < pts.length; i += 3) {
+            float dx = pts[i] - px, dy = pts[i + 1] - py;
+            p[i] = px + dx * c - dy * s;
+            p[i + 1] = py + dx * s + dy * c;
+            p[i + 2] = pts[i + 2];
+        }
+        return new Stroke(brush, color, size, flags, p);
+    }
+
+    @Override
     public Stroke recolored(int argb) {
         return new Stroke(brush, withAlphaOf(argb, color), size, flags, pts);
     }
