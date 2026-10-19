@@ -1,0 +1,5 @@
+/build/
+node_modules/
+# The ready-to-install APK is committed on purpose so it can be downloaded
+# straight from GitHub on a phone.
+!apk/Spark.apk

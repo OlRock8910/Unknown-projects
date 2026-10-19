@@ -1,11 +1,13 @@
-# Publishes Adjetivos so anyone can play in their browser, no install:
+# Publishes the web apps so anyone can use them in their browser, no install:
 # https://olrock8910.github.io/Unknown-projects/adjetivos/
-name: Publish Adjetivos website
+# https://olrock8910.github.io/Unknown-projects/spark/
+# GitHub Pages holds one site per repository, so both go up together here.
+name: Publish websites
 
 on:
   push:
     branches: [main]
-    paths: ['adjetivos/web/**', '.github/workflows/adjetivos-pages.yml']
+    paths: ['adjetivos/web/**', 'spark/web/**', '.github/workflows/adjetivos-pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -29,6 +31,7 @@ jobs:
         run: |
           mkdir -p _site
           cp -r adjetivos/web _site/adjetivos
+          cp -r spark/web _site/spark
           # The bare site address goes straight to the game.
           printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=adjetivos/"><a href="adjetivos/">Adjetivos</a>\n' > _site/index.html
       - uses: actions/configure-pages@v5

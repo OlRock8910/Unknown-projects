@@ -1,0 +1,15 @@
+{
+  "name": "spark",
+  "private": true,
+  "description": "Spark: chat with Claude on your phone",
+  "scripts": {
+    "test": "node tests/smoke.mjs",
+    "vendor": "node vendor.mjs",
+    "build:apk": "./build-apk.sh"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "0.135.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.56.1"
+  }
+}
