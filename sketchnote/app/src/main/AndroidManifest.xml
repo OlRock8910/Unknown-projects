@@ -28,6 +28,11 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|navigation|density"
             android:windowSoftInputMode="adjustNothing" />
 
+        <activity
+            android:name=".ImageEditActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|navigation|density" />
+
         <provider
             android:name=".ExportProvider"
             android:authorities="com.infinink.app.exports"

@@ -2,6 +2,7 @@ package com.infinink.app.ui;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
@@ -63,10 +64,16 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
         /** First stylus contact: fingers were switched to pan-only. */
         void onStylusDetected();
+
+        /** The eyedropper picked this colour off the page. */
+        void onColorPicked(int rgb);
     }
 
     private static final int M_NONE = 0, M_DRAW = 1, M_ERASE = 2, M_LASSO = 3, M_SHAPE = 4,
-            M_NAV = 5, M_MOVE_SEL = 6, M_SCALE_SEL = 7, M_NOTE = 8, M_IGNORE = 9;
+            M_NAV = 5, M_MOVE_SEL = 6, M_SCALE_SEL = 7, M_NOTE = 8, M_IGNORE = 9, M_PICK = 10;
+
+    /** Pixels sampled around the eyedropper, shown magnified in the loupe. */
+    private static final int LOUPE = 15;
 
     private static final long HOLD_TO_SNAP_MS = 520;
 
@@ -137,6 +144,17 @@ public final class CanvasView extends View implements ImageCache.Listener {
     private float flingVx, flingVy;
     private long flingLast;
     private ValueAnimator zoomAnim;
+
+    // Eyedropper.
+    private boolean pickArmed;
+    private Bitmap loupe;
+    private Canvas loupeCanvas;
+    private int pickColor;
+    private float pickX, pickY;
+    private final int[] pickPx = new int[9];
+    private final Paint pixelated = new Paint();
+    private final Path loupeClip = new Path();
+    private final Paint loupeText = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private final Paint ui = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint uiFill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -323,6 +341,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
             uiFill.setColor(accent);
             c.drawCircle(r.right, r.bottom, 6.5f * density, uiFill);
         }
+        if (mode == M_PICK && loupe != null) drawLoupe(c);
         if (eraseShow && !Float.isNaN(eraseX)) {
             float sx = vp.toScreenX(eraseX), sy = vp.toScreenY(eraseY);
             uiFill.setColor(dark ? 0x22FFFFFF : 0x22000000);
@@ -331,6 +350,79 @@ public final class CanvasView extends View implements ImageCache.Listener {
             ui.setStrokeWidth(1.2f * density);
             c.drawCircle(sx, sy, eraseScreenR, ui);
         }
+    }
+
+    /** Arms the eyedropper: the next touch on the page picks the colour under it. */
+    public void startColorPick() {
+        pickArmed = true;
+        setSelection(Collections.<Item>emptyList());
+    }
+
+    public boolean picking() {
+        return pickArmed;
+    }
+
+    /** Draws the few pixels around (sx, sy) exactly as on screen and averages the middle. */
+    private void pickAt(float sx, float sy) {
+        pickX = sx;
+        pickY = sy;
+        if (loupe == null) {
+            loupe = Bitmap.createBitmap(LOUPE, LOUPE, Bitmap.Config.ARGB_8888);
+            loupeCanvas = new Canvas(loupe);
+        }
+        int half = LOUPE / 2;
+        Canvas c = loupeCanvas;
+        c.save();
+        c.translate(half - sx, half - sy);
+        paper.draw(c, board.paper, board.pattern, vp, getWidth(), getHeight());
+        c.translate(vp.tx, vp.ty);
+        c.scale(vp.scale, vp.scale);
+        ink.setViewScale(vp.scale);
+        Box area = new Box(vp.toBoardX(sx - half), vp.toBoardY(sy - half), vp.toBoardX(sx + half), vp.toBoardY(sy + half));
+        ink.drawAll(c, board.items, area);
+        c.restore();
+        loupe.getPixels(pickPx, 0, 3, half - 1, half - 1, 3, 3);
+        int r = 0, g = 0, b = 0;
+        for (int p : pickPx) {
+            r += (p >> 16) & 255;
+            g += (p >> 8) & 255;
+            b += p & 255;
+        }
+        pickColor = 0xFF000000 | (r / 9) << 16 | (g / 9) << 8 | (b / 9);
+        invalidate();
+    }
+
+    /** The magnifier above the finger while picking a colour. */
+    private void drawLoupe(Canvas c) {
+        float rad = 52 * density;
+        float cx = pickX, cy = pickY - rad - 40 * density;
+        if (cy - rad < 0) cy = pickY + rad + 40 * density;
+        c.save();
+        loupeClip.rewind();
+        loupeClip.addCircle(cx, cy, rad, Path.Direction.CW);
+        c.clipPath(loupeClip);
+        tmp.set(cx - rad, cy - rad, cx + rad, cy + rad);
+        c.drawBitmap(loupe, null, tmp, pixelated);
+        c.restore();
+        ui.setStrokeWidth(6 * density);
+        ui.setColor(pickColor);
+        c.drawCircle(cx, cy, rad, ui);
+        ui.setStrokeWidth(1.5f * density);
+        ui.setColor(0xFFFFFFFF);
+        c.drawCircle(cx, cy, rad + 3 * density, ui);
+        float cell = 2 * rad / LOUPE;
+        ui.setColor(Board.isDark(pickColor) ? 0xFFFFFFFF : 0xFF000000);
+        c.drawRect(cx - cell * 1.5f, cy - cell * 1.5f, cx + cell * 1.5f, cy + cell * 1.5f, ui);
+        String hex = String.format("#%06X", pickColor & 0xFFFFFF);
+        loupeText.setColor(0xFFFFFFFF);
+        loupeText.setTextSize(13 * density);
+        loupeText.setTextAlign(Paint.Align.CENTER);
+        loupeText.setFakeBoldText(true);
+        float tw = loupeText.measureText(hex) / 2 + 10 * density;
+        tmp.set(cx - tw, cy + rad + 8 * density, cx + tw, cy + rad + 32 * density);
+        uiFill.setColor(0xCC000000);
+        c.drawRoundRect(tmp, 12 * density, 12 * density, uiFill);
+        c.drawText(hex, cx, tmp.bottom - 7 * density, loupeText);
     }
 
     private RectF selectionScreenRect(RectF out) {
@@ -359,6 +451,13 @@ public final class CanvasView extends View implements ImageCache.Listener {
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
                 stopMotion();
+                if (pickArmed) {
+                    // The eyedropper takes the next touch, from a finger or a pen.
+                    mode = M_PICK;
+                    activeId = e.getPointerId(0);
+                    pickAt(e.getX(), e.getY());
+                    return true;
+                }
                 boolean pen = isPen(e, 0);
                 if (pen && !stylusSeen) {
                     stylusSeen = true;
@@ -383,7 +482,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
             }
             case MotionEvent.ACTION_POINTER_DOWN: {
                 int i = e.getActionIndex();
-                if (mode == M_IGNORE) return true;
+                if (mode == M_IGNORE || mode == M_PICK) return true;
                 if (mode != M_NAV && mode != M_NONE && activeStylus) return true; // palm while writing
                 if (isPen(e, i)) {
                     // A palm (or finger) was resting and has not panned yet: the pen takes over.
@@ -411,6 +510,11 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 return true;
             }
             case MotionEvent.ACTION_MOVE:
+                if (mode == M_PICK) {
+                    int pi = e.findPointerIndex(activeId);
+                    if (pi >= 0) pickAt(e.getX(pi), e.getY(pi));
+                    return true;
+                }
                 if (mode == M_NAV) nav(e);
                 else if (mode != M_NONE && mode != M_IGNORE) moveTool(e);
                 return true;
@@ -425,13 +529,17 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 return true;
             }
             case MotionEvent.ACTION_UP:
-                if (mode == M_NAV) endNav(e);
+                if (mode == M_PICK) {
+                    pickArmed = false;
+                    if (listener != null) listener.onColorPicked(pickColor);
+                } else if (mode == M_NAV) endNav(e);
                 else if (mode != M_NONE && mode != M_IGNORE) endTool(e, 0);
                 mode = M_NONE;
                 activeId = -1;
                 invalidate();
                 return true;
             case MotionEvent.ACTION_CANCEL:
+                if (mode == M_PICK) pickArmed = false;
                 cancelTool();
                 if (mode == M_NAV) settled();
                 mode = M_NONE;
@@ -1123,6 +1231,15 @@ public final class CanvasView extends View implements ImageCache.Listener {
         contentChanged();
         setSelection(Collections.<Item>singletonList(p));
         return p;
+    }
+
+    /** Swaps one item for another (an edited picture) as one undoable step, and selects it. */
+    public void replaceItem(Item before, Item after) {
+        Change c = new Change();
+        c.apply(board.items, before, after);
+        history.push(c);
+        contentChanged();
+        setSelection(Collections.singletonList(after));
     }
 
     public void undo() {

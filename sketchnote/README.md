@@ -10,6 +10,10 @@ shapes and photos to mark up. Free, with no ads, no account, no internet, and no
 |:---:|:---:|:---:|:---:|
 | <img src="docs/1-home.jpg" width="200"> | <img src="docs/2-sketch.jpg" width="200"> | <img src="docs/3-pen.jpg" width="200"> | <img src="docs/4-lasso.jpg" width="200"> |
 
+| Cut out a background | Pick colours from a photo |
+|:---:|:---:|
+| <img src="docs/5-cutout.jpg" width="200"> | <img src="docs/6-colours.jpg" width="200"> |
+
 ## Install
 
 `apk/Sketchnote.apk` is ready to install. Copy it to the phone or tablet, open it, and allow
@@ -46,7 +50,19 @@ out lines, arrows, rectangles, ellipses, triangles and diamonds, filled or not.
 **Notes and text.** Sticky notes in eight colours and plain text, in four sizes. Tap to edit,
 drag to move.
 
-**Annotate photos.** Add any picture from your gallery or files and draw on top of it.
+**Annotate photos.** Add any picture from your gallery or files and draw on top of it. Every
+picture opens in the picture editor first (and again any time: select it and tap the pencil):
+
+- **Crop**, with free, original, square, 4:3, 3:4 and 16:9 frames, plus rotate and flip.
+- **Cut out** the background. *Auto remove* takes away a plain background (a wall, paper, a
+  table, the sky) that touches the edges, the *magic wand* removes whatever area you tap, and
+  *Erase* / *Restore* brushes tidy up the edges. Cut-outs keep their see-through background on
+  the page. This works by colour, on the device, so it is best with fairly plain backgrounds.
+- **Colours**: drag the magnifier over the picture to pick any colour, or tap one of its main
+  colours. Picked colours go on your pen and into your colours.
+
+**Eyedropper.** In any tool's colour panel, *Pick a colour from the page* lets you drag a
+magnifier over anything on the board (ink, notes, photos) and take that exact colour.
 
 **Lasso.** Loop round anything (or tap one thing) to move it, resize it from the corner,
 recolour, duplicate or delete it.
@@ -82,11 +98,13 @@ the script header). That is how `apk/Sketchnote.apk` was produced.
 ```
 app/src/main/java/com/sketchnote/app/
   ink/      stroke outlines, shape recognition, geometry: pure Java, unit-tested
+  img/      background removal, magic wand, brushes, colour picking: pure Java, unit-tested
   model/    boards, items, undo history and the file format: pure Java, unit-tested
   render/   drawing ink, notes, pictures and paper onto a Canvas (GPU display list on Android 10+)
   ui/       the canvas view (touch, stylus, gestures) and the toolbar widgets
   MainActivity    the board list
   BoardActivity   the editor
+  ImageEditActivity  the picture editor (crop, cut out, colours)
 ```
 
 The app was first called Infinink. Its package (`com.infinink.app`) and signing key keep that

@@ -43,6 +43,7 @@ import com.infinink.app.model.Board;
 import com.infinink.app.model.History;
 import com.infinink.app.model.Item;
 import com.infinink.app.model.Note;
+import com.infinink.app.model.Picture;
 import com.infinink.app.render.ImageCache;
 import com.infinink.app.render.InkRenderer;
 import com.infinink.app.render.PaperRenderer;
@@ -72,6 +73,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     public static final String EXTRA_ID = "board";
 
     private static final int REQ_IMAGE = 7;
+    private static final int REQ_EDIT = 8;
     private static final int[] TOOL_ICONS = {
             Icons.PEN, Icons.PENCIL, Icons.BRUSH, Icons.CALLIGRAPHY, Icons.MARKER, Icons.HIGHLIGHTER,
             Icons.ERASER, Icons.LASSO, Icons.SHAPES, Icons.TEXT, Icons.NOTE
@@ -105,6 +107,9 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     private TextView selLabel;
     private IconButton selEdit;
     private int panelFor = -1;
+    // The picture in the editor: the one on the board (null for a new import) and its file.
+    private Picture editing;
+    private String editingFile;
     private boolean dirty;
     private int insetTop, insetBottom, insetLeft, insetRight;
 
@@ -256,7 +261,10 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         selBar.setVisibility(show ? View.VISIBLE : View.GONE);
         if (show) {
             selLabel.setText(selection.size() == 1 ? "1 item" : selection.size() + " items");
-            selEdit.setVisibility(selection.size() == 1 && selection.get(0) instanceof Note ? View.VISIBLE : View.GONE);
+            boolean one = selection.size() == 1;
+            selEdit.setVisibility(one && (selection.get(0) instanceof Note || selection.get(0) instanceof Picture)
+                    ? View.VISIBLE : View.GONE);
+            selEdit.setContentDescription(one && selection.get(0) instanceof Picture ? "Crop, cut out or pick colours" : "Edit text");
         }
         if (panelFor == PANEL_SELECTION_COLOR && !show) hidePanel();
     }
@@ -265,6 +273,27 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     public void onNoteTap(Note existing, float bx, float by) {
         hidePanel();
         editNote(existing, bx, by, tools.tool == ToolBox.NOTE ? Note.STICKY : Note.TEXT);
+    }
+
+    @Override
+    public void onColorPicked(int rgb) {
+        applyPicked(new int[]{rgb});
+    }
+
+    /** Colours picked with an eyedropper go into the recent colours and onto the current tool. */
+    private void applyPicked(int[] colors) {
+        if (colors == null || colors.length == 0) return;
+        for (int c : colors) tools.addRecent(c);
+        int last = colors[colors.length - 1];
+        int t = tools.tool;
+        if (!ToolBox.hasColor(t)) {
+            t = ToolBox.PEN;
+            selectTool(t);
+        }
+        tools.setHue(t, last);
+        refreshDock();
+        showHint(String.format("Picked #%06X for the %s. It's saved in your colours too.",
+                last & 0xFFFFFF, ToolBox.NAMES[t].toLowerCase(Locale.US)));
     }
 
     @Override
@@ -562,13 +591,16 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                 showSelectionColors();
             }
         }));
-        selEdit = button(Icons.EDIT, "Edit text", new View.OnClickListener() {
+        selEdit = button(Icons.EDIT, "Edit", new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 List<Item> sel = canvas.selection();
                 if (sel.size() == 1 && sel.get(0) instanceof Note) {
                     Note n = (Note) sel.get(0);
                     editNote(n, n.x, n.y, n.style);
+                } else if (sel.size() == 1 && sel.get(0) instanceof Picture) {
+                    Picture p = (Picture) sel.get(0);
+                    startEditor(p.file, p);
                 }
             }
         });
@@ -805,6 +837,20 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
 
         if (ToolBox.hasColor(t)) {
             label(col, t == ToolBox.NOTE ? "Note colour" : "Colour");
+            if (t != ToolBox.NOTE) {
+                TextView pick = Ui.chip(this, "Pick a colour from the page", false);
+                pick.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        hidePanel();
+                        canvas.startColorPick();
+                        showHint("Touch and drag over anything on the page, a photo too, then let go to take that colour.");
+                    }
+                });
+                LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, -2);
+                pp.setMargins(0, dp(4), 0, dp(8));
+                col.addView(pick, pp);
+            }
             int[] colors = t == ToolBox.NOTE ? Ui.NOTE_COLORS : Ui.PALETTE;
             col.addView(swatches(colors, tools.color(t), t != ToolBox.NOTE, new ColorPick() {
                 @Override
@@ -843,7 +889,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             case ToolBox.ERASER:
                 return "Precise rubs out just what you touch. The button on a pen, or its eraser end, erases with any tool.";
             case ToolBox.LASSO:
-                return "Draw a loop around things to select them, or tap one thing. Drag to move, pull the corner dot to resize.";
+                return "Draw a loop around things to select them, or tap one thing. Drag to move, pull the corner dot to resize. Select a picture and tap the pencil to crop it or cut out its background.";
             case ToolBox.SHAPE:
                 return "Drag on the page to draw. Lines snap to level, upright and 45°.";
             case ToolBox.TEXT:
@@ -1357,9 +1403,60 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         }
     }
 
+    private void startEditor(String file, Picture existing) {
+        editing = existing;
+        editingFile = file;
+        Intent i = new Intent(this, ImageEditActivity.class)
+                .putExtra(ImageEditActivity.EXTRA_FILE, new File(images.dir(), file).getAbsolutePath());
+        startActivityForResult(i, REQ_EDIT);
+    }
+
+    /** Back from the picture editor: place the new picture, or swap the edited one in. */
+    private void editorDone(int result, Intent data) {
+        if (data != null) applyPicked(data.getIntArrayExtra(ImageEditActivity.RESULT_COLORS));
+        String name = data == null ? null : data.getStringExtra(ImageEditActivity.RESULT_NAME);
+        File original = new File(images.dir(), editingFile);
+        if (result != RESULT_OK || name == null) {
+            if (editing == null) original.delete(); // a cancelled import leaves nothing behind
+            editing = null;
+            return;
+        }
+        int w = data.getIntExtra(ImageEditActivity.RESULT_W, 1), h = data.getIntExtra(ImageEditActivity.RESULT_H, 1);
+        if (editing == null) {
+            if (!name.equals(editingFile)) original.delete();
+            selectTool(ToolBox.LASSO);
+            canvas.addPicture(name, w, h);
+            onSelectionChanged(canvas.selection());
+        } else if (!name.equals(editingFile)) {
+            // Keep the picture the same size on the page: same board units per pixel, and the
+            // cropped part stays where it was. (The old file stays, for undo.)
+            Picture old = editing;
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(original.getAbsolutePath(), o);
+            float k = old.w / Math.max(1, o.outWidth);
+            float nw = w * k, nh = h * k;
+            Picture p;
+            if (data.getBooleanExtra(ImageEditActivity.RESULT_TURNED, false)) {
+                p = new Picture(name, old.x + old.w / 2 - nw / 2, old.y + old.h / 2 - nh / 2, nw, nh);
+            } else {
+                float cx = data.getFloatExtra(ImageEditActivity.RESULT_CROP_X, 0), cy = data.getFloatExtra(ImageEditActivity.RESULT_CROP_Y, 0);
+                p = new Picture(name, old.x + cx * k, old.y + cy * k, nw, nh);
+            }
+            selectTool(ToolBox.LASSO);
+            canvas.replaceItem(old, p);
+            onSelectionChanged(canvas.selection());
+        }
+        editing = null;
+    }
+
     @Override
     protected void onActivityResult(int req, int result, Intent data) {
         super.onActivityResult(req, result, data);
+        if (req == REQ_EDIT) {
+            editorDone(result, data);
+            return;
+        }
         if (req != REQ_IMAGE || result != RESULT_OK || data == null || data.getData() == null) return;
         final Uri uri = data.getData();
         io.execute(new Runnable() {
@@ -1373,9 +1470,8 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                     main.post(new Runnable() {
                         @Override
                         public void run() {
-                            selectTool(ToolBox.LASSO);
-                            canvas.addPicture(name, o.outWidth, o.outHeight);
-                            onSelectionChanged(canvas.selection());
+                            // Straight into the editor, to crop or cut out before it goes on the page.
+                            startEditor(name, null);
                         }
                     });
                 } catch (IOException | RuntimeException | OutOfMemoryError e) {
