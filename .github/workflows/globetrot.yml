@@ -1,0 +1,44 @@
+# Tests and builds Globetrot (the world travel map in globetrot/).
+name: Build Globetrot APK
+
+on:
+  push:
+    paths: ['globetrot/**', '.github/workflows/globetrot.yml']
+  pull_request:
+    paths: ['globetrot/**', '.github/workflows/globetrot.yml']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    name: Test and build APK
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: globetrot
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq aapt dalvik-exchange zipalign apksigner android-sdk-platform-23 zip
+
+      - name: Browser test
+        run: |
+          npm install --no-package-lock
+          npx playwright install --with-deps chromium
+          node tests/smoke.mjs
+
+      - name: Build APK
+        run: ./build-apk.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: globetrot-apk
+          path: globetrot/build/Globetrot.apk
+          if-no-files-found: error

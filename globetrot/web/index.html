@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0f1e">
+  <meta name="description" content="Globetrot: colour in the countries you've been to, plan where to go next, and see how much of the world you've seen.">
+  <title>Globetrot</title>
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- Map: always underneath; the other tabs slide over it. -->
+  <section id="view-map" class="view active" aria-label="Map">
+    <svg id="map" role="img" aria-label="World map"></svg>
+    <div id="labels" aria-hidden="true"></div>
+    <header class="map-top">
+      <button class="brand" data-a="tab" data-tab="stats">
+        <span class="brand-globe">🌍</span>
+        <span class="brand-count"><b id="top-count">0</b> <span id="top-label">countries</span></span>
+        <span class="brand-pct" id="top-pct">0%</span>
+      </button>
+      <button class="round" data-a="search" aria-label="Find a country">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      </button>
+    </header>
+    <div class="map-tools">
+      <div class="legend">
+        <span><i class="sw been"></i>Been</span>
+        <span><i class="sw lived"></i>Lived</span>
+        <span><i class="sw want"></i>Want to go</span>
+      </div>
+      <div class="tool-btns">
+        <button class="round" data-a="zoom-out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+        <button class="round" data-a="zoom-in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+        <button class="pill-btn" id="quick" data-a="quick" aria-pressed="false" title="Tap countries to tick them off">
+          <svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>Quick mark</span>
+        </button>
+      </div>
+    </div>
+    <div id="hint" class="hint" hidden>
+      <b>Tap a country</b> to mark it. <b>Long-press</b> to pin a place. Pinch to zoom.
+      <button data-a="hint-ok">Got it</button>
+    </div>
+  </section>
+
+  <section id="view-list" class="view panel" aria-label="Countries">
+    <header class="panel-head">
+      <h1>Countries</h1>
+      <div class="search-box">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="list-q" type="search" placeholder="Search 237 countries and territories" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="chips" id="list-filters"></div>
+    </header>
+    <div class="panel-body" id="list-body"></div>
+  </section>
+
+  <section id="view-stats" class="view panel" aria-label="Stats">
+    <header class="panel-head"><h1>Your world</h1></header>
+    <div class="panel-body" id="stats-body"></div>
+  </section>
+
+  <nav class="tabbar">
+    <button data-a="tab" data-tab="map" class="on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Map</span></button>
+    <button data-a="tab" data-tab="list"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg><span>Countries</span></button>
+    <button data-a="tab" data-tab="stats"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/></svg><span>Stats</span></button>
+  </nav>
+
+  <div id="scrim" hidden></div>
+  <aside id="sheet" aria-live="polite"></aside>
+
+  <div id="search" class="overlay" hidden>
+    <div class="search-top">
+      <button class="round" data-a="search-close" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <input id="search-q" type="search" placeholder="Find a country" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="search-results"></div>
+  </div>
+
+  <div id="modal" class="overlay modal" hidden></div>
+  <div id="toast" role="status"></div>
+  <input id="file-in" type="file" accept="application/json,.json,text/plain" hidden>
+
+  <script src="js/world.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

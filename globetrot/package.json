@@ -1,0 +1,13 @@
+{
+  "name": "globetrot",
+  "private": true,
+  "description": "Colour in the world map as you travel",
+  "scripts": {
+    "test": "node tests/smoke.mjs",
+    "build:apk": "./build-apk.sh",
+    "build:map": "node tools/build-map.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}
