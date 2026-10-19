@@ -57,15 +57,17 @@ picture opens in the picture editor first (and again any time: select it and tap
 - **Cut out** the background. *Auto remove* takes away a plain background (a wall, paper, a
   table, the sky) that touches the edges, the *magic wand* removes whatever area you tap, and
   *Erase* / *Restore* brushes tidy up the edges. Cut-outs keep their see-through background on
-  the page. This works by colour, on the device, so it is best with fairly plain backgrounds.
+  the page, trimmed to what is left (stray specks are dropped), so the selection box hugs the
+  subject. This works by colour, on the device, so it is best with fairly plain backgrounds.
 - **Colours**: drag the magnifier over the picture to pick any colour, or tap one of its main
   colours. Picked colours go on your pen and into your colours.
 
 **Eyedropper.** In any tool's colour panel, *Pick a colour from the page* lets you drag a
 magnifier over anything on the board (ink, notes, photos) and take that exact colour.
 
-**Lasso.** Loop round anything (or tap one thing) to move it, resize it from the corner,
-recolour, duplicate or delete it.
+**Lasso.** Loop round anything (or tap one thing) to move it, recolour, duplicate or delete
+it. Dots on every corner and side resize it: corners keep its shape, sides stretch it one way
+(text gets wider or narrower and rewraps instead of stretching).
 
 **Eraser.** Precise (rubs out just what it touches, splitting lines) or whole strokes.
 

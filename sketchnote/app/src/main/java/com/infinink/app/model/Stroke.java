@@ -59,13 +59,18 @@ public final class Stroke extends Item {
 
     @Override
     public Stroke transformed(float scale, float dx, float dy) {
+        return transformed(scale, scale, dx, dy);
+    }
+
+    @Override
+    public Stroke transformed(float sx, float sy, float dx, float dy) {
         float[] p = new float[pts.length];
         for (int i = 0; i < pts.length; i += 3) {
-            p[i] = pts[i] * scale + dx;
-            p[i + 1] = pts[i + 1] * scale + dy;
+            p[i] = pts[i] * sx + dx;
+            p[i + 1] = pts[i + 1] * sy + dy;
             p[i + 2] = pts[i + 2];
         }
-        return new Stroke(brush, color, size * scale, flags, p);
+        return new Stroke(brush, color, size * (float) Math.sqrt(Math.abs(sx * sy)), flags, p);
     }
 
     @Override

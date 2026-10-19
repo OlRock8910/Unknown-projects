@@ -456,26 +456,47 @@ public final class ImageEditActivity extends Activity implements ImageEditView.L
         if (saving) return;
         final Intent data = new Intent();
         putColors(data);
-        if (!editor.edited()) {
-            data.putExtra(RESULT_NAME, source.getName());
-            data.putExtra(RESULT_W, editor.width());
-            data.putExtra(RESULT_H, editor.height());
-            setResult(RESULT_OK, data);
-            finish();
-            return;
-        }
         saving = true;
         final int[] c = editor.cropRect();
         final int[] px = editor.pixels();
         final byte[] mask = editor.mask();
-        final int w = editor.width();
+        final int w = editor.width(), h = editor.height();
         final boolean turned = editor.turned();
+        final boolean edited = editor.edited();
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     int[] out = ImageOps.cutOut(px, w, mask, c[0], c[1], c[2], c[3]);
                     boolean alpha = ImageOps.anyTransparent(out);
+                    boolean changed = edited;
+                    if (alpha) {
+                        // Trim the empty, see-through edges a cut-out leaves (and stray specks),
+                        // so the picture's box on the page hugs what is left.
+                        int[] t = ImageOps.trimBounds(out, c[2], c[3]);
+                        if (t != null && (t[0] > 0 || t[1] > 0 || t[2] < c[2] || t[3] < c[3])) {
+                            out = ImageOps.crop(out, c[2], t[0], t[1], t[2] - t[0], t[3] - t[1]);
+                            c[0] += t[0];
+                            c[1] += t[1];
+                            c[2] = t[2] - t[0];
+                            c[3] = t[3] - t[1];
+                            changed = true;
+                        }
+                    }
+                    if (!changed) {
+                        // Nothing to do: hand the original back untouched.
+                        data.putExtra(RESULT_NAME, source.getName());
+                        data.putExtra(RESULT_W, w);
+                        data.putExtra(RESULT_H, h);
+                        main.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                setResult(RESULT_OK, data);
+                                finish();
+                            }
+                        });
+                        return;
+                    }
                     Bitmap b = Bitmap.createBitmap(out, c[2], c[3], Bitmap.Config.ARGB_8888);
                     String name = BoardStore.newId() + (alpha ? ".png" : ".jpg");
                     File f = new File(source.getParentFile(), name);

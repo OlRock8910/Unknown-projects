@@ -889,7 +889,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             case ToolBox.ERASER:
                 return "Precise rubs out just what you touch. The button on a pen, or its eraser end, erases with any tool.";
             case ToolBox.LASSO:
-                return "Draw a loop around things to select them, or tap one thing. Drag to move, pull the corner dot to resize. Select a picture and tap the pencil to crop it or cut out its background.";
+                return "Draw a loop around things to select them, or tap one thing. Drag to move. Pull a corner dot to resize, or a side dot to stretch one way. Select a picture and tap the pencil to crop it or cut out its background.";
             case ToolBox.SHAPE:
                 return "Drag on the page to draw. Lines snap to level, upright and 45°.";
             case ToolBox.TEXT:
@@ -1253,7 +1253,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                 + "• Tap with two fingers to undo, three fingers to redo.\n\n"
                 + "• Hold still at the end of a line to snap it into a clean line, circle, triangle, box or polygon.\n\n"
                 + "• With a pen, your palm and fingers are ignored while writing. The pen's button (or eraser end) erases.\n\n"
-                + "• Lasso: draw round things to select them, then drag, resize, recolour, duplicate or delete.\n\n"
+                + "• Lasso: draw round things to select them, then drag, resize, recolour, duplicate or delete. Corner dots resize, side dots stretch.\n\n"
                 + "• Tap the zoom number to jump between 100% and seeing everything.\n\n"
                 + "• Everything saves by itself, on your device only.";
         new AlertDialog.Builder(this).setTitle("Gestures & tips").setMessage(msg).setPositiveButton("Got it", null).show();

@@ -123,7 +123,9 @@ public final class CanvasView extends View implements ImageCache.Listener {
     private final ArrayList<Item> selection = new ArrayList<>();
     private final Set<Item> selectionSet = Collections.newSetFromMap(new IdentityHashMap<Item, Boolean>());
     private Box selBox;
-    private float selScale = 1f, selDx, selDy;
+    // A selection being moved or resized: x' = anchor + (x - anchor) * scale + offset.
+    private float selSx = 1f, selSy = 1f, selDx, selDy, selAx, selAy;
+    private int selHx, selHy; // which handle is held: -1 / 0 / 1 across and down
     private float gestureBx, gestureBy;
     private Note touchedNote;
 
@@ -292,9 +294,8 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
         if (!selection.isEmpty()) {
             c.save();
-            float ax = selBox.minX, ay = selBox.minY;
-            c.translate(ax - ax * selScale + selDx, ay - ay * selScale + selDy);
-            c.scale(selScale, selScale);
+            c.translate(selAx - selAx * selSx + selDx, selAy - selAy * selSy + selDy);
+            c.scale(selSx, selSy);
             for (Item it : selection) ink.draw(c, it);
             c.restore();
         }
@@ -335,11 +336,21 @@ public final class CanvasView extends View implements ImageCache.Listener {
             ui.setPathEffect(new DashPathEffect(new float[]{7 * density, 5 * density}, 0));
             c.drawRoundRect(r, 6 * density, 6 * density, ui);
             ui.setPathEffect(null);
-            // Resize handle.
-            uiFill.setColor(0xFFFFFFFF);
-            c.drawCircle(r.right, r.bottom, 9 * density, uiFill);
-            uiFill.setColor(accent);
-            c.drawCircle(r.right, r.bottom, 6.5f * density, uiFill);
+            // Resize handles on every corner and side.
+            for (int hy = -1; hy <= 1; hy++) {
+                for (int hx = -1; hx <= 1; hx++) {
+                    if (!handleShown(r, hx, hy)) continue;
+                    float hxp = handleX(r, hx), hyp = handleY(r, hy);
+                    boolean held = (mode == M_SCALE_SEL && hx == selHx && hy == selHy);
+                    float big = (hx != 0 && hy != 0 ? 9.5f : 8f) * density * (held ? 1.3f : 1f);
+                    uiFill.setColor(0x33000000);
+                    c.drawCircle(hxp, hyp + density, big + density, uiFill);
+                    uiFill.setColor(0xFFFFFFFF);
+                    c.drawCircle(hxp, hyp, big, uiFill);
+                    uiFill.setColor(accent);
+                    c.drawCircle(hxp, hyp, big - 2.5f * density, uiFill);
+                }
+            }
         }
         if (mode == M_PICK && loupe != null) drawLoupe(c);
         if (eraseShow && !Float.isNaN(eraseX)) {
@@ -427,11 +438,84 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
     private RectF selectionScreenRect(RectF out) {
         float pad = 8 * density;
-        float ax = selBox.minX, ay = selBox.minY;
-        float minX = ax + selDx, minY = ay + selDy;
-        float maxX = ax + (selBox.maxX - ax) * selScale + selDx, maxY = ay + (selBox.maxY - ay) * selScale + selDy;
+        float minX = selX(selBox.minX), minY = selY(selBox.minY);
+        float maxX = selX(selBox.maxX), maxY = selY(selBox.maxY);
         out.set(vp.toScreenX(minX) - pad, vp.toScreenY(minY) - pad, vp.toScreenX(maxX) + pad, vp.toScreenY(maxY) + pad);
         return out;
+    }
+
+    private float selX(float x) {
+        return selAx + (x - selAx) * selSx + selDx;
+    }
+
+    private float selY(float y) {
+        return selAy + (y - selAy) * selSy + selDy;
+    }
+
+    private static float handleX(RectF r, int hx) {
+        return hx < 0 ? r.left : hx > 0 ? r.right : r.centerX();
+    }
+
+    private static float handleY(RectF r, int hy) {
+        return hy < 0 ? r.top : hy > 0 ? r.bottom : r.centerY();
+    }
+
+    /** Corners always; the side handles only when the box is big enough to tell them apart. */
+    private boolean handleShown(RectF r, int hx, int hy) {
+        if (hx == 0 && hy == 0) return false;
+        if (hx == 0) return r.width() > 96 * density;
+        if (hy == 0) return r.height() > 96 * density;
+        return true;
+    }
+
+    /** Grabs the resize handle near (x, y), if any. */
+    private boolean grabHandle(float x, float y) {
+        RectF r = selectionScreenRect(tmp);
+        float best = 26 * density;
+        int bx = 0, by = 0;
+        for (int hy = -1; hy <= 1; hy++) {
+            for (int hx = -1; hx <= 1; hx++) {
+                if (!handleShown(r, hx, hy)) continue;
+                float d = Geometry.dist(x, y, handleX(r, hx), handleY(r, hy));
+                // Corners win ties, so a small box is still easy to scale evenly.
+                if (hx != 0 && hy != 0) d -= 4 * density;
+                if (d < best) {
+                    best = d;
+                    bx = hx;
+                    by = hy;
+                }
+            }
+        }
+        if (bx == 0 && by == 0) return false;
+        selHx = bx;
+        selHy = by;
+        // The side opposite the handle stays put.
+        selAx = bx < 0 ? selBox.maxX : bx > 0 ? selBox.minX : selBox.centerX();
+        selAy = by < 0 ? selBox.maxY : by > 0 ? selBox.minY : selBox.centerY();
+        return true;
+    }
+
+    /** Follows a dragged resize handle: corners keep the shape, sides stretch one way. */
+    private void dragHandle(float bx, float by) {
+        float min = 12 * density / vp.scale;
+        float sx = 1f, sy = 1f;
+        if (selHx != 0) {
+            float edge = selHx < 0 ? selBox.minX : selBox.maxX;
+            float span = edge - selAx;
+            float now = edge + (bx - gestureBx) - selAx;
+            if (Math.abs(span) > 1e-6f) sx = now / span;
+            sx = Math.max(sx, min / Math.max(1e-6f, Math.abs(span)));
+        }
+        if (selHy != 0) {
+            float edge = selHy < 0 ? selBox.minY : selBox.maxY;
+            float span = edge - selAy;
+            float now = edge + (by - gestureBy) - selAy;
+            if (Math.abs(span) > 1e-6f) sy = now / span;
+            sy = Math.max(sy, min / Math.max(1e-6f, Math.abs(span)));
+        }
+        if (selHx != 0 && selHy != 0) sx = sy = Math.max(0.02f, (sx + sy) / 2f);
+        selSx = sx;
+        selSy = sy;
     }
 
     // ---- touch ----------------------------------------------------------------------------------
@@ -737,11 +821,11 @@ public final class CanvasView extends View implements ImageCache.Listener {
         gestureBy = by;
 
         if (gestureTool == ToolBox.LASSO && !selection.isEmpty()) {
-            RectF r = selectionScreenRect(tmp);
-            if (Geometry.dist(x, y, r.right, r.bottom) < 28 * density) {
+            if (grabHandle(x, y)) {
                 mode = M_SCALE_SEL;
                 return;
             }
+            RectF r = selectionScreenRect(tmp);
             r.inset(-6 * density, -6 * density);
             if (r.contains(x, y)) {
                 mode = M_MOVE_SEL;
@@ -833,13 +917,9 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 selDx = vp.toBoardX(e.getX(i)) - gestureBx;
                 selDy = vp.toBoardY(e.getY(i)) - gestureBy;
                 break;
-            case M_SCALE_SEL: {
-                float ax = selBox.minX, ay = selBox.minY;
-                float d0 = (gestureBx - ax) + (gestureBy - ay);
-                float d1 = (vp.toBoardX(e.getX(i)) - ax) + (vp.toBoardY(e.getY(i)) - ay);
-                if (d0 > 1e-6f) selScale = Math.max(0.05f, d1 / d0);
+            case M_SCALE_SEL:
+                dragHandle(vp.toBoardX(e.getX(i)), vp.toBoardY(e.getY(i)));
                 break;
-            }
             case M_NOTE:
                 if (touchedNote != null && Geometry.dist(downX, downY, e.getX(i), e.getY(i)) > 10 * density) {
                     // Dragging a note with the text tool moves it.
@@ -922,8 +1002,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
         lasso.clear();
         eraseShow = false;
         touchedNote = null;
-        selScale = 1f;
-        selDx = selDy = 0;
+        resetSelTransform();
     }
 
     // ---- ink ------------------------------------------------------------------------------------
@@ -1113,8 +1192,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
         selectionSet.clear();
         selection.addAll(items);
         selectionSet.addAll(items);
-        selScale = 1f;
-        selDx = selDy = 0;
+        resetSelTransform();
         recomputeSelBox();
         sceneDirty = true;
         invalidate();
@@ -1138,18 +1216,23 @@ public final class CanvasView extends View implements ImageCache.Listener {
         selBox = selection.isEmpty() ? null : Board.boundsOf(selection);
     }
 
+    private void resetSelTransform() {
+        selSx = selSy = 1f;
+        selDx = selDy = 0;
+        selAx = selAy = 0;
+        selHx = selHy = 0;
+    }
+
     private void commitSelectionTransform() {
-        if (selection.isEmpty() || (selScale == 1f && selDx == 0 && selDy == 0)) {
-            selScale = 1f;
-            selDx = selDy = 0;
+        if (selection.isEmpty() || (selSx == 1f && selSy == 1f && selDx == 0 && selDy == 0)) {
+            resetSelTransform();
             return;
         }
-        float ax = selBox.minX, ay = selBox.minY;
-        float s = selScale, dx = ax - ax * s + selDx, dy = ay - ay * s + selDy;
+        float dx = selAx - selAx * selSx + selDx, dy = selAy - selAy * selSy + selDy;
         Change c = new Change();
         List<Item> moved = new ArrayList<>();
         for (Item it : selection) {
-            Item t = it.transformed(s, dx, dy);
+            Item t = it.transformed(selSx, selSy, dx, dy);
             if (t instanceof Note) {
                 Note n = (Note) t;
                 t = n.withSize(n.w, ink.measureNoteHeight(n));
@@ -1158,8 +1241,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
             moved.add(t);
         }
         history.push(c);
-        selScale = 1f;
-        selDx = selDy = 0;
+        resetSelTransform();
         selection.clear();
         selectionSet.clear();
         selection.addAll(moved);

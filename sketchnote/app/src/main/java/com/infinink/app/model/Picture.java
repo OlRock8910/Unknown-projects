@@ -20,7 +20,12 @@ public final class Picture extends Item {
 
     @Override
     public Picture transformed(float scale, float dx, float dy) {
-        return new Picture(file, x * scale + dx, y * scale + dy, w * scale, h * scale);
+        return transformed(scale, scale, dx, dy);
+    }
+
+    @Override
+    public Picture transformed(float sx, float sy, float dx, float dy) {
+        return new Picture(file, x * sx + dx, y * sy + dy, w * sx, h * sy);
     }
 
     @Override

@@ -102,6 +102,27 @@ public class ImageOpsTest {
     }
 
     @Test
+    public void trimHugsTheSubjectAndIgnoresSpecks() {
+        int[] px = picture();
+        byte[] m = ImageOps.fullMask(W * H);
+        ImageOps.removeBackground(px, W, H, 0.3f, m);
+        m[1 * W + 1] = (byte) 255; // a leftover speck in the corner
+        int[] cut = ImageOps.cutOut(px, W, m, 0, 0, W, H);
+        int[] t = ImageOps.trimBounds(cut, W, H);
+        assertNotNull(t);
+        // The disc spans 30..90 across and 15..75 down.
+        assertEquals(31, t[0], 2);
+        assertEquals(16, t[1], 2);
+        assertEquals(90, t[2], 2);
+        assertEquals(75, t[3], 2);
+        int[] c = ImageOps.crop(cut, W, t[0], t[1], t[2] - t[0], t[3] - t[1]);
+        assertEquals((t[2] - t[0]) * (t[3] - t[1]), c.length);
+        // Trimming the trimmed picture again changes nothing.
+        int[] again = ImageOps.trimBounds(c, t[2] - t[0], t[3] - t[1]);
+        assertArrayEquals(new int[]{0, 0, t[2] - t[0], t[3] - t[1]}, again);
+    }
+
+    @Test
     public void cutOutAppliesCropAndMask() {
         int[] px = picture();
         byte[] m = ImageOps.fullMask(W * H);

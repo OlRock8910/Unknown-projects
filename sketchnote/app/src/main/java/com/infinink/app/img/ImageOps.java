@@ -348,6 +348,77 @@ public final class ImageOps {
         return out;
     }
 
+    /**
+     * The box around what is left visible after a cut-out, as {left, top, right, bottom} (right
+     * and bottom exclusive). Small specks lying apart from the subject (leftovers of a removed
+     * background) are left out; anything joined to the subject, however thin, is kept, so trimming
+     * an already trimmed picture changes nothing. Null when nothing is visible.
+     */
+    public static int[] trimBounds(int[] px, int w, int h) {
+        // Group visible pixels into blobs on a coarse grid, which also bridges hairline gaps.
+        int g = Math.max(1, Math.max(w, h) / 256);
+        int gw = (w + g - 1) / g, gh = (h + g - 1) / g;
+        long[] mass = new long[gw * gh];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int a = px[y * w + x] >>> 24;
+                if (a > 16) mass[(y / g) * gw + x / g] += a;
+            }
+        }
+        int[] label = new int[gw * gh];
+        java.util.ArrayList<Long> blobMass = new java.util.ArrayList<>();
+        blobMass.add(0L);
+        int[] queue = new int[gw * gh];
+        for (int i = 0; i < label.length; i++) {
+            if (mass[i] == 0 || label[i] != 0) continue;
+            int id = blobMass.size();
+            long m = 0;
+            int head = 0, tail = 0;
+            queue[tail++] = i;
+            label[i] = id;
+            while (head < tail) {
+                int c = queue[head++];
+                m += mass[c];
+                int cx = c % gw, cy = c / gw;
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int nx = cx + dx, ny = cy + dy;
+                        if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+                        int n = ny * gw + nx;
+                        if (mass[n] != 0 && label[n] == 0) {
+                            label[n] = id;
+                            queue[tail++] = n;
+                        }
+                    }
+                }
+            }
+            blobMass.add(m);
+        }
+        if (blobMass.size() == 1) return null;
+        long biggest = 0;
+        for (long m : blobMass) biggest = Math.max(biggest, m);
+        boolean[] keep = new boolean[blobMass.size()];
+        for (int k = 1; k < keep.length; k++) keep[k] = blobMass.get(k) * 50 >= biggest; // 2% of the main blob
+        int l = w, t = h, r = -1, b = -1;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if ((px[y * w + x] >>> 24) <= 16 || !keep[label[(y / g) * gw + x / g]]) continue;
+                if (x < l) l = x;
+                if (x > r) r = x;
+                if (y < t) t = y;
+                if (y > b) b = y;
+            }
+        }
+        return new int[]{l, t, r + 1, b + 1};
+    }
+
+    /** The cw x ch block at (left, top) of an image w pixels wide. */
+    public static int[] crop(int[] px, int w, int left, int top, int cw, int ch) {
+        int[] out = new int[cw * ch];
+        for (int y = 0; y < ch; y++) System.arraycopy(px, (top + y) * w + left, out, y * cw, cw);
+        return out;
+    }
+
     public static boolean anyTransparent(int[] px) {
         for (int p : px) if ((p >>> 24) != 255) return true;
         return false;
