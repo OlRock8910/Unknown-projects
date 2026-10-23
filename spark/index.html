@@ -459,6 +459,39 @@
     .screen { display: none; }
     .screen.active { display: block; }
 
+    /* ── Search ──────────────────────────────── */
+    .search-row {
+      display: flex;
+      gap: 10px;
+      padding: 18px 18px 0;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+      min-width: 0;
+      font-family: inherit;
+    }
+    .search-input::placeholder { color: var(--dim); }
+    .search-input:focus { border-color: var(--accent); }
+    .search-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 60px 24px 24px;
+      text-align: center;
+      color: var(--dim);
+      font-size: 15px;
+    }
+    .state-icon { font-size: 44px; line-height: 1; }
+
     /* ── History empty ───────────────────────── */
     #historyScreen .empty { padding-top: 60px; }
 
@@ -625,6 +658,43 @@
       <div class="bottom-pad"></div>
     </div>
 
+    <!-- Search screen -->
+    <div class="screen" id="searchScreen">
+      <div class="search-row">
+        <input
+          class="search-input"
+          id="searchInput"
+          type="search"
+          inputmode="search"
+          placeholder="Search YouTube videos…"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+        >
+        <button class="btn btn-accent" id="searchBtn">Search</button>
+      </div>
+      <p class="paste-hint" style="padding: 8px 18px 0">Search YouTube without an account</p>
+
+      <div class="search-state" id="searchIdle">
+        <div class="state-icon">🔍</div>
+        <p>Search for any YouTube video</p>
+      </div>
+      <div class="search-state" id="searchLoading" style="display:none">
+        <div class="spinner"></div>
+        <p>Searching…</p>
+      </div>
+      <div class="search-state" id="searchError" style="display:none">
+        <div class="state-icon">😕</div>
+        <p id="searchErrorMsg">Search failed. Try again.</p>
+      </div>
+      <div id="searchResults" style="display:none">
+        <div class="section" style="padding-top:16px">
+          <div class="card-grid" id="searchGrid"></div>
+        </div>
+      </div>
+      <div class="bottom-pad"></div>
+    </div>
+
     <!-- Browse / Channels screen -->
     <div class="screen" id="browseScreen">
 
@@ -705,12 +775,19 @@
       </svg>
       Home
     </button>
-    <button class="tab" data-screen="browseScreen">
+    <button class="tab" data-screen="searchScreen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/>
         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      Browse
+      Search
+    </button>
+    <button class="tab" data-screen="browseScreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      Channels
     </button>
     <button class="tab" data-screen="historyScreen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -1050,6 +1127,79 @@
       toastEl.classList.add('show');
       toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2800);
     }
+
+    /* ── Search ───────────────────────────────────────────── */
+
+    const INVIDIOUS_INSTANCES = [
+      'https://inv.nadeko.net',
+      'https://invidious.privacydev.net',
+      'https://vid.puffyan.us',
+    ];
+
+    async function searchYouTube(query) {
+      let lastErr;
+      for (const base of INVIDIOUS_INSTANCES) {
+        try {
+          const url = `${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title,author,videoThumbnails,lengthSeconds,viewCount`;
+          const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.json();
+          return data.map(v => ({
+            platform: 'youtube',
+            id: v.videoId,
+            title: v.title || 'YouTube video',
+            thumb: (v.videoThumbnails || []).find(t => t.quality === 'medium')?.url
+                || (v.videoThumbnails || [])[0]?.url
+                || `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg`,
+            published: v.author || '',
+          }));
+        } catch (e) { lastErr = e; }
+      }
+      throw lastErr || new Error('All search servers failed.');
+    }
+
+    function setSearchState(state) {
+      document.getElementById('searchIdle').style.display    = state === 'idle'    ? '' : 'none';
+      document.getElementById('searchLoading').style.display = state === 'loading' ? '' : 'none';
+      document.getElementById('searchError').style.display   = state === 'error'   ? '' : 'none';
+      document.getElementById('searchResults').style.display = state === 'loaded'  ? '' : 'none';
+    }
+
+    async function triggerSearch(query) {
+      query = query.trim();
+      if (!query) { showToast('Enter something to search'); return; }
+      setSearchState('loading');
+      try {
+        const results = await searchYouTube(query);
+        const grid = document.getElementById('searchGrid');
+        grid.innerHTML = '';
+        if (!results.length) {
+          document.getElementById('searchErrorMsg').textContent = 'No results found.';
+          setSearchState('error');
+          return;
+        }
+        results.forEach(v => {
+          grid.appendChild(makeCard(v, entry => {
+            pushHistory({ ...entry, ts: Date.now() });
+            renderRecent();
+            openPlayer('youtube', entry.id);
+          }));
+        });
+        setSearchState('loaded');
+        document.getElementById('mainScroll').scrollTop = 0;
+      } catch (err) {
+        document.getElementById('searchErrorMsg').textContent = 'Search failed — check your connection.';
+        setSearchState('error');
+      }
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', () => {
+      triggerSearch(document.getElementById('searchInput').value);
+    });
+
+    document.getElementById('searchInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('searchBtn').click();
+    });
 
     /* ── Channel browsing ─────────────────────────────────── */
 
