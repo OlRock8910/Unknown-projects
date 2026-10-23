@@ -461,6 +461,112 @@
 
     /* ── History empty ───────────────────────── */
     #historyScreen .empty { padding-top: 60px; }
+
+    /* ── Browse / Channels ───────────────────── */
+    .channel-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+      min-width: 0;
+      font-family: inherit;
+    }
+    .channel-input::placeholder { color: var(--dim); }
+    .channel-input:focus { border-color: var(--accent); }
+
+    .channel-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 12px 18px 4px;
+    }
+
+    .channel-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .channel-chip:active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .channel-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .channel-avatar {
+      width: 50px; height: 50px;
+      border-radius: 50%;
+      background: var(--bg3);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .channel-name {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .channel-sub {
+      font-size: 12px;
+      color: var(--dim);
+      margin-top: 3px;
+    }
+
+    .browse-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 52px 20px;
+      gap: 12px;
+      color: var(--dim);
+      text-align: center;
+    }
+    .browse-state .state-icon { font-size: 42px; }
+    .browse-state p { font-size: 14px; line-height: 1.5; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 24px; height: 24px;
+      border: 2.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    .chips-label {
+      padding: 14px 18px 0;
+      font-size: 11px;
+      color: var(--dim);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
   </style>
 </head>
 <body>
@@ -519,6 +625,59 @@
       <div class="bottom-pad"></div>
     </div>
 
+    <!-- Browse / Channels screen -->
+    <div class="screen" id="browseScreen">
+
+      <div class="hero">
+        <div class="hero-label">Browse a channel</div>
+        <div class="url-row">
+          <input
+            class="channel-input"
+            id="channelInput"
+            type="text"
+            inputmode="url"
+            placeholder="@handle or youtube.com/…"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
+          <button class="btn btn-accent" id="loadChannelBtn">Load</button>
+        </div>
+        <p class="paste-hint">Enter a YouTube <span class="pill">@handle</span> or channel URL</p>
+      </div>
+
+      <!-- Recent channel chips -->
+      <div id="recentChannelsWrap" style="display:none">
+        <div class="chips-label">Recent channels</div>
+        <div class="channel-chips" id="recentChannelChips"></div>
+      </div>
+
+      <!-- Idle / loading / error states -->
+      <div class="browse-state" id="browseIdle">
+        <div class="state-icon">📺</div>
+        <p>Enter a YouTube @handle<br>to see their latest videos</p>
+      </div>
+      <div class="browse-state" id="browseLoading" style="display:none">
+        <div class="spinner"></div>
+        <p>Loading channel…</p>
+      </div>
+      <div class="browse-state" id="browseError" style="display:none">
+        <div class="state-icon">😕</div>
+        <p id="browseErrorMsg">Could not load this channel.</p>
+      </div>
+
+      <!-- Channel content (shown after load) -->
+      <div id="channelPage" style="display:none">
+        <div class="channel-header" id="channelHeader"></div>
+        <div class="section" style="padding-top:16px">
+          <div class="section-title" style="margin-bottom:14px">Latest Videos</div>
+          <div class="card-grid" id="channelGrid"></div>
+        </div>
+      </div>
+
+      <div class="bottom-pad"></div>
+    </div>
+
     <!-- History screen -->
     <div class="screen" id="historyScreen">
       <div class="section">
@@ -545,6 +704,13 @@
         <path d="M9 21V12h6v9"/>
       </svg>
       Home
+    </button>
+    <button class="tab" data-screen="browseScreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Browse
     </button>
     <button class="tab" data-screen="historyScreen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -775,7 +941,8 @@
       return Math.floor(s / 86400) + 'd ago';
     }
 
-    function makeCard(entry) {
+    function makeCard(entry, onPlay) {
+      const dateStr = entry.ts ? timeAgo(entry.ts) : (entry.published || '');
       const card = document.createElement('div');
       card.className = 'card';
       card.innerHTML = `
@@ -798,10 +965,13 @@
         </div>
         <div class="card-info">
           <div class="card-title">${entry.title}</div>
-          ${entry.ts ? `<div class="card-date">${timeAgo(entry.ts)}</div>` : ''}
+          ${dateStr ? `<div class="card-date">${dateStr}</div>` : ''}
         </div>
       `;
-      card.addEventListener('click', () => openPlayer(entry.platform, entry.id));
+      card.addEventListener('click', () => {
+        if (onPlay) onPlay(entry);
+        else openPlayer(entry.platform, entry.id);
+      });
       return card;
     }
 
@@ -865,6 +1035,7 @@
         document.getElementById(targetId).classList.add('active');
         document.getElementById('mainScroll').scrollTop = 0;
         if (targetId === 'historyScreen') renderHistory();
+        if (targetId === 'browseScreen')  renderRecentChannelChips();
       });
     });
 
@@ -879,6 +1050,166 @@
       toastEl.classList.add('show');
       toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2800);
     }
+
+    /* ── Channel browsing ─────────────────────────────────── */
+
+    const CHANNELS_KEY = 'spark_v1_channels';
+    const PROXY = 'https://corsproxy.io/?';
+
+    function loadRecentChannels() {
+      try { return JSON.parse(localStorage.getItem(CHANNELS_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function saveRecentChannels(list) {
+      try { localStorage.setItem(CHANNELS_KEY, JSON.stringify(list)); }
+      catch {}
+    }
+    function pushRecentChannel(ch) {
+      const list = loadRecentChannels().filter(c => c.id !== ch.id);
+      list.unshift(ch);
+      saveRecentChannels(list.slice(0, 8));
+    }
+
+    function decodeHtml(str) {
+      return str
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n));
+    }
+
+    async function resolveChannelId(input) {
+      input = input.trim().replace(/\/+$/, '');
+
+      // Direct channel ID
+      const idDirect = input.match(/(?:channel\/|^)(UC[a-zA-Z0-9_-]{22})$/);
+      if (idDirect) return idDirect[1];
+
+      // Extract handle
+      let handle = null;
+      const inUrl = input.match(/youtube\.com\/@([a-zA-Z0-9_.-]+)/);
+      if (inUrl) handle = inUrl[1];
+      else {
+        const bare = input.match(/^@?([a-zA-Z0-9_.-]+)$/);
+        if (bare) handle = bare[1];
+      }
+      if (!handle) throw new Error('Unrecognized format. Try @handle or a channel URL.');
+
+      // Fetch channel page to extract channel ID
+      const resp = await fetch(PROXY + encodeURIComponent(`https://www.youtube.com/@${handle}`));
+      if (!resp.ok) throw new Error('Network error');
+      const html = await resp.text();
+      for (const p of [
+        /"externalId":"(UC[a-zA-Z0-9_-]{22})"/,
+        /"channelId":"(UC[a-zA-Z0-9_-]{22})"/,
+        /\/channel\/(UC[a-zA-Z0-9_-]{22})/,
+      ]) {
+        const m = html.match(p);
+        if (m) return m[1];
+      }
+      throw new Error('Channel not found. Double-check the handle.');
+    }
+
+    async function fetchChannelVideos(channelId) {
+      const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+      const resp = await fetch(PROXY + encodeURIComponent(rssUrl));
+      if (!resp.ok) throw new Error('Could not fetch channel videos.');
+      const xml = await resp.text();
+
+      const nameMatch = xml.match(/<name>([^<]+)<\/name>/);
+      const channelName = nameMatch ? decodeHtml(nameMatch[1]) : 'YouTube Channel';
+
+      const videos = [];
+      const re = /<entry>([\s\S]*?)<\/entry>/g;
+      let m;
+      while ((m = re.exec(xml)) !== null) {
+        const e = m[1];
+        const id  = (e.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) || [])[1];
+        const ttl = (e.match(/<title>([^<]+)<\/title>/)            || [])[1];
+        const thb = (e.match(/url="(https:\/\/[^"]*ytimg[^"]*)"/  ) || [])[1];
+        const pub = (e.match(/<published>([^<]+)<\/published>/)    || [])[1];
+        if (!id) continue;
+        videos.push({
+          platform: 'youtube', id,
+          title: ttl ? decodeHtml(ttl) : 'YouTube video',
+          thumb: thb || `https://img.youtube.com/vi/${id}/mqdefault.jpg`,
+          published: pub ? new Date(pub).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+        });
+      }
+      return { channelId, name: channelName, videos };
+    }
+
+    function setBrowseState(state) {
+      document.getElementById('browseIdle').style.display    = state === 'idle'    ? '' : 'none';
+      document.getElementById('browseLoading').style.display = state === 'loading' ? '' : 'none';
+      document.getElementById('browseError').style.display   = state === 'error'   ? '' : 'none';
+      document.getElementById('channelPage').style.display   = state === 'loaded'  ? '' : 'none';
+    }
+
+    function renderChannelPage(data) {
+      document.getElementById('channelHeader').innerHTML = `
+        <div class="channel-avatar">📺</div>
+        <div style="min-width:0">
+          <div class="channel-name">${data.name}</div>
+          <div class="channel-sub">${data.videos.length} recent video${data.videos.length !== 1 ? 's' : ''}</div>
+        </div>`;
+
+      const grid = document.getElementById('channelGrid');
+      grid.innerHTML = '';
+      data.videos.forEach(v => {
+        grid.appendChild(makeCard(v, entry => {
+          pushHistory({ ...entry, ts: Date.now() });
+          renderRecent();
+          openPlayer('youtube', entry.id);
+        }));
+      });
+      setBrowseState('loaded');
+    }
+
+    function renderRecentChannelChips() {
+      const channels = loadRecentChannels();
+      const wrap  = document.getElementById('recentChannelsWrap');
+      const chips = document.getElementById('recentChannelChips');
+      if (!channels.length) { wrap.style.display = 'none'; return; }
+      wrap.style.display = '';
+      chips.innerHTML = '';
+      channels.forEach(ch => {
+        const el = document.createElement('button');
+        el.className = 'channel-chip';
+        el.textContent = ch.name;
+        el.addEventListener('click', () => {
+          document.getElementById('channelInput').value = '@' + ch.id;
+          triggerChannelLoad(ch.id);
+        });
+        chips.appendChild(el);
+      });
+    }
+
+    async function triggerChannelLoad(input) {
+      setBrowseState('loading');
+      document.getElementById('recentChannelsWrap').style.display = 'none';
+      try {
+        const channelId = await resolveChannelId(input);
+        const data = await fetchChannelVideos(channelId);
+        pushRecentChannel({ id: channelId, name: data.name });
+        renderChannelPage(data);
+        renderRecentChannelChips();
+        document.getElementById('mainScroll').scrollTop = 0;
+      } catch (err) {
+        document.getElementById('browseErrorMsg').textContent = err.message || 'Could not load channel.';
+        setBrowseState('error');
+        renderRecentChannelChips();
+      }
+    }
+
+    document.getElementById('loadChannelBtn').addEventListener('click', () => {
+      const v = document.getElementById('channelInput').value.trim();
+      if (!v) { showToast('Enter a YouTube @handle or channel URL'); return; }
+      triggerChannelLoad(v);
+    });
+
+    document.getElementById('channelInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('loadChannelBtn').click();
+    });
 
     /* ── Init ─────────────────────────────────────────────── */
 
