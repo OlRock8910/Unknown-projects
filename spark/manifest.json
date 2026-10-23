@@ -1,0 +1,22 @@
+{
+  "name": "Spark",
+  "short_name": "Spark",
+  "description": "Watch videos your way",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e0e18",
+  "theme_color": "#0e0e18",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='42' fill='%230e0e18'/%3E%3Cpath d='M110 28 L68 104 H96 L82 164 L144 80 H112 Z' fill='%23ff6b35'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%230e0e18'/%3E%3Cpath d='M294 74 L182 278 H256 L218 438 L384 214 H298 Z' fill='%23ff6b35'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
