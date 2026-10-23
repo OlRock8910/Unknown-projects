@@ -78,6 +78,50 @@
       overflow-y: auto;
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
+      position: relative;
+    }
+
+    /* ── Feed iframe ─────────────────────────── */
+    #feedScreen {
+      position: absolute;
+      inset: 0;
+      display: none;
+    }
+    #feedScreen.active {
+      display: flex;
+      flex-direction: column;
+    }
+    #feedFrame {
+      flex: 1;
+      width: 100%;
+      border: none;
+      background: #000;
+    }
+    .feed-bar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+    }
+    .feed-bar-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--dim);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      flex: 1;
+    }
+    .feed-reload {
+      background: none;
+      border: none;
+      color: var(--dim);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
     }
 
     /* ── URL hero ────────────────────────────── */
@@ -612,6 +656,20 @@
   <!-- Main scrollable area -->
   <div class="main" id="mainScroll">
 
+    <!-- Feed screen (full YouTube frontend) -->
+    <div id="feedScreen">
+      <div class="feed-bar">
+        <span class="feed-bar-label">Browse Videos</span>
+        <button class="feed-reload" id="feedReloadBtn" title="Reload">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+          </svg>
+        </button>
+      </div>
+      <iframe id="feedFrame" src="about:blank" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+    </div>
+
     <!-- Home screen -->
     <div class="screen active" id="homeScreen">
 
@@ -768,6 +826,13 @@
 
   <!-- Tab bar -->
   <nav class="tabbar">
+    <button class="tab" data-screen="feedScreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2"/>
+        <path d="M8 21h8M12 17v4"/>
+      </svg>
+      Feed
+    </button>
     <button class="tab active" data-screen="homeScreen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
@@ -1098,6 +1163,28 @@
       renderHistory();
     });
 
+    /* ── Feed ─────────────────────────────────────────────── */
+
+    const FEED_URL = 'https://piped.video';
+    const feedFrame = document.getElementById('feedFrame');
+    let feedLoaded = false;
+
+    function activateFeed() {
+      if (!feedLoaded) {
+        feedFrame.src = FEED_URL;
+        feedLoaded = true;
+      }
+      document.getElementById('feedScreen').classList.add('active');
+    }
+
+    function deactivateFeed() {
+      document.getElementById('feedScreen').classList.remove('active');
+    }
+
+    document.getElementById('feedReloadBtn').addEventListener('click', () => {
+      feedFrame.src = FEED_URL;
+    });
+
     /* ── Tab navigation ───────────────────────────────────── */
 
     const tabs    = document.querySelectorAll('.tab');
@@ -1107,8 +1194,16 @@
       tab.addEventListener('click', () => {
         const targetId = tab.dataset.screen;
         tabs.forEach(t => t.classList.remove('active'));
-        screens.forEach(s => s.classList.remove('active'));
         tab.classList.add('active');
+
+        if (targetId === 'feedScreen') {
+          screens.forEach(s => s.classList.remove('active'));
+          activateFeed();
+          return;
+        }
+
+        deactivateFeed();
+        screens.forEach(s => s.classList.remove('active'));
         document.getElementById(targetId).classList.add('active');
         document.getElementById('mainScroll').scrollTop = 0;
         if (targetId === 'historyScreen') renderHistory();
