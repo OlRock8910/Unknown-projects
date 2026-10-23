@@ -869,9 +869,17 @@
       return null;
     }
 
+    // Invidious embed avoids YouTube's Error 153 when running from a local file
+    const YT_EMBED_INSTANCES = [
+      'https://inv.nadeko.net',
+      'https://invidious.privacydev.net',
+      'https://vid.puffyan.us',
+    ];
+    let ytEmbedBase = YT_EMBED_INSTANCES[0];
+
     function embedUrl(platform, id) {
       if (platform === 'youtube') {
-        return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&rel=0`;
+        return `${ytEmbedBase}/embed/${id}?autoplay=1&local=true`;
       }
       if (platform === 'tiktok') {
         return `https://www.tiktok.com/embed/v2/${id}`;
@@ -915,6 +923,17 @@
       frameWrap.className = 'player-frame-wrap ' + (platform === 'tiktok' ? 'tt' : 'yt');
       frameWrap.appendChild(iframe);
       activeIframe = iframe;
+
+      // If Invidious instance is down, try the next one
+      if (platform === 'youtube') {
+        iframe.addEventListener('error', () => {
+          const idx = YT_EMBED_INSTANCES.indexOf(ytEmbedBase);
+          if (idx < YT_EMBED_INSTANCES.length - 1) {
+            ytEmbedBase = YT_EMBED_INSTANCES[idx + 1];
+            iframe.src = embedUrl('youtube', id);
+          }
+        });
+      }
 
       playerLabel.textContent = platformLabel(platform);
       overlay.classList.add('open');
