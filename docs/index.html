@@ -1,0 +1,1369 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0e18">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Spark">
+  <meta name="description" content="Watch videos your way">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='38' fill='%230e0e18'/%3E%3Cpath d='M102 26 L60 98 H88 L74 154 L136 72 H104 Z' fill='%23ff6b35'/%3E%3C/svg%3E">
+  <title>Spark</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0e0e18;
+      --bg2:       #161620;
+      --bg3:       #1e1e2c;
+      --border:    #2a2a3a;
+      --accent:    #ff6b35;
+      --accent2:   #ff9f5e;
+      --text:      #f2f2fa;
+      --dim:       #8888aa;
+      --radius:    14px;
+      --safe-top:    env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+    }
+
+    /* ── Top bar ─────────────────────────────── */
+    .topbar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(var(--safe-top) + 12px) 18px 12px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      z-index: 10;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      user-select: none;
+    }
+
+    .logo .bolt {
+      -webkit-text-fill-color: initial;
+      font-style: normal;
+    }
+
+    /* ── Main scrollable area ────────────────── */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── URL hero ────────────────────────────── */
+    .hero {
+      padding: 28px 18px 20px;
+      background: linear-gradient(180deg, var(--bg2) 0%, var(--bg) 100%);
+    }
+
+    .hero-label {
+      font-size: 13px;
+      color: var(--dim);
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .url-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .url-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+      min-width: 0;
+    }
+
+    .url-input::placeholder { color: var(--dim); }
+
+    .url-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 700;
+      transition: transform 0.12s, opacity 0.12s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .btn:active { transform: scale(0.94); opacity: 0.85; }
+
+    .btn-accent {
+      background: var(--accent);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 13px 20px;
+      font-size: 15px;
+    }
+
+    .btn-ghost {
+      background: var(--bg3);
+      color: var(--dim);
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      font-size: 15px;
+      border: 1.5px solid var(--border);
+    }
+    .btn-ghost:active { color: var(--text); border-color: var(--accent); }
+
+    .paste-hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--dim);
+      text-align: center;
+    }
+
+    .paste-hint .pill {
+      display: inline-block;
+      background: var(--bg3);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 11px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── Section ─────────────────────────────── */
+    .section {
+      padding: 20px 18px 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+
+    .section-action {
+      font-size: 13px;
+      color: var(--accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 600;
+      padding: 2px 0;
+    }
+
+    /* ── Video card grid ─────────────────────── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      padding-bottom: 8px;
+    }
+
+    .card {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      border: 1px solid var(--border);
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .card:active { transform: scale(0.97); }
+
+    .card-thumb {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background: var(--bg3);
+      overflow: hidden;
+    }
+
+    .card-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .card-thumb .no-thumb {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      background: var(--bg3);
+    }
+
+    .card-badge {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      background: rgba(14,14,24,0.82);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border-radius: 6px;
+      padding: 3px 7px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .card-badge.yt  { color: #ff5c5c; }
+    .card-badge.tt  { color: #69c9d0; }
+
+    .play-icon {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      background: rgba(14,14,24,0.45);
+      transition: opacity 0.15s;
+    }
+    .card:hover .play-icon { opacity: 1; }
+
+    .play-icon svg {
+      width: 40px; height: 40px;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.7));
+    }
+
+    .card-info {
+      padding: 10px 10px 11px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: var(--text);
+    }
+
+    .card-date {
+      font-size: 11px;
+      color: var(--dim);
+      margin-top: 4px;
+    }
+
+    /* ── Empty state ─────────────────────────── */
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--dim);
+    }
+
+    .empty .empty-icon { font-size: 44px; margin-bottom: 12px; }
+    .empty p { font-size: 14px; line-height: 1.5; }
+
+    /* ── Bottom padding for tab bar ─────────── */
+    .bottom-pad {
+      height: calc(62px + var(--safe-bottom));
+      flex-shrink: 0;
+    }
+
+    /* ── Tab bar ─────────────────────────────── */
+    .tabbar {
+      flex-shrink: 0;
+      display: flex;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding-bottom: var(--safe-bottom);
+    }
+
+    .tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 10px 4px 8px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--dim);
+      letter-spacing: 0.3px;
+      transition: color 0.15s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .tab.active { color: var(--accent); }
+
+    .tab svg {
+      width: 22px; height: 22px;
+      stroke-width: 2;
+      transition: transform 0.15s;
+    }
+    .tab.active svg { transform: scale(1.1); }
+
+    /* ── Player overlay ──────────────────────── */
+    .player-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .player-overlay.open {
+      transform: translateY(0);
+    }
+
+    .player-topbar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: calc(var(--safe-top) + 10px) 14px 10px;
+      background: #000;
+    }
+
+    .btn-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      color: #fff;
+      font-size: 16px;
+      flex-shrink: 0;
+      transition: background 0.15s, transform 0.12s;
+    }
+    .btn-close:active { transform: scale(0.9); background: rgba(255,255,255,0.2); }
+
+    .player-label {
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .player-frame-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* YouTube: 16:9 landscape */
+    .player-frame-wrap.yt {
+      align-items: center;
+    }
+
+    /* TikTok: 9:16 portrait */
+    .player-frame-wrap.tt {
+      align-items: stretch;
+    }
+
+    .player-frame-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    /* ── Toast ───────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: calc(80px + var(--safe-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(30,30,44,0.95);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      z-index: 200;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Screens ─────────────────────────────── */
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Search ──────────────────────────────── */
+    .search-row {
+      display: flex;
+      gap: 10px;
+      padding: 18px 18px 0;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+      min-width: 0;
+      font-family: inherit;
+    }
+    .search-input::placeholder { color: var(--dim); }
+    .search-input:focus { border-color: var(--accent); }
+    .search-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 60px 24px 24px;
+      text-align: center;
+      color: var(--dim);
+      font-size: 15px;
+    }
+    .state-icon { font-size: 44px; line-height: 1; }
+
+    /* ── History empty ───────────────────────── */
+    #historyScreen .empty { padding-top: 60px; }
+
+    /* ── Browse / Channels ───────────────────── */
+    .channel-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+      min-width: 0;
+      font-family: inherit;
+    }
+    .channel-input::placeholder { color: var(--dim); }
+    .channel-input:focus { border-color: var(--accent); }
+
+    .channel-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 12px 18px 4px;
+    }
+
+    .channel-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .channel-chip:active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .channel-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .channel-avatar {
+      width: 50px; height: 50px;
+      border-radius: 50%;
+      background: var(--bg3);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .channel-name {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .channel-sub {
+      font-size: 12px;
+      color: var(--dim);
+      margin-top: 3px;
+    }
+
+    .browse-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 52px 20px;
+      gap: 12px;
+      color: var(--dim);
+      text-align: center;
+    }
+    .browse-state .state-icon { font-size: 42px; }
+    .browse-state p { font-size: 14px; line-height: 1.5; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 24px; height: 24px;
+      border: 2.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    .chips-label {
+      padding: 14px 18px 0;
+      font-size: 11px;
+      color: var(--dim);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="logo">SPARK <span class="bolt">⚡</span></div>
+  </header>
+
+  <!-- Main scrollable area -->
+  <div class="main" id="mainScroll">
+
+    <!-- Home screen -->
+    <div class="screen active" id="homeScreen">
+
+      <!-- URL entry -->
+      <div class="hero">
+        <div class="hero-label">Watch a video</div>
+        <div class="url-row">
+          <input
+            class="url-input"
+            id="urlInput"
+            type="url"
+            inputmode="url"
+            placeholder="Paste a link here…"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
+          <button class="btn btn-ghost" id="pasteBtn" title="Paste from clipboard">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="2" width="6" height="4" rx="1"/>
+              <path d="M8 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2h-2"/>
+            </svg>
+          </button>
+          <button class="btn btn-accent" id="goBtn">Play</button>
+        </div>
+        <p class="paste-hint">
+          Works with
+          <span class="pill">YouTube</span>
+          &nbsp;and&nbsp;
+          <span class="pill">TikTok</span>
+          &nbsp;links
+        </p>
+      </div>
+
+      <!-- Recent videos -->
+      <div class="section" id="recentSection" style="display:none">
+        <div class="section-head">
+          <span class="section-title">Recent</span>
+          <button class="section-action" id="clearRecentBtn">Clear</button>
+        </div>
+        <div class="card-grid" id="recentGrid"></div>
+      </div>
+
+      <div class="bottom-pad"></div>
+    </div>
+
+    <!-- Search screen -->
+    <div class="screen" id="searchScreen">
+      <div class="search-row">
+        <input
+          class="search-input"
+          id="searchInput"
+          type="search"
+          inputmode="search"
+          placeholder="Search YouTube videos…"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+        >
+        <button class="btn btn-accent" id="searchBtn">Search</button>
+      </div>
+      <p class="paste-hint" style="padding: 8px 18px 0">Search YouTube without an account</p>
+
+      <div class="search-state" id="searchIdle">
+        <div class="state-icon">🔍</div>
+        <p>Search for any YouTube video</p>
+      </div>
+      <div class="search-state" id="searchLoading" style="display:none">
+        <div class="spinner"></div>
+        <p>Searching…</p>
+      </div>
+      <div class="search-state" id="searchError" style="display:none">
+        <div class="state-icon">😕</div>
+        <p id="searchErrorMsg">Search failed. Try again.</p>
+      </div>
+      <div id="searchResults" style="display:none">
+        <div class="section" style="padding-top:16px">
+          <div class="card-grid" id="searchGrid"></div>
+        </div>
+      </div>
+      <div class="bottom-pad"></div>
+    </div>
+
+    <!-- Browse / Channels screen -->
+    <div class="screen" id="browseScreen">
+
+      <div class="hero">
+        <div class="hero-label">Browse a channel</div>
+        <div class="url-row">
+          <input
+            class="channel-input"
+            id="channelInput"
+            type="text"
+            inputmode="url"
+            placeholder="@handle or youtube.com/…"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
+          <button class="btn btn-accent" id="loadChannelBtn">Load</button>
+        </div>
+        <p class="paste-hint">Enter a YouTube <span class="pill">@handle</span> or channel URL</p>
+      </div>
+
+      <!-- Recent channel chips -->
+      <div id="recentChannelsWrap" style="display:none">
+        <div class="chips-label">Recent channels</div>
+        <div class="channel-chips" id="recentChannelChips"></div>
+      </div>
+
+      <!-- Idle / loading / error states -->
+      <div class="browse-state" id="browseIdle">
+        <div class="state-icon">📺</div>
+        <p>Enter a YouTube @handle<br>to see their latest videos</p>
+      </div>
+      <div class="browse-state" id="browseLoading" style="display:none">
+        <div class="spinner"></div>
+        <p>Loading channel…</p>
+      </div>
+      <div class="browse-state" id="browseError" style="display:none">
+        <div class="state-icon">😕</div>
+        <p id="browseErrorMsg">Could not load this channel.</p>
+      </div>
+
+      <!-- Channel content (shown after load) -->
+      <div id="channelPage" style="display:none">
+        <div class="channel-header" id="channelHeader"></div>
+        <div class="section" style="padding-top:16px">
+          <div class="section-title" style="margin-bottom:14px">Latest Videos</div>
+          <div class="card-grid" id="channelGrid"></div>
+        </div>
+      </div>
+
+      <div class="bottom-pad"></div>
+    </div>
+
+    <!-- History screen -->
+    <div class="screen" id="historyScreen">
+      <div class="section">
+        <div class="section-head">
+          <span class="section-title">History</span>
+          <button class="section-action" id="clearHistoryBtn">Clear all</button>
+        </div>
+        <div class="card-grid" id="historyGrid"></div>
+      </div>
+      <div id="historyEmpty" class="empty" style="display:none">
+        <div class="empty-icon">📭</div>
+        <p>No history yet.<br>Watch a video and it'll appear here.</p>
+      </div>
+      <div class="bottom-pad"></div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- Tab bar -->
+  <nav class="tabbar">
+    <button class="tab active" data-screen="homeScreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
+        <path d="M9 21V12h6v9"/>
+      </svg>
+      Home
+    </button>
+    <button class="tab" data-screen="searchScreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Search
+    </button>
+    <button class="tab" data-screen="browseScreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      Channels
+    </button>
+    <button class="tab" data-screen="historyScreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/>
+        <polyline points="12 7 12 12 15 15"/>
+      </svg>
+      History
+    </button>
+  </nav>
+
+  <!-- Player overlay -->
+  <div class="player-overlay" id="playerOverlay">
+    <div class="player-topbar">
+      <button class="btn-close" id="closePlayerBtn">✕</button>
+      <span class="player-label" id="playerLabel">Now Playing</span>
+    </div>
+    <div class="player-frame-wrap" id="playerFrameWrap">
+      <!-- iframe injected here -->
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    'use strict';
+
+    /* ── History ──────────────────────────────────────────── */
+
+    const HISTORY_KEY = 'spark_v1_history';
+    const MAX_HISTORY = 40;
+
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+      catch { return []; }
+    }
+
+    function saveHistory(list) {
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }
+      catch {}
+    }
+
+    function pushHistory(entry) {
+      const list = loadHistory().filter(
+        h => !(h.platform === entry.platform && h.id === entry.id)
+      );
+      list.unshift({ ...entry, ts: Date.now() });
+      saveHistory(list.slice(0, MAX_HISTORY));
+    }
+
+    function clearHistory() {
+      saveHistory([]);
+    }
+
+    /* ── URL parsing ──────────────────────────────────────── */
+
+    function parseVideoUrl(raw) {
+      const url = raw.trim();
+
+      // YouTube: watch, short, shorts, youtu.be
+      const ytMatch = url.match(
+        /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+      );
+      if (ytMatch) {
+        return { platform: 'youtube', id: ytMatch[1] };
+      }
+
+      // TikTok: long URL with numeric video ID
+      const ttMatch = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/);
+      if (ttMatch) {
+        return { platform: 'tiktok', id: ttMatch[1] };
+      }
+
+      // TikTok: vm.tiktok.com short URL (can't resolve client-side)
+      if (/vm\.tiktok\.com|vt\.tiktok\.com/.test(url)) {
+        return { platform: 'tiktok_short', id: null };
+      }
+
+      return null;
+    }
+
+    function embedUrl(platform, id) {
+      if (platform === 'youtube') {
+        return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&rel=0`;
+      }
+      if (platform === 'tiktok') {
+        return `https://www.tiktok.com/embed/v2/${id}`;
+      }
+      return null;
+    }
+
+    function thumbnailUrl(platform, id) {
+      if (platform === 'youtube') {
+        return `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+      }
+      return '';
+    }
+
+    function platformLabel(platform) {
+      return platform === 'youtube' ? 'YouTube' : 'TikTok';
+    }
+
+    /* ── Player ───────────────────────────────────────────── */
+
+    const overlay    = document.getElementById('playerOverlay');
+    const frameWrap  = document.getElementById('playerFrameWrap');
+    const playerLabel = document.getElementById('playerLabel');
+    const closeBtn   = document.getElementById('closePlayerBtn');
+
+    let activeIframe = null;
+
+    function openPlayer(platform, id) {
+      const src = embedUrl(platform, id);
+      if (!src) return;
+
+      // Remove old iframe
+      if (activeIframe) { activeIframe.remove(); activeIframe = null; }
+
+      const iframe = document.createElement('iframe');
+      iframe.src = src;
+      iframe.allowFullscreen = true;
+      iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+      iframe.setAttribute('playsinline', '');
+
+      frameWrap.className = 'player-frame-wrap ' + (platform === 'tiktok' ? 'tt' : 'yt');
+      frameWrap.appendChild(iframe);
+      activeIframe = iframe;
+
+      playerLabel.textContent = platformLabel(platform);
+      overlay.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closePlayer() {
+      overlay.classList.remove('open');
+      document.body.style.overflow = '';
+      // Delay removal so animation finishes
+      setTimeout(() => {
+        if (activeIframe) { activeIframe.remove(); activeIframe = null; }
+      }, 350);
+    }
+
+    closeBtn.addEventListener('click', closePlayer);
+
+    // Swipe down to close
+    let touchStartY = 0;
+    overlay.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+    overlay.addEventListener('touchend', e => {
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (dy > 80) closePlayer();
+    }, { passive: true });
+
+    /* ── Watch function ───────────────────────────────────── */
+
+    function watchUrl(raw) {
+      const result = parseVideoUrl(raw);
+
+      if (!result) {
+        showToast('Unrecognized link. Try a YouTube or TikTok URL.');
+        return;
+      }
+
+      if (result.platform === 'tiktok_short') {
+        showToast('Paste the full TikTok link (tiktok.com/@user/video/…)');
+        return;
+      }
+
+      const { platform, id } = result;
+
+      pushHistory({
+        platform,
+        id,
+        thumb: thumbnailUrl(platform, id),
+        url: raw.trim(),
+        title: platformLabel(platform) + ' video'
+      });
+
+      renderRecent();
+      renderHistory();
+      openPlayer(platform, id);
+    }
+
+    /* ── Input / paste ────────────────────────────────────── */
+
+    const urlInput = document.getElementById('urlInput');
+    const goBtn    = document.getElementById('goBtn');
+    const pasteBtn = document.getElementById('pasteBtn');
+
+    goBtn.addEventListener('click', () => {
+      const v = urlInput.value.trim();
+      if (!v) { showToast('Paste a YouTube or TikTok link first'); return; }
+      watchUrl(v);
+      urlInput.value = '';
+      urlInput.blur();
+    });
+
+    urlInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') goBtn.click();
+    });
+
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          urlInput.value = text.trim();
+          urlInput.focus();
+          // Auto-play if it looks like a URL
+          if (/^https?:\/\//.test(text.trim())) {
+            setTimeout(() => goBtn.click(), 80);
+          }
+        } else {
+          showToast('Nothing on clipboard');
+        }
+      } catch {
+        // Clipboard permission denied — focus input so user can paste manually
+        urlInput.focus();
+        showToast('Tap the field and paste your link');
+      }
+    });
+
+    /* ── Cards ────────────────────────────────────────────── */
+
+    function timeAgo(ts) {
+      const s = Math.floor((Date.now() - ts) / 1000);
+      if (s < 60)   return 'just now';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    }
+
+    function makeCard(entry, onPlay) {
+      const dateStr = entry.ts ? timeAgo(entry.ts) : (entry.published || '');
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="card-thumb">
+          ${entry.thumb
+            ? `<img src="${entry.thumb}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+            : ''}
+          <div class="no-thumb" style="display:${entry.thumb ? 'none' : 'flex'}">
+            ${entry.platform === 'youtube' ? '▶' : '♪'}
+          </div>
+          <span class="card-badge ${entry.platform === 'youtube' ? 'yt' : 'tt'}">
+            ${entry.platform === 'youtube' ? 'YT' : 'TT'}
+          </span>
+          <div class="play-icon">
+            <svg viewBox="0 0 24 24" fill="white" stroke="none">
+              <circle cx="12" cy="12" r="11" fill="rgba(255,107,53,0.9)"/>
+              <polygon points="10,8 17,12 10,16" fill="white"/>
+            </svg>
+          </div>
+        </div>
+        <div class="card-info">
+          <div class="card-title">${entry.title}</div>
+          ${dateStr ? `<div class="card-date">${dateStr}</div>` : ''}
+        </div>
+      `;
+      card.addEventListener('click', () => {
+        if (onPlay) onPlay(entry);
+        else openPlayer(entry.platform, entry.id);
+      });
+      return card;
+    }
+
+    /* ── Recent (top 6) ───────────────────────────────────── */
+
+    const recentSection = document.getElementById('recentSection');
+    const recentGrid    = document.getElementById('recentGrid');
+
+    function renderRecent() {
+      const list = loadHistory().slice(0, 6);
+      recentGrid.innerHTML = '';
+      if (list.length === 0) {
+        recentSection.style.display = 'none';
+        return;
+      }
+      recentSection.style.display = '';
+      list.forEach(e => recentGrid.appendChild(makeCard(e)));
+    }
+
+    document.getElementById('clearRecentBtn').addEventListener('click', () => {
+      clearHistory();
+      renderRecent();
+      renderHistory();
+    });
+
+    /* ── History (all) ────────────────────────────────────── */
+
+    const historyGrid  = document.getElementById('historyGrid');
+    const historyEmpty = document.getElementById('historyEmpty');
+
+    function renderHistory() {
+      const list = loadHistory();
+      historyGrid.innerHTML = '';
+      if (list.length === 0) {
+        historyEmpty.style.display = '';
+        historyGrid.style.display  = 'none';
+        return;
+      }
+      historyEmpty.style.display = 'none';
+      historyGrid.style.display  = '';
+      list.forEach(e => historyGrid.appendChild(makeCard(e)));
+    }
+
+    document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+      clearHistory();
+      renderRecent();
+      renderHistory();
+    });
+
+    /* ── Tab navigation ───────────────────────────────────── */
+
+    const tabs    = document.querySelectorAll('.tab');
+    const screens = document.querySelectorAll('.screen');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const targetId = tab.dataset.screen;
+        tabs.forEach(t => t.classList.remove('active'));
+        screens.forEach(s => s.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(targetId).classList.add('active');
+        document.getElementById('mainScroll').scrollTop = 0;
+        if (targetId === 'historyScreen') renderHistory();
+        if (targetId === 'browseScreen')  renderRecentChannelChips();
+      });
+    });
+
+    /* ── Toast ────────────────────────────────────────────── */
+
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+
+    function showToast(msg) {
+      clearTimeout(toastTimer);
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2800);
+    }
+
+    /* ── Search ───────────────────────────────────────────── */
+
+    const INVIDIOUS_INSTANCES = [
+      'https://inv.nadeko.net',
+      'https://invidious.privacydev.net',
+      'https://vid.puffyan.us',
+    ];
+
+    async function searchYouTube(query) {
+      let lastErr;
+      for (const base of INVIDIOUS_INSTANCES) {
+        try {
+          const url = `${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title,author,videoThumbnails,lengthSeconds,viewCount`;
+          const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.json();
+          return data.map(v => ({
+            platform: 'youtube',
+            id: v.videoId,
+            title: v.title || 'YouTube video',
+            thumb: (v.videoThumbnails || []).find(t => t.quality === 'medium')?.url
+                || (v.videoThumbnails || [])[0]?.url
+                || `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg`,
+            published: v.author || '',
+          }));
+        } catch (e) { lastErr = e; }
+      }
+      throw lastErr || new Error('All search servers failed.');
+    }
+
+    function setSearchState(state) {
+      document.getElementById('searchIdle').style.display    = state === 'idle'    ? '' : 'none';
+      document.getElementById('searchLoading').style.display = state === 'loading' ? '' : 'none';
+      document.getElementById('searchError').style.display   = state === 'error'   ? '' : 'none';
+      document.getElementById('searchResults').style.display = state === 'loaded'  ? '' : 'none';
+    }
+
+    async function triggerSearch(query) {
+      query = query.trim();
+      if (!query) { showToast('Enter something to search'); return; }
+      setSearchState('loading');
+      try {
+        const results = await searchYouTube(query);
+        const grid = document.getElementById('searchGrid');
+        grid.innerHTML = '';
+        if (!results.length) {
+          document.getElementById('searchErrorMsg').textContent = 'No results found.';
+          setSearchState('error');
+          return;
+        }
+        results.forEach(v => {
+          grid.appendChild(makeCard(v, entry => {
+            pushHistory({ ...entry, ts: Date.now() });
+            renderRecent();
+            openPlayer('youtube', entry.id);
+          }));
+        });
+        setSearchState('loaded');
+        document.getElementById('mainScroll').scrollTop = 0;
+      } catch (err) {
+        document.getElementById('searchErrorMsg').textContent = 'Search failed — check your connection.';
+        setSearchState('error');
+      }
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', () => {
+      triggerSearch(document.getElementById('searchInput').value);
+    });
+
+    document.getElementById('searchInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('searchBtn').click();
+    });
+
+    /* ── Channel browsing ─────────────────────────────────── */
+
+    const CHANNELS_KEY = 'spark_v1_channels';
+    const PROXY = 'https://corsproxy.io/?';
+
+    function loadRecentChannels() {
+      try { return JSON.parse(localStorage.getItem(CHANNELS_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function saveRecentChannels(list) {
+      try { localStorage.setItem(CHANNELS_KEY, JSON.stringify(list)); }
+      catch {}
+    }
+    function pushRecentChannel(ch) {
+      const list = loadRecentChannels().filter(c => c.id !== ch.id);
+      list.unshift(ch);
+      saveRecentChannels(list.slice(0, 8));
+    }
+
+    function decodeHtml(str) {
+      return str
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n));
+    }
+
+    async function resolveChannelId(input) {
+      input = input.trim().replace(/\/+$/, '');
+
+      // Direct channel ID
+      const idDirect = input.match(/(?:channel\/|^)(UC[a-zA-Z0-9_-]{22})$/);
+      if (idDirect) return idDirect[1];
+
+      // Extract handle
+      let handle = null;
+      const inUrl = input.match(/youtube\.com\/@([a-zA-Z0-9_.-]+)/);
+      if (inUrl) handle = inUrl[1];
+      else {
+        const bare = input.match(/^@?([a-zA-Z0-9_.-]+)$/);
+        if (bare) handle = bare[1];
+      }
+      if (!handle) throw new Error('Unrecognized format. Try @handle or a channel URL.');
+
+      // Fetch channel page to extract channel ID
+      const resp = await fetch(PROXY + encodeURIComponent(`https://www.youtube.com/@${handle}`));
+      if (!resp.ok) throw new Error('Network error');
+      const html = await resp.text();
+      for (const p of [
+        /"externalId":"(UC[a-zA-Z0-9_-]{22})"/,
+        /"channelId":"(UC[a-zA-Z0-9_-]{22})"/,
+        /\/channel\/(UC[a-zA-Z0-9_-]{22})/,
+      ]) {
+        const m = html.match(p);
+        if (m) return m[1];
+      }
+      throw new Error('Channel not found. Double-check the handle.');
+    }
+
+    async function fetchChannelVideos(channelId) {
+      const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+      const resp = await fetch(PROXY + encodeURIComponent(rssUrl));
+      if (!resp.ok) throw new Error('Could not fetch channel videos.');
+      const xml = await resp.text();
+
+      const nameMatch = xml.match(/<name>([^<]+)<\/name>/);
+      const channelName = nameMatch ? decodeHtml(nameMatch[1]) : 'YouTube Channel';
+
+      const videos = [];
+      const re = /<entry>([\s\S]*?)<\/entry>/g;
+      let m;
+      while ((m = re.exec(xml)) !== null) {
+        const e = m[1];
+        const id  = (e.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) || [])[1];
+        const ttl = (e.match(/<title>([^<]+)<\/title>/)            || [])[1];
+        const thb = (e.match(/url="(https:\/\/[^"]*ytimg[^"]*)"/  ) || [])[1];
+        const pub = (e.match(/<published>([^<]+)<\/published>/)    || [])[1];
+        if (!id) continue;
+        videos.push({
+          platform: 'youtube', id,
+          title: ttl ? decodeHtml(ttl) : 'YouTube video',
+          thumb: thb || `https://img.youtube.com/vi/${id}/mqdefault.jpg`,
+          published: pub ? new Date(pub).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+        });
+      }
+      return { channelId, name: channelName, videos };
+    }
+
+    function setBrowseState(state) {
+      document.getElementById('browseIdle').style.display    = state === 'idle'    ? '' : 'none';
+      document.getElementById('browseLoading').style.display = state === 'loading' ? '' : 'none';
+      document.getElementById('browseError').style.display   = state === 'error'   ? '' : 'none';
+      document.getElementById('channelPage').style.display   = state === 'loaded'  ? '' : 'none';
+    }
+
+    function renderChannelPage(data) {
+      document.getElementById('channelHeader').innerHTML = `
+        <div class="channel-avatar">📺</div>
+        <div style="min-width:0">
+          <div class="channel-name">${data.name}</div>
+          <div class="channel-sub">${data.videos.length} recent video${data.videos.length !== 1 ? 's' : ''}</div>
+        </div>`;
+
+      const grid = document.getElementById('channelGrid');
+      grid.innerHTML = '';
+      data.videos.forEach(v => {
+        grid.appendChild(makeCard(v, entry => {
+          pushHistory({ ...entry, ts: Date.now() });
+          renderRecent();
+          openPlayer('youtube', entry.id);
+        }));
+      });
+      setBrowseState('loaded');
+    }
+
+    function renderRecentChannelChips() {
+      const channels = loadRecentChannels();
+      const wrap  = document.getElementById('recentChannelsWrap');
+      const chips = document.getElementById('recentChannelChips');
+      if (!channels.length) { wrap.style.display = 'none'; return; }
+      wrap.style.display = '';
+      chips.innerHTML = '';
+      channels.forEach(ch => {
+        const el = document.createElement('button');
+        el.className = 'channel-chip';
+        el.textContent = ch.name;
+        el.addEventListener('click', () => {
+          document.getElementById('channelInput').value = '@' + ch.id;
+          triggerChannelLoad(ch.id);
+        });
+        chips.appendChild(el);
+      });
+    }
+
+    async function triggerChannelLoad(input) {
+      setBrowseState('loading');
+      document.getElementById('recentChannelsWrap').style.display = 'none';
+      try {
+        const channelId = await resolveChannelId(input);
+        const data = await fetchChannelVideos(channelId);
+        pushRecentChannel({ id: channelId, name: data.name });
+        renderChannelPage(data);
+        renderRecentChannelChips();
+        document.getElementById('mainScroll').scrollTop = 0;
+      } catch (err) {
+        document.getElementById('browseErrorMsg').textContent = err.message || 'Could not load channel.';
+        setBrowseState('error');
+        renderRecentChannelChips();
+      }
+    }
+
+    document.getElementById('loadChannelBtn').addEventListener('click', () => {
+      const v = document.getElementById('channelInput').value.trim();
+      if (!v) { showToast('Enter a YouTube @handle or channel URL'); return; }
+      triggerChannelLoad(v);
+    });
+
+    document.getElementById('channelInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('loadChannelBtn').click();
+    });
+
+    /* ── Init ─────────────────────────────────────────────── */
+
+    renderRecent();
+  </script>
+</body>
+</html>
