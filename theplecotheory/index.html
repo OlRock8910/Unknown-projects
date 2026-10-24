@@ -103,9 +103,6 @@
   .btn[aria-disabled="true"] { opacity: .55; pointer-events: none; }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center; }
-  .split img { border-radius: 14px; }
-
   ol.steps { padding-left: 1.3em; margin: 0; }
   ol.steps li { margin-bottom: 8px; }
 
@@ -118,12 +115,10 @@
     margin: 0 -16px; padding: 0 16px 8px; scrollbar-width: none;
   }
   .gallery::-webkit-scrollbar { display: none; }
-  .gallery a { flex: 0 0 72%; max-width: 300px; scroll-snap-align: center; }
-  .gallery img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; }
+  .gallery a { flex: 0 0 auto; scroll-snap-align: center; }
+  .gallery img { height: 340px; width: auto; max-width: 85vw; object-fit: cover; border-radius: 14px; }
   .swipe { margin: 4px 0 0; font-size: .9rem; color: var(--muted); }
 
-  .plecos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-  .plecos img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; }
 
   .soon { border-style: dashed; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -136,7 +131,7 @@
   @media (max-width: 560px) {
     header.hero img { height: 280px; }
     header.hero h1 { font-size: 1.8rem; }
-    .split, .tips { grid-template-columns: 1fr; }
+    .tips { grid-template-columns: 1fr; }
     .price b { font-size: 1.4rem; }
   }
 </style>
@@ -195,15 +190,27 @@
       <a href="img/shrimp-4.jpg"><img src="img/shrimp-4.jpg" alt="Shrimp feeding inside a cave" loading="lazy"></a>
       <a href="img/shrimp-5.jpg"><img src="img/shrimp-5.jpg" alt="Shrimp around a cave and rock" loading="lazy"></a>
       <a href="img/shrimp-6.jpg"><img src="img/shrimp-6.jpg" alt="Red shrimp grazing on a rock" loading="lazy"></a>
+      <a href="img/shrimp-7.jpg"><img src="img/shrimp-7.jpg" alt="A crowd of shrimp by a cave" loading="lazy"></a>
+      <a href="img/shrimp-8.jpg"><img src="img/shrimp-8.jpg" alt="Loads of shrimp on the gravel" loading="lazy"></a>
+      <a href="img/shrimp-9.jpg"><img src="img/shrimp-9.jpg" alt="A yellow shrimp up close" loading="lazy"></a>
+      <a href="img/shrimp-10.jpg"><img src="img/shrimp-10.jpg" alt="A yellow shrimp on the glass" loading="lazy"></a>
+      <a href="img/shrimp-11.jpg"><img src="img/shrimp-11.jpg" alt="Shrimp spread across the gravel" loading="lazy"></a>
     </div>
     <p class="swipe">Swipe for more → tap a photo to see it bigger</p>
   </section>
 
-  <section class="split">
-    <img src="img/tank.jpg" alt="The curved 190 litre tank with rocks, driftwood and moss" loading="lazy">
-    <div>
-      <h2>Where they come from</h2>
-      <p>Every shrimp is bred here, not bought in and resold. They grow up in a mature tank with gentle sponge filters, so they're strong and settle in well.</p>
+  <section>
+    <h2>Where they come from</h2>
+    <p>Every shrimp is bred here, not bought in and resold. They grow up in a mature tank with gentle sponge filters, so they're strong and settle in well.</p>
+    <div class="gallery">
+      <a href="img/tank-1.jpg"><img src="img/tank-1.jpg" alt="The curved 190 litre tank" loading="lazy"></a>
+      <a href="img/tank-2.jpg"><img src="img/tank-2.jpg" alt="Inside the curved tank" loading="lazy"></a>
+      <a href="img/tank-3.jpg"><img src="img/tank-3.jpg" alt="Rocks, wood and shrimp in the curved tank" loading="lazy"></a>
+      <a href="img/tank-4.jpg"><img src="img/tank-4.jpg" alt="The front of the curved tank" loading="lazy"></a>
+      <a href="img/tank-5.jpg"><img src="img/tank-5.jpg" alt="Shrimp and a pleco in the curved tank" loading="lazy"></a>
+      <a href="img/tank-6.jpg"><img src="img/tank-6.jpg" alt="The curved tank with moss" loading="lazy"></a>
+      <a href="img/tank-7.jpg"><img src="img/tank-7.jpg" alt="The pleco tank and supplies underneath" loading="lazy"></a>
+      <a href="img/tank-8.jpg"><img src="img/tank-8.jpg" alt="A small tank with floating plants" loading="lazy"></a>
     </div>
   </section>
 
@@ -231,11 +238,24 @@
 
   <section>
     <h2>Bristlenose plecos</h2>
-    <div class="plecos">
-      <img src="img/pleco-albino.jpg" alt="Albino bristlenose pleco on the tank glass" loading="lazy">
-      <img src="img/pleco-bristlenose.jpg" alt="Bristlenose pleco resting in a cave" loading="lazy">
+    <p style="margin:0 0 12px">Where the name comes from. I also have some bristlenose plecos looking for new homes. Message me if you're interested.</p>
+    <div class="gallery">
+      <a href="img/pleco-1.jpg"><img src="img/pleco-1.jpg" alt="Albino bristlenose pleco on the glass" loading="lazy"></a>
+      <a href="img/pleco-2.jpg"><img src="img/pleco-2.jpg" alt="Albino bristlenose pleco from the front" loading="lazy"></a>
+      <a href="img/pleco-3.jpg"><img src="img/pleco-3.jpg" alt="Albino bristlenose pleco on the gravel" loading="lazy"></a>
+      <a href="img/pleco-4.jpg"><img src="img/pleco-4.jpg" alt="Bristlenose pleco resting in a cave" loading="lazy"></a>
+      <a href="img/pleco-5.jpg"><img src="img/pleco-5.jpg" alt="Bristlenose pleco by its caves" loading="lazy"></a>
     </div>
-    <p style="margin:0">Where the name comes from. I also have some bristlenose plecos looking for new homes. Message me if you're interested.</p>
+  </section>
+
+  <section>
+    <h2>Bettas</h2>
+    <p style="margin:0 0 12px">Not just shrimp and plecos. Here are my bettas too.</p>
+    <div class="gallery">
+      <a href="img/betta-1.jpg"><img src="img/betta-1.jpg" alt="Blue and white betta among plants" loading="lazy"></a>
+      <a href="img/betta-2.jpg"><img src="img/betta-2.jpg" alt="Blue marble betta up close" loading="lazy"></a>
+      <a href="img/betta-3.jpg"><img src="img/betta-3.jpg" alt="Betta swimming by the plants" loading="lazy"></a>
+    </div>
   </section>
 
   <section>
