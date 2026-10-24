@@ -1,11 +1,12 @@
-# Publishes Adjetivos so anyone can play in their browser, no install:
-# https://olrock8910.github.io/Unknown-projects/adjetivos/
-name: Publish Adjetivos website
+# Publishes the websites:
+# https://olrock8910.github.io/Unknown-projects/adjetivos/ (play Adjetivos in the browser, no install)
+# https://olrock8910.github.io/Unknown-projects/theplecotheory/ (The Pleco Theory shrimp shop)
+name: Publish websites
 
 on:
   push:
     branches: [main]
-    paths: ['adjetivos/web/**', '.github/workflows/adjetivos-pages.yml']
+    paths: ['adjetivos/web/**', 'theplecotheory/**', '.github/workflows/adjetivos-pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -29,6 +30,7 @@ jobs:
         run: |
           mkdir -p _site
           cp -r adjetivos/web _site/adjetivos
+          cp -r theplecotheory _site/theplecotheory
           # The bare site address goes straight to the game.
           printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=adjetivos/"><a href="adjetivos/">Adjetivos</a>\n' > _site/index.html
       - uses: actions/configure-pages@v5

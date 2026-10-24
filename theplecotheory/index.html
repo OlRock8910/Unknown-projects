@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Pleco Theory</title>
+<meta name="description" content="Home-bred Neocaridina cherry shrimp in North Shields. £1 each, 10 for £8, 20 for £15. Collection only.">
+<meta property="og:title" content="The Pleco Theory – home-bred shrimp, North Shields">
+<meta property="og:description" content="Neocaridina cherry shrimp. £1 each, 10 for £8, 20 for £15. Collection only.">
+<meta property="og:image" content="img/shrimp.jpg">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦐</text></svg>">
+<style>
+  :root {
+    --bg: #f6f3ee;
+    --card: #ffffff;
+    --ink: #1d2422;
+    --muted: #5d6a66;
+    --line: #e2ddd4;
+    --accent: #c8402c;
+    --accent-ink: #ffffff;
+    --water: #1f5a55;
+    --wa: #1fa855;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101716;
+      --card: #18211f;
+      --ink: #eef2f0;
+      --muted: #a2b0ab;
+      --line: #2a3633;
+      --accent: #e5604a;
+      --water: #7fc4bb;
+      --wa: #25c264;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+
+  header.hero { position: relative; color: #fff; }
+  header.hero img { width: 100%; height: 340px; object-fit: cover; }
+  header.hero .shade {
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.7));
+  }
+  header.hero .text {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    max-width: 720px; margin: 0 auto; padding: 0 16px 24px;
+  }
+  header.hero h1 { margin: 0; font-size: 2.2rem; line-height: 1.1; letter-spacing: -.02em; }
+  header.hero p { margin: 6px 0 0; font-size: 1.05rem; opacity: .92; }
+
+  .next {
+    margin: -18px auto 0; position: relative;
+    background: var(--accent); color: var(--accent-ink);
+    border-radius: 12px; padding: 12px 16px; font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0,0,0,.18);
+  }
+
+  section { margin: 36px 0; }
+  h2 { font-size: 1.4rem; margin: 0 0 12px; letter-spacing: -.01em; }
+  .muted { color: var(--muted); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px;
+  }
+
+  .prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .price { text-align: center; padding: 16px 8px; }
+  .price b { display: block; font-size: 1.7rem; color: var(--accent); }
+  .price span { color: var(--muted); font-size: .95rem; }
+
+  .calc { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .stepper { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .stepper button {
+    width: 44px; height: 44px; border: 0; background: transparent;
+    color: var(--ink); font-size: 1.4rem; cursor: pointer;
+  }
+  .stepper input {
+    width: 64px; height: 44px; border: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+    background: transparent; color: var(--ink); font: inherit; text-align: center;
+    -moz-appearance: textfield;
+  }
+  .stepper input::-webkit-inner-spin-button,
+  .stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .total { font-weight: 700; font-size: 1.15rem; }
+  .hint { width: 100%; margin: 0; font-size: .95rem; color: var(--water); min-height: 1.4em; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 48px; padding: 0 20px; border-radius: 12px; border: 0;
+    font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
+  }
+  .btn-wa { background: var(--wa); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center; }
+  .split img { border-radius: 14px; }
+
+  ol.steps { padding-left: 1.3em; margin: 0; }
+  ol.steps li { margin-bottom: 8px; }
+
+  .tips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tip b { display: block; }
+  .tip span { color: var(--muted); font-size: .95rem; }
+
+  .soon { border-style: dashed; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip { border-radius: 999px; padding: 4px 12px; font-size: .9rem; font-weight: 600; }
+  .chip.red { background: #c8402c22; color: var(--accent); }
+  .chip.blue { background: #2c6bc822; color: #3d7fe0; }
+
+  footer { padding: 28px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+
+  @media (max-width: 560px) {
+    header.hero img { height: 280px; }
+    header.hero h1 { font-size: 1.8rem; }
+    .split, .tips { grid-template-columns: 1fr; }
+    .price b { font-size: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <img src="img/shrimp.jpg" alt="Red cherry shrimp on a rock in the tank">
+  <div class="shade"></div>
+  <div class="text">
+    <h1>The Pleco Theory</h1>
+    <p>Home-bred cherry shrimp from North Shields</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- Change this line when the next collection day changes -->
+  <div class="next">📅 Next collection day: Monday 26 October</div>
+
+  <section>
+    <h2>Shrimp for sale</h2>
+    <p>Healthy <strong>Neocaridina</strong> (cherry shrimp), bred at home in a mature 190&nbsp;litre tank with sponge filters. Mixed colours, mostly red, with juveniles and adults. They're hardy, they eat algae and leftover food, and they're great for starting your first colony.</p>
+
+    <div class="prices">
+      <div class="card price"><b>£1</b><span>each</span></div>
+      <div class="card price"><b>£8</b><span>for 10</span></div>
+      <div class="card price"><b>£15</b><span>for 20</span></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <strong>How many would you like?</strong>
+      <div class="calc">
+        <div class="stepper">
+          <button type="button" id="minus" aria-label="Fewer">−</button>
+          <input id="qty" type="number" inputmode="numeric" min="1" max="200" value="10" aria-label="Number of shrimp">
+          <button type="button" id="plus" aria-label="More">+</button>
+        </div>
+        <div class="total" id="total">£8</div>
+        <p class="hint" id="hint"></p>
+      </div>
+      <div class="actions">
+        <a class="btn btn-wa" id="wa" target="_blank" rel="noopener">💬 Message me on WhatsApp</a>
+        <button class="btn btn-ghost" type="button" id="copy">Copy my message</button>
+      </div>
+      <p class="muted" id="copied" style="margin:10px 0 0;font-size:.95rem"></p>
+      <p class="muted" style="margin:10px 0 0;font-size:.95rem">Bigger amounts? Message me for a price.</p>
+    </div>
+  </section>
+
+  <section class="split">
+    <img src="img/tank.jpg" alt="The shrimp tank with rocks, driftwood and green gravel">
+    <div>
+      <h2>Where they come from</h2>
+      <p>Every shrimp is bred here, not bought in and resold. They grow up in a mature tank with gentle sponge filters, so they're strong and settle in well.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>How to buy</h2>
+    <div class="card">
+      <ol class="steps">
+        <li><strong>Message me on WhatsApp</strong> with how many you want.</li>
+        <li>I'll <strong>reserve them</strong> and send you a collection time.</li>
+        <li><strong>Collect in North Shields</strong> and pay when you pick them up.</li>
+      </ol>
+      <p class="muted" style="margin:12px 0 0">They come bagged in tank water. If you're buying a lot, bring a bag or container to carry them home. Collection only, no postage.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Looking after them</h2>
+    <div class="tips">
+      <div class="card tip"><b>🌡️ 18–26°C</b><span>Room temperature is usually fine. A heater helps in a cold room.</span></div>
+      <div class="card tip"><b>💧 pH 6.5–8</b><span>Normal UK tap water works once it's dechlorinated.</span></div>
+      <div class="card tip"><b>⏳ Acclimatise slowly</b><span>Float the bag, then add a little tank water every 10 minutes for about an hour.</span></div>
+      <div class="card tip"><b>🚫 No copper</b><span>Many plant and snail treatments contain copper, which kills shrimp.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card soon">
+      <h2>In the works</h2>
+      <p style="margin:0">I'm setting up separate tanks to breed only the brightest shrimp. Selectively bred colour lines are on the way.</p>
+      <div class="chips">
+        <span class="chip red">Fire Red</span>
+        <span class="chip blue">Blue</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">The Pleco Theory · North Shields · Collection only</div>
+</footer>
+
+<script>
+  // Your WhatsApp link. Use the QR link from WhatsApp (Settings → QR code → Share),
+  // which looks like https://wa.me/qr/ABC123. It doesn't show your phone number.
+  const WHATSAPP_LINK = "";
+
+  const qty = document.getElementById("qty");
+  const total = document.getElementById("total");
+  const hint = document.getElementById("hint");
+  const wa = document.getElementById("wa");
+  const copied = document.getElementById("copied");
+
+  function price(n) {
+    const twenties = Math.floor(n / 20);
+    const tens = Math.floor((n % 20) / 10);
+    return twenties * 15 + tens * 8 + (n % 10);
+  }
+
+  function count() {
+    const n = parseInt(qty.value, 10);
+    return Math.min(200, Math.max(1, isNaN(n) ? 1 : n));
+  }
+
+  function update() {
+    const n = count();
+    const cost = price(n);
+    total.textContent = "£" + cost;
+    // Point out when buying a few more works out cheaper.
+    const nextDeal = n < 10 ? 10 : Math.ceil(n / 10) * 10;
+    if (nextDeal > n && price(nextDeal) <= cost) {
+      const deal = price(nextDeal) < cost ? "cheaper than " : "the same price as ";
+      hint.textContent = "Tip: " + nextDeal + " are £" + price(nextDeal) + ", " + deal + n + ".";
+    } else {
+      hint.textContent = "";
+    }
+  }
+
+  function message() {
+    return "Hi, I'd like " + count() + " shrimp (£" + price(count()) + ") for collection. Are they still available?";
+  }
+
+  document.getElementById("minus").onclick = () => { qty.value = Math.max(1, count() - 1); update(); };
+  document.getElementById("plus").onclick = () => { qty.value = Math.min(200, count() + 1); update(); };
+  qty.addEventListener("input", update);
+  qty.addEventListener("blur", () => { qty.value = count(); update(); });
+
+  document.getElementById("copy").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(message());
+      copied.textContent = "Copied! Paste it into WhatsApp.";
+    } catch {
+      copied.textContent = message();
+    }
+  };
+
+  if (WHATSAPP_LINK) {
+    wa.href = WHATSAPP_LINK;
+  } else {
+    wa.textContent = "WhatsApp link coming soon";
+    wa.setAttribute("aria-disabled", "true");
+  }
+
+  update();
+</script>
+</body>
+</html>
