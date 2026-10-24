@@ -7,7 +7,7 @@
 <meta name="description" content="Home-bred Neocaridina cherry shrimp in North Shields. £1 each, 10 for £8, 20 for £15. Collection only.">
 <meta property="og:title" content="The Pleco Theory – home-bred shrimp, North Shields">
 <meta property="og:description" content="Neocaridina cherry shrimp. £1 each, 10 for £8, 20 for £15. Collection only.">
-<meta property="og:image" content="img/shrimp.jpg">
+<meta property="og:image" content="img/hero.jpg">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦐</text></svg>">
 <style>
   :root {
@@ -113,6 +113,18 @@
   .tip b { display: block; }
   .tip span { color: var(--muted); font-size: .95rem; }
 
+  .gallery {
+    display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory;
+    margin: 0 -16px; padding: 0 16px 8px; scrollbar-width: none;
+  }
+  .gallery::-webkit-scrollbar { display: none; }
+  .gallery a { flex: 0 0 72%; max-width: 300px; scroll-snap-align: center; }
+  .gallery img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; }
+  .swipe { margin: 4px 0 0; font-size: .9rem; color: var(--muted); }
+
+  .plecos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .plecos img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; }
+
   .soon { border-style: dashed; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .chip { border-radius: 999px; padding: 4px 12px; font-size: .9rem; font-weight: 600; }
@@ -132,7 +144,7 @@
 <body>
 
 <header class="hero">
-  <img src="img/shrimp.jpg" alt="Red cherry shrimp on a rock in the tank">
+  <img src="img/hero.jpg" alt="Lots of red cherry shrimp on the gravel in the tank">
   <div class="shade"></div>
   <div class="text">
     <h1>The Pleco Theory</h1>
@@ -174,8 +186,21 @@
     </div>
   </section>
 
+  <section>
+    <h2>The shrimp</h2>
+    <div class="gallery">
+      <a href="img/shrimp-1.jpg"><img src="img/shrimp-1.jpg" alt="Red shrimp on dark gravel" loading="lazy"></a>
+      <a href="img/shrimp-2.jpg"><img src="img/shrimp-2.jpg" alt="Red shrimp climbing a rock" loading="lazy"></a>
+      <a href="img/shrimp-3.jpg"><img src="img/shrimp-3.jpg" alt="A bright red shrimp next to a yellow one" loading="lazy"></a>
+      <a href="img/shrimp-4.jpg"><img src="img/shrimp-4.jpg" alt="Shrimp feeding inside a cave" loading="lazy"></a>
+      <a href="img/shrimp-5.jpg"><img src="img/shrimp-5.jpg" alt="Shrimp around a cave and rock" loading="lazy"></a>
+      <a href="img/shrimp-6.jpg"><img src="img/shrimp-6.jpg" alt="Red shrimp grazing on a rock" loading="lazy"></a>
+    </div>
+    <p class="swipe">Swipe for more → tap a photo to see it bigger</p>
+  </section>
+
   <section class="split">
-    <img src="img/tank.jpg" alt="The shrimp tank with rocks, driftwood and green gravel">
+    <img src="img/tank.jpg" alt="The curved 190 litre tank with rocks, driftwood and moss" loading="lazy">
     <div>
       <h2>Where they come from</h2>
       <p>Every shrimp is bred here, not bought in and resold. They grow up in a mature tank with gentle sponge filters, so they're strong and settle in well.</p>
@@ -202,6 +227,15 @@
       <div class="card tip"><b>⏳ Acclimatise slowly</b><span>Float the bag, then add a little tank water every 10 minutes for about an hour.</span></div>
       <div class="card tip"><b>🚫 No copper</b><span>Many plant and snail treatments contain copper, which kills shrimp.</span></div>
     </div>
+  </section>
+
+  <section>
+    <h2>Bristlenose plecos</h2>
+    <div class="plecos">
+      <img src="img/pleco-albino.jpg" alt="Albino bristlenose pleco on the tank glass" loading="lazy">
+      <img src="img/pleco-bristlenose.jpg" alt="Bristlenose pleco resting in a cave" loading="lazy">
+    </div>
+    <p style="margin:0">Where the name comes from. I also have some bristlenose plecos looking for new homes. Message me if you're interested.</p>
   </section>
 
   <section>
