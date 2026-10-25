@@ -9,6 +9,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.os.Build;
+import android.os.SystemClock;
 import android.view.HapticFeedbackConstants;
 import android.view.InputDevice;
 import android.view.MotionEvent;
@@ -77,7 +78,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
     }
 
     private static final int M_NONE = 0, M_DRAW = 1, M_ERASE = 2, M_LASSO = 3, M_SHAPE = 4,
-            M_NAV = 5, M_MOVE_SEL = 6, M_SCALE_SEL = 7, M_NOTE = 8, M_IGNORE = 9, M_PICK = 10, M_TWIST = 11;
+            M_NAV = 5, M_MOVE_SEL = 6, M_SCALE_SEL = 7, M_NOTE = 8, M_IGNORE = 9, M_PICK = 10, M_TWIST = 11, M_AIM = 12;
 
     /** Pixels sampled around the eyedropper, shown magnified in the loupe. */
     private static final int LOUPE = 15;
@@ -140,6 +141,14 @@ public final class CanvasView extends View implements ImageCache.Listener {
     // Press and hold on something to pick it up; tap a picked-up picture or note to edit it.
     private static final long PRESS_FINGER_MS = 450, PRESS_PEN_MS = 650;
     private Item pressItem;
+
+    // Pointer pen: a finger holds a long pen and the ink comes from its tip, away from the finger.
+    private static final long POINTER_ARM_MS = 350;
+    private boolean pointerPen;
+    private boolean pointerInk; // the current stroke is drawn at the tip, not under the finger
+    private float pdx, pdy;     // tip offset from the finger, in screen pixels
+    private float aimX, aimY, aimAnchorX, aimAnchorY;
+    private long aimSince;
 
     // A note being typed: drawn live in place of the one it will replace (if any).
     private Note draft, draftOf;
@@ -215,6 +224,15 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
     public InkRenderer renderer() {
         return ink;
+    }
+
+    /** Turns the pointer pen on or off (fingers only; a real stylus always draws under its tip). */
+    public void setPointerPen(boolean on) {
+        pointerPen = on;
+    }
+
+    private boolean pointerPenFor(int tool) {
+        return pointerPen && ToolBox.isInk(tool);
     }
 
     public void setFingerDraws(boolean draws) {
@@ -384,6 +402,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
             }
         }
         if (mode == M_PICK && loupe != null) drawLoupe(c);
+        if (mode == M_AIM || (mode == M_DRAW && pointerInk)) drawPointerPen(c);
         if (eraseShow && !Float.isNaN(eraseX)) {
             float sx = vp.toScreenX(eraseX), sy = vp.toScreenY(eraseY);
             uiFill.setColor(dark ? 0x22FFFFFF : 0x22000000);
@@ -392,6 +411,94 @@ public final class CanvasView extends View implements ImageCache.Listener {
             ui.setStrokeWidth(1.2f * density);
             c.drawCircle(sx, sy, eraseScreenR, ui);
         }
+    }
+
+    /** Held still long enough while aiming: ink starts at the pen's tip. */
+    private final Runnable aimArm = new Runnable() {
+        @Override
+        public void run() {
+            if (mode != M_AIM) return;
+            float tx = aimX + pdx, ty = aimY + pdy;
+            mode = M_DRAW;
+            pointerInk = true;
+            liveBrush = ToolBox.brushOf(gestureTool);
+            liveColor = tools.color(gestureTool);
+            liveSize = tools.size(gestureTool) * density / vp.scale;
+            liveFlags = 0;
+            live.clear();
+            snapped = null;
+            simPressure = 0.5f;
+            long now = SystemClock.uptimeMillis();
+            lastT = now;
+            lastSx = tx;
+            lastSy = ty;
+            addSample(tx, ty, 0.5f, now, true);
+            holdX = tx;
+            holdY = ty;
+            removeCallbacks(holdToSnap);
+            postDelayed(holdToSnap, HOLD_TO_SNAP_MS);
+            performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            invalidate();
+        }
+    };
+
+    /** Redraws the filling "get ready" ring while aiming. */
+    private final Runnable aimTick = new Runnable() {
+        @Override
+        public void run() {
+            if (mode != M_AIM) return;
+            invalidate();
+            postOnAnimation(this);
+        }
+    };
+
+    /** The pointer pen: a long pen from the finger to its tip, nib in the ink's colour. */
+    private void drawPointerPen(Canvas c) {
+        float fx = aimX, fy = aimY, tx = aimX + pdx, ty = aimY + pdy;
+        float len = Geometry.dist(fx, fy, tx, ty);
+        float ux = (tx - fx) / len, uy = (ty - fy) / len, nx = -uy, ny = ux;
+        float nib = 20 * density, half = 6.5f * density;
+        float bx = tx - ux * nib, by = ty - uy * nib; // where the body meets the nib
+        float gx = fx - ux * 26 * density, gy = fy - uy * 26 * density; // the end past the finger
+        // Body.
+        ui.setStrokeCap(Paint.Cap.ROUND);
+        ui.setStrokeWidth(2 * half + 3 * density);
+        ui.setColor(0xCCFFFFFF);
+        c.drawLine(gx, gy, bx, by, ui);
+        ui.setStrokeWidth(2 * half);
+        ui.setColor(0xF02A2B33);
+        c.drawLine(gx, gy, bx, by, ui);
+        ui.setStrokeCap(Paint.Cap.BUTT);
+        // Nib.
+        tmpPath.rewind();
+        tmpPath.moveTo(bx + nx * half, by + ny * half);
+        tmpPath.lineTo(tx, ty);
+        tmpPath.lineTo(bx - nx * half, by - ny * half);
+        tmpPath.close();
+        uiFill.setColor(liveColorFor(gestureTool) | 0xFF000000);
+        c.drawPath(tmpPath, uiFill);
+        ui.setStrokeWidth(1.5f * density);
+        ui.setColor(0xCCFFFFFF);
+        c.drawPath(tmpPath, ui);
+        // Tip marker: a ring that fills while you hold still, then a small dot while inking.
+        float r = 16 * density;
+        if (mode == M_AIM) {
+            float t = Math.min(1f, (SystemClock.uptimeMillis() - aimSince) / (float) POINTER_ARM_MS);
+            ui.setStrokeWidth(3.5f * density);
+            ui.setColor(0x66000000);
+            c.drawCircle(tx, ty, r, ui);
+            ui.setColor(Ui.ACCENT);
+            tmp.set(tx - r, ty - r, tx + r, ty + r);
+            c.drawArc(tmp, -90, 360 * t, false, ui);
+        } else {
+            ui.setStrokeWidth(1.5f * density);
+            ui.setColor(0x88FFFFFF);
+            c.drawCircle(tx, ty, r * 0.4f, ui);
+        }
+    }
+
+    private int liveColorFor(int tool) {
+        return ToolBox.isInk(tool) ? tools.color(tool) : Ui.ACCENT;
     }
 
     /** Items the display list leaves out because they are drawn separately on top. */
@@ -637,7 +744,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 maxPointers = 1;
                 navTravel = 0;
                 fingerOnlyGesture = !pen && !isMouse(e, 0);
-                if (fingerOnlyGesture && !fingerDraws) {
+                if (fingerOnlyGesture && !fingerDraws && !pointerPenFor(tools.tool)) {
                     mode = M_NAV;
                     beginNav(e, -1);
                     return true;
@@ -1131,6 +1238,20 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 touchedNote = noteAt(bx, by);
                 break;
             default:
+                pointerInk = false;
+                if (pointerPenFor(gestureTool) && !activeStylus) {
+                    // Pointer pen: the pen appears; slide to aim, hold still and it starts inking.
+                    mode = M_AIM;
+                    pdx = -46 * density;
+                    pdy = -78 * density;
+                    aimX = aimAnchorX = x;
+                    aimY = aimAnchorY = y;
+                    aimSince = SystemClock.uptimeMillis();
+                    removeCallbacks(aimArm);
+                    postDelayed(aimArm, POINTER_ARM_MS);
+                    postOnAnimation(aimTick);
+                    break;
+                }
                 mode = M_DRAW;
                 liveBrush = ToolBox.brushOf(gestureTool);
                 liveColor = tools.color(gestureTool);
@@ -1166,18 +1287,34 @@ public final class CanvasView extends View implements ImageCache.Listener {
             pressItem = null;
         }
         switch (mode) {
-            case M_DRAW:
-                for (int h = 0; h < hist; h++) {
-                    sample(e.getHistoricalX(i, h), e.getHistoricalY(i, h), e.getHistoricalPressure(i, h), e.getHistoricalEventTime(h));
+            case M_AIM:
+                aimX = e.getX(i);
+                aimY = e.getY(i);
+                if (Geometry.dist(aimAnchorX, aimAnchorY, aimX, aimY) > 4 * density) {
+                    // Still aiming: start the hold-still wait again from here.
+                    aimAnchorX = aimX;
+                    aimAnchorY = aimY;
+                    aimSince = SystemClock.uptimeMillis();
+                    removeCallbacks(aimArm);
+                    postDelayed(aimArm, POINTER_ARM_MS);
                 }
-                sample(e.getX(i), e.getY(i), e.getPressure(i), e.getEventTime());
-                if (Geometry.dist(holdX, holdY, e.getX(i), e.getY(i)) > 5 * density && snapped == null) {
-                    holdX = e.getX(i);
-                    holdY = e.getY(i);
+                break;
+            case M_DRAW: {
+                float ox = pointerInk ? pdx : 0, oy = pointerInk ? pdy : 0;
+                for (int h = 0; h < hist; h++) {
+                    sample(e.getHistoricalX(i, h) + ox, e.getHistoricalY(i, h) + oy, e.getHistoricalPressure(i, h), e.getHistoricalEventTime(h));
+                }
+                sample(e.getX(i) + ox, e.getY(i) + oy, e.getPressure(i), e.getEventTime());
+                aimX = e.getX(i);
+                aimY = e.getY(i);
+                if (Geometry.dist(holdX, holdY, e.getX(i) + ox, e.getY(i) + oy) > 5 * density && snapped == null) {
+                    holdX = e.getX(i) + ox;
+                    holdY = e.getY(i) + oy;
                     removeCallbacks(holdToSnap);
                     postDelayed(holdToSnap, HOLD_TO_SNAP_MS);
                 }
                 break;
+            }
             case M_ERASE:
                 for (int h = 0; h < hist; h++) eraseAt(vp.toBoardX(e.getHistoricalX(i, h)), vp.toBoardY(e.getHistoricalY(i, h)));
                 eraseAt(vp.toBoardX(e.getX(i)), vp.toBoardY(e.getY(i)));
@@ -1212,11 +1349,14 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
     private void endTool(MotionEvent e, int i) {
         removeCallbacks(holdToSnap);
+        removeCallbacks(aimArm); // lifted while still aiming: nothing is drawn
         removeCallbacks(holdToSelect);
         pressItem = null;
         switch (mode) {
             case M_DRAW:
-                if (snapped == null) sample(e.getX(i), e.getY(i), e.getPressure(i), e.getEventTime());
+                if (snapped == null) {
+                    sample(e.getX(i) + (pointerInk ? pdx : 0), e.getY(i) + (pointerInk ? pdy : 0), e.getPressure(i), e.getEventTime());
+                }
                 commitStroke();
                 break;
             case M_ERASE:
@@ -1253,6 +1393,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
     /** A second finger arrived: this was the start of a pinch, not a drawing. */
     private void abortToolForGesture(MotionEvent e) {
         removeCallbacks(holdToSnap);
+        removeCallbacks(aimArm);
         removeCallbacks(holdToSelect);
         pressItem = null;
         tapToEdit = false;
@@ -1280,6 +1421,8 @@ public final class CanvasView extends View implements ImageCache.Listener {
 
     private void cancelTool() {
         removeCallbacks(holdToSnap);
+        removeCallbacks(aimArm);
+        pointerInk = false;
         removeCallbacks(holdToSelect);
         pressItem = null;
         if (mode == M_ERASE && eraseChange != null) {
@@ -1637,6 +1780,8 @@ public final class CanvasView extends View implements ImageCache.Listener {
         removeCallbacks(flingStep);
         removeCallbacks(holdToSnap);
         removeCallbacks(holdToSelect);
+        removeCallbacks(aimArm);
+        removeCallbacks(aimTick);
         if (zoomAnim != null) zoomAnim.cancel();
     }
 
