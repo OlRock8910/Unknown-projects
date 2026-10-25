@@ -93,7 +93,9 @@ selection and twist to turn it (pinch to resize at the same time); it snaps stra
 **Pointer pen.** For detailed drawing with a finger: turn it on in a pen's settings panel (or
 the ⋯ menu). Put a finger down and a long pen appears with its tip up and to the left; slide to
 aim, hold still until the ring at the tip fills, then draw. The ink comes from the tip, so your
-finger never hides what you are drawing. Lift to finish; a quick touch only aims.
+finger never hides what you are drawing. Lift to finish; a quick touch only aims. Left-handed?
+Tap **Left-handed** next to it (or use the ⋯ menu) and the pen leans the other way, tip up and
+to the right.
 
 **Made for pens and tablets.** The first time a stylus touches the screen, fingers switch to
 moving the page and your palm is ignored while you write, even if it landed first. The pen's

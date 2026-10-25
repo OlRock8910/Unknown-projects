@@ -49,6 +49,8 @@ public final class ToolBox {
     public Boolean fingerDraws;
     /** Pointer pen: fingers hold a long pen and draw from its tip. */
     public boolean pointerPen;
+    /** Left-handed pointer pen: the tip sits up and to the right of the finger instead of the left. */
+    public boolean pointerLeft;
     /** Font and bold/italic/underline/alignment for new text and notes. */
     public String textFont = "";
     public int textFmt;
@@ -68,6 +70,7 @@ public final class ToolBox {
         if (prefs.contains("fingerDraws")) fingerDraws = prefs.getBoolean("fingerDraws", true);
         textFont = prefs.getString("textFont", "");
         pointerPen = prefs.getBoolean("pointerPen", false);
+        pointerLeft = prefs.getBoolean("pointerLeft", false);
         textFmt = prefs.getInt("textFmt", 0);
         recentCount = Math.min(recent.length, prefs.getInt("recentCount", 0));
         for (int i = 0; i < recentCount; i++) recent[i] = prefs.getInt("recent" + i, 0);
@@ -186,6 +189,7 @@ public final class ToolBox {
         if (fingerDraws != null) e.putBoolean("fingerDraws", fingerDraws);
         e.putString("textFont", textFont);
         e.putBoolean("pointerPen", pointerPen);
+        e.putBoolean("pointerLeft", pointerLeft);
         e.putInt("textFmt", textFmt);
         e.putInt("recentCount", recentCount);
         for (int i = 0; i < recentCount; i++) e.putInt("recent" + i, recent[i]);
