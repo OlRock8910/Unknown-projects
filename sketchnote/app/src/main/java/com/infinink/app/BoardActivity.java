@@ -134,6 +134,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         edgeToEdge();
         buildUi();
         canvas.setup(board, history, tools, images, this);
+        canvas.setPointerPen(tools.pointerPen);
         selectTool(tools.tool == ToolBox.LASSO ? ToolBox.PEN : tools.tool);
         updateHistoryButtons();
         updateSystemBars();
@@ -922,6 +923,22 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             }), new LinearLayout.LayoutParams(-1, -2));
         }
 
+        if (ToolBox.isInk(t)) {
+            // The pointer pen, for drawing detail with a finger without covering it.
+            final TextView pointer = Ui.chip(this, tools.pointerPen ? "Pointer pen: on" : "Pointer pen: off", tools.pointerPen);
+            pointer.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    setPointerPen(!tools.pointerPen);
+                    pointer.setText(tools.pointerPen ? "Pointer pen: on" : "Pointer pen: off");
+                    Ui.styleChip(pointer, tools.pointerPen);
+                }
+            });
+            LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, -2);
+            pp.setMargins(0, dp(14), 0, 0);
+            col.addView(pointer, pp);
+        }
+
         String tip = tipFor(t);
         if (tip != null) {
             TextView tv = Ui.text(this, tip, 12.5f, Ui.TEXT_2, false);
@@ -1461,7 +1478,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     // ---- menu -----------------------------------------------------------------------------------
 
     private static final int MENU_FIT = 1, MENU_100 = 2, MENU_PNG = 3, MENU_PDF = 4, MENU_GALLERY = 5,
-            MENU_FINGER = 6, MENU_HELP = 7, MENU_PATTERN = 20, MENU_PAPER = 40;
+            MENU_FINGER = 6, MENU_HELP = 7, MENU_POINTER = 8, MENU_PATTERN = 20, MENU_PAPER = 40;
 
     private void showMenu(View anchor) {
         PopupMenu pm = new PopupMenu(this, anchor, Gravity.END);
@@ -1483,6 +1500,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         m.add(0, MENU_PDF, 0, "Share as PDF");
         if (Build.VERSION.SDK_INT >= 29) m.add(0, MENU_GALLERY, 0, "Save image to gallery");
         m.add(0, MENU_FINGER, 0, "Draw with finger").setCheckable(true).setChecked(canvas.fingerDraws());
+        m.add(0, MENU_POINTER, 0, "Pointer pen").setCheckable(true).setChecked(tools.pointerPen);
         m.add(0, MENU_HELP, 0, "Gestures & tips");
         pm.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
@@ -1536,8 +1554,19 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             case MENU_HELP:
                 help();
                 return true;
+            case MENU_POINTER:
+                setPointerPen(!tools.pointerPen);
+                return true;
         }
         return false;
+    }
+
+    private void setPointerPen(boolean on) {
+        tools.pointerPen = on;
+        tools.save();
+        canvas.setPointerPen(on);
+        showHint(on ? "Pointer pen on: put a finger down and a pen appears. Slide to aim the tip, hold still a moment until the ring fills, then draw. The ink comes from the tip, so your finger never covers it."
+                : "Pointer pen off: you draw right under your finger again.");
     }
 
     private void boardLookChanged() {
@@ -1554,6 +1583,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                 + "• With a pen, your palm and fingers are ignored while writing. The pen's button (or eraser end) erases.\n\n"
                 + "• Press and hold on anything you've put down (a picture, a note, a drawing) to pick it up. Tap it again to edit it. Tap empty paper to put it down and get your pen back.\n\n"
                 + "• Text and notes: pick fonts, colours, sizes and bold / italic / underline in the bar at the bottom while you type; the note changes on the page as you go.\n\n"
+                + "• Pointer pen (⋯ menu or a pen's settings): a long pen appears under your finger; aim the tip, hold still until the ring fills, then draw from the tip.\n\n"
                 + "• Layers: select something and tap the layers button to send it behind or bring it in front of other things.\n\n"
                 + "• Lasso: draw round things to select them, then drag, resize, recolour, duplicate or delete. Corner dots resize, side dots stretch, and two fingers on the selection turn it.\n\n"
                 + "• Tap the zoom number to jump between 100% and seeing everything.\n\n"
