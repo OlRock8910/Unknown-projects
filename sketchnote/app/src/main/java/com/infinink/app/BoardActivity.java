@@ -135,6 +135,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         buildUi();
         canvas.setup(board, history, tools, images, this);
         canvas.setPointerPen(tools.pointerPen);
+        canvas.setPointerLeftHanded(tools.pointerLeft);
         selectTool(tools.tool == ToolBox.LASSO ? ToolBox.PEN : tools.tool);
         updateHistoryButtons();
         updateSystemBars();
@@ -934,9 +935,28 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
                     Ui.styleChip(pointer, tools.pointerPen);
                 }
             });
+            final TextView hand = Ui.chip(this, "Left-handed", tools.pointerLeft);
+            hand.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    setPointerLeftHanded(!tools.pointerLeft);
+                    Ui.styleChip(hand, tools.pointerLeft);
+                    if (!tools.pointerPen) {
+                        // Choosing a hand means you want the pointer pen.
+                        setPointerPen(true);
+                        pointer.setText("Pointer pen: on");
+                        Ui.styleChip(pointer, true);
+                    }
+                }
+            });
+            LinearLayout pointerRow = new LinearLayout(this);
+            pointerRow.addView(pointer);
+            LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-2, -2);
+            hp.setMargins(dp(8), 0, 0, 0);
+            pointerRow.addView(hand, hp);
             LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, -2);
             pp.setMargins(0, dp(14), 0, 0);
-            col.addView(pointer, pp);
+            col.addView(pointerRow, pp);
         }
 
         String tip = tipFor(t);
@@ -1478,7 +1498,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
     // ---- menu -----------------------------------------------------------------------------------
 
     private static final int MENU_FIT = 1, MENU_100 = 2, MENU_PNG = 3, MENU_PDF = 4, MENU_GALLERY = 5,
-            MENU_FINGER = 6, MENU_HELP = 7, MENU_POINTER = 8, MENU_PATTERN = 20, MENU_PAPER = 40;
+            MENU_FINGER = 6, MENU_HELP = 7, MENU_POINTER = 8, MENU_POINTER_LEFT = 9, MENU_PATTERN = 20, MENU_PAPER = 40;
 
     private void showMenu(View anchor) {
         PopupMenu pm = new PopupMenu(this, anchor, Gravity.END);
@@ -1501,6 +1521,7 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         if (Build.VERSION.SDK_INT >= 29) m.add(0, MENU_GALLERY, 0, "Save image to gallery");
         m.add(0, MENU_FINGER, 0, "Draw with finger").setCheckable(true).setChecked(canvas.fingerDraws());
         m.add(0, MENU_POINTER, 0, "Pointer pen").setCheckable(true).setChecked(tools.pointerPen);
+        m.add(0, MENU_POINTER_LEFT, 0, "Pointer pen: left-handed").setCheckable(true).setChecked(tools.pointerLeft);
         m.add(0, MENU_HELP, 0, "Gestures & tips");
         pm.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
@@ -1557,6 +1578,10 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
             case MENU_POINTER:
                 setPointerPen(!tools.pointerPen);
                 return true;
+            case MENU_POINTER_LEFT:
+                setPointerLeftHanded(!tools.pointerLeft);
+                if (!tools.pointerPen) setPointerPen(true);
+                return true;
         }
         return false;
     }
@@ -1567,6 +1592,14 @@ public final class BoardActivity extends Activity implements CanvasView.Listener
         canvas.setPointerPen(on);
         showHint(on ? "Pointer pen on: put a finger down and a pen appears. Slide to aim the tip, hold still a moment until the ring fills, then draw. The ink comes from the tip, so your finger never covers it."
                 : "Pointer pen off: you draw right under your finger again.");
+    }
+
+    private void setPointerLeftHanded(boolean left) {
+        tools.pointerLeft = left;
+        tools.save();
+        canvas.setPointerLeftHanded(left);
+        showHint(left ? "Left-handed: the pointer pen's tip is now up and to the right of your finger."
+                : "Right-handed: the pointer pen's tip is up and to the left of your finger.");
     }
 
     private void boardLookChanged() {

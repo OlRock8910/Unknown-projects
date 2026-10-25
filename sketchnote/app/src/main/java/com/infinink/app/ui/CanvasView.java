@@ -145,6 +145,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
     // Pointer pen: a finger holds a long pen and the ink comes from its tip, away from the finger.
     private static final long POINTER_ARM_MS = 350;
     private boolean pointerPen;
+    private boolean pointerLeft;
     private boolean pointerInk; // the current stroke is drawn at the tip, not under the finger
     private float pdx, pdy;     // tip offset from the finger, in screen pixels
     private float aimX, aimY, aimAnchorX, aimAnchorY;
@@ -229,6 +230,11 @@ public final class CanvasView extends View implements ImageCache.Listener {
     /** Turns the pointer pen on or off (fingers only; a real stylus always draws under its tip). */
     public void setPointerPen(boolean on) {
         pointerPen = on;
+    }
+
+    /** Left-handed: the pen leans the other way, tip up and to the right of the finger. */
+    public void setPointerLeftHanded(boolean left) {
+        pointerLeft = left;
     }
 
     private boolean pointerPenFor(int tool) {
@@ -1242,7 +1248,7 @@ public final class CanvasView extends View implements ImageCache.Listener {
                 if (pointerPenFor(gestureTool) && !activeStylus) {
                     // Pointer pen: the pen appears; slide to aim, hold still and it starts inking.
                     mode = M_AIM;
-                    pdx = -46 * density;
+                    pdx = (pointerLeft ? 46 : -46) * density;
                     pdy = -78 * density;
                     aimX = aimAnchorX = x;
                     aimY = aimAnchorY = y;
