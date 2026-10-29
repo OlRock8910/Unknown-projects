@@ -16,7 +16,7 @@ music keeps playing while you film. Free, with no ads and no account.
 "install unknown apps" for your file manager or browser when asked. Every build is signed with
 the same key, so a newer APK installs over an older one and keeps your settings.
 
-CI also builds it on every push (Actions, artifact **GymCam-apk**). Needs Android 10 or newer.
+Needs Android 10 or newer.
 
 ## What it does
 
