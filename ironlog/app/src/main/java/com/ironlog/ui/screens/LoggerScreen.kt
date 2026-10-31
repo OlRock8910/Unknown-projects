@@ -53,6 +53,9 @@ import com.ironlog.domain.lastPoint
 import com.ironlog.domain.lastSets
 import com.ironlog.domain.records
 import com.ironlog.domain.activeSession
+import com.ironlog.domain.asPerSide
+import com.ironlog.domain.isPerSide
+import com.ironlog.domain.withSides
 import com.ironlog.domain.startingWeightKg
 import com.ironlog.domain.stepFor
 import com.ironlog.domain.stepWeight
@@ -65,6 +68,7 @@ import com.ironlog.ui.components.Chip
 import com.ironlog.ui.components.CircleIconButton
 import com.ironlog.ui.components.GlassButton
 import com.ironlog.ui.components.GlassCard
+import com.ironlog.ui.components.GlassSwitch
 import com.ironlog.ui.components.GlassTextField
 import com.ironlog.ui.components.IronIcons
 import com.ironlog.ui.components.NoteBadge
@@ -81,11 +85,13 @@ import com.ironlog.ui.platform.SystemBackHandler
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** Sets as flat [weight, reps, note] triples, which a saved-state Bundle can hold. */
+/** Sets as flat [weight, reps, note, left, right] groups (-1 = no side), which a saved-state Bundle can hold. */
 private val SetListSaver = listSaver<SnapshotStateList<SetEntry>, Any>(
-    save = { list -> list.flatMap { listOf(it.weightKg, it.reps, it.note ?: "") } },
+    save = { list -> list.flatMap { listOf(it.weightKg, it.reps, it.note ?: "", it.left ?: -1, it.right ?: -1) } },
     restore = { flat ->
-        flat.chunked(3).map { (w, r, n) -> SetEntry(w as Double, r as Int, (n as String).ifEmpty { null }) }.toMutableStateList()
+        flat.chunked(5).map { (w, r, n, l, rr) ->
+            SetEntry(w as Double, r as Int, (n as String).ifEmpty { null }, (l as Int).takeIf { it >= 0 }, (rr as Int).takeIf { it >= 0 })
+        }.toMutableStateList()
     },
 )
 
@@ -110,13 +116,19 @@ fun LoggerScreen(app: AppState, workoutId: String?, exerciseId: String, sessionI
     }
     val existing = remember { target?.entries?.firstOrNull { it.exerciseId == exerciseId }?.sets }
     val hist = remember(data) { data.history(exerciseId, excludeSessionId = target?.id) }
+    val perSide = data.isPerSide(info)
     // Saveable, so the sets you've adjusted survive opening the graph or rotating the phone.
     val rows = rememberSaveable(saver = SetListSaver) {
         (existing ?: hist.lastSets()?.filter { it.reps > 0 }?.takeIf { it.isNotEmpty() }
-            ?: List(3) { SetEntry(startingWeightKg(info.equipment, unit), 10) }).toMutableStateList()
+            ?: List(3) { SetEntry(startingWeightKg(info.equipment, unit), 10) }).map { it.asPerSide(perSide) }.toMutableStateList()
     }
     // What was on screen when it opened; anything different counts as unsaved.
     val initial = rememberSaveable(saver = SetListSaver) { rows.toList().toMutableStateList() }
+    // Switching left/right on or off reshapes the sets; that alone isn't an unsaved change.
+    LaunchedEffect(perSide) {
+        for (i in rows.indices) rows[i] = rows[i].asPerSide(perSide)
+        for (i in initial.indices) initial[i] = initial[i].asPerSide(perSide)
+    }
     val dirty = rows.toList() != initial.toList()
     val step = stepFor(data, info)
     val bodyweight = info.equipment == Equipment.BODYWEIGHT
@@ -191,7 +203,7 @@ fun LoggerScreen(app: AppState, workoutId: String?, exerciseId: String, sessionI
                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("SET", style = Type.label, color = p.textFaint, modifier = Modifier.width(36.dp))
                     Text(if (bodyweight) "ADDED ${unit.label.uppercase()}" else "WEIGHT ${unit.label.uppercase()}", style = Type.label, color = p.textFaint, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                    Text("REPS", style = Type.label, color = p.textFaint, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                    Text(if (perSide) "REPS L / R" else "REPS", style = Type.label, color = p.textFaint, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
                     Text("NOTE", style = Type.label, color = p.textFaint, modifier = Modifier.width(44.dp), textAlign = TextAlign.Center)
                 }
                 VSpace(8.dp)
@@ -200,7 +212,6 @@ fun LoggerScreen(app: AppState, workoutId: String?, exerciseId: String, sessionI
                 SetRow(
                     index = i,
                     weight = weightText(set.weightKg),
-                    reps = set.reps.toString(),
                     hasNote = !set.note.isNullOrBlank(),
                     onWeightMinus = { rows[i] = rows[i].copy(weightKg = stepWeight(rows[i].weightKg, step, unit, up = false)) },
                     onWeightPlus = { rows[i] = rows[i].copy(weightKg = stepWeight(rows[i].weightKg, step, unit, up = true)) },
@@ -209,11 +220,47 @@ fun LoggerScreen(app: AppState, workoutId: String?, exerciseId: String, sessionI
                             if (i < rows.size) rows[i] = rows[i].copy(weightKg = v.coerceIn(0.0, 2000.0).toKg(unit))
                         }
                     },
-                    onRepsMinus = { rows[i] = rows[i].copy(reps = (rows[i].reps - 1).coerceAtLeast(0)) },
-                    onRepsPlus = { rows[i] = rows[i].copy(reps = (rows[i].reps + 1).coerceAtMost(999)) },
-                    onRepsClick = {
-                        editNumber("Set ${i + 1} reps", rows[i].reps.toString(), "reps", false) { v ->
-                            if (i < rows.size) rows[i] = rows[i].copy(reps = v.toInt().coerceIn(0, 999))
+                    reps = { mod ->
+                        if (set.perSide) {
+                            // Two counters, left over right. Each edits its own side.
+                            fun side(isLeft: Boolean, change: (Int) -> Int) {
+                                if (i >= rows.size || !rows[i].perSide) return
+                                val s = rows[i]
+                                val l = if (isLeft) change(s.left!!).coerceIn(0, 999) else s.left!!
+                                val r = if (isLeft) s.right!! else change(s.right!!).coerceIn(0, 999)
+                                rows[i] = s.withSides(l, r)
+                            }
+                            Column(mod, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf(true, false).forEach { isLeft ->
+                                    val n = if (isLeft) set.left!! else set.right!!
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(if (isLeft) "L" else "R", style = Type.label, color = p.accent2, modifier = Modifier.width(14.dp), textAlign = TextAlign.Center)
+                                        Stepper(
+                                            n.toString(),
+                                            { side(isLeft) { it - 1 } },
+                                            { side(isLeft) { it + 1 } },
+                                            {
+                                                editNumber("Set ${i + 1} ${if (isLeft) "left" else "right"} reps", n.toString(), "reps", false) { v ->
+                                                    side(isLeft) { v.toInt() }
+                                                }
+                                            },
+                                            Modifier.weight(1f), dim = n == 0,
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Stepper(
+                                set.reps.toString(),
+                                { rows[i] = rows[i].copy(reps = (rows[i].reps - 1).coerceAtLeast(0)) },
+                                { rows[i] = rows[i].copy(reps = (rows[i].reps + 1).coerceAtMost(999)) },
+                                {
+                                    editNumber("Set ${i + 1} reps", rows[i].reps.toString(), "reps", false) { v ->
+                                        if (i < rows.size) rows[i] = rows[i].copy(reps = v.toInt().coerceIn(0, 999))
+                                    }
+                                },
+                                mod, dim = set.reps == 0,
+                            )
                         }
                     },
                     onNote = {
@@ -247,7 +294,7 @@ fun LoggerScreen(app: AppState, workoutId: String?, exerciseId: String, sessionI
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassButton("Add set", {
                         val lastRow = rows.lastOrNull()
-                        rows.add(lastRow?.copy(note = null) ?: SetEntry(startingWeightKg(info.equipment, unit), 10))
+                        rows.add(lastRow?.copy(note = null) ?: SetEntry(startingWeightKg(info.equipment, unit), 10).asPerSide(perSide))
                     }, Modifier.weight(1f), icon = IronIcons.Plus, style = ButtonStyle.SECONDARY, height = 50.dp)
                     GlassButton("Remove set", { if (rows.size > 1) rows.removeAt(rows.lastIndex) }, Modifier.weight(1f), icon = IronIcons.Minus, style = ButtonStyle.SECONDARY, height = 50.dp, enabled = rows.size > 1)
                 }
@@ -263,6 +310,19 @@ fun LoggerScreen(app: AppState, workoutId: String?, exerciseId: String, sessionI
                         Text("Tap to match your machine or dumbbells", style = Type.bodySmall, color = p.textMuted)
                     }
                     Icon(IronIcons.ChevronRight, null, tint = p.textFaint, modifier = Modifier.size(20.dp))
+                }
+                VSpace(10.dp)
+                Row(
+                    Modifier.fillMaxWidth().pressable({ app.setPerSide(exerciseId, !perSide) }, haptic = true).glass(p, RoundedCornerShape(20.dp)).padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("L·R", style = Type.label, color = p.accent2, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
+                    Spacer(Modifier.width(6.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Left & right reps", style = Type.body.copy(fontWeight = FontWeight.Bold), color = p.text)
+                        Text("Count each arm or leg separately", style = Type.bodySmall, color = p.textMuted)
+                    }
+                    GlassSwitch(perSide, { app.setPerSide(exerciseId, it) })
                 }
                 if (existing != null) {
                     VSpace(10.dp)
@@ -289,14 +349,12 @@ fun LoggerScreen(app: AppState, workoutId: String?, exerciseId: String, sessionI
 private fun SetRow(
     index: Int,
     weight: String,
-    reps: String,
     hasNote: Boolean,
     onWeightMinus: () -> Unit,
     onWeightPlus: () -> Unit,
     onWeightClick: () -> Unit,
-    onRepsMinus: () -> Unit,
-    onRepsPlus: () -> Unit,
-    onRepsClick: () -> Unit,
+    /** The reps counter (or left and right counters), given the modifier to lay itself out with. */
+    reps: @Composable (Modifier) -> Unit,
     onNote: () -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -315,7 +373,7 @@ private fun SetRow(
         Spacer(Modifier.width(6.dp))
         Stepper(weight, onWeightMinus, onWeightPlus, onWeightClick, Modifier.weight(1f))
         Spacer(Modifier.width(4.dp))
-        Stepper(reps, onRepsMinus, onRepsPlus, onRepsClick, Modifier.weight(1f), dim = reps == "0")
+        reps(Modifier.weight(1f))
         Box(Modifier.size(44.dp).pressable(onNote, scaleDown = 0.85f, haptic = true), contentAlignment = Alignment.Center) {
             if (hasNote) NoteBadge(p.note) else Icon(IronIcons.NoteLines, "Add note", tint = p.textFaint, modifier = Modifier.size(22.dp))
         }

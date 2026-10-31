@@ -369,3 +369,50 @@ class ReviewFixesTest {
         assertNull(d.activeSession("w1", today, started + 6L * 3600 * 1000))
     }
 }
+
+class PerSideTest {
+    @Test fun repsIsTheWeakerSideOrTheOnlySideDone() {
+        assertEquals(7, SetEntry(20.0).withSides(8, 7).reps)
+        assertEquals(9, SetEntry(20.0).withSides(0, 9).reps)
+        assertEquals(0, SetEntry(20.0).withSides(0, 0).reps)
+    }
+
+    @Test fun switchingOnCopiesRepsToBothSidesAndOffDropsThem() {
+        val on = SetEntry(20.0, 10, "slow").asPerSide(true)
+        assertEquals(10, on.left)
+        assertEquals(10, on.right)
+        assertEquals("slow", on.note)
+        val off = on.withSides(10, 8).asPerSide(false)
+        assertFalse(off.perSide)
+        assertEquals(8, off.reps)
+        assertEquals(on, on.asPerSide(true))
+    }
+
+    @Test fun formatsBothSides() {
+        assertEquals("20kg × 10L 9R", formatSet(SetEntry(20.0).withSides(10, 9), WeightUnit.KG))
+        assertEquals("20kg × 10", formatSet(SetEntry(20.0, 10), WeightUnit.KG))
+    }
+
+    @Test fun oneArmAndOneLegMovesDefaultToPerSide() {
+        val d = AppData(customExercises = listOf(
+            CustomExercise("c1", "Single-Leg Dumbbell Calf Raise"),
+            CustomExercise("c2", "Rope Biceps Curl"),
+        ))
+        assertTrue(d.isPerSide(d.exercise("db_row")))
+        assertTrue(d.isPerSide(d.exercise("bulgarian_split_squat")))
+        assertTrue(d.isPerSide(d.exercise("c1")))
+        assertFalse(d.isPerSide(d.exercise("c2")))
+        assertFalse(d.isPerSide(d.exercise("leg_extension")))
+        val chosen = d.copy(exercisePrefs = mapOf("leg_extension" to ExercisePrefs(perSide = true), "db_row" to ExercisePrefs(perSide = false)))
+        assertTrue(chosen.isPerSide(chosen.exercise("leg_extension")))
+        assertFalse(chosen.isPerSide(chosen.exercise("db_row")))
+    }
+
+    @Test fun sidesSurviveABackupCode() {
+        val d = AppData(sessions = listOf(Session("s", date = "2026-10-30", entries = listOf(
+            ExerciseLog("db_row", listOf(SetEntry(22.5).withSides(10, 9))),
+        ))))
+        val back = (BackupCodec.decode(BackupCodec.encode(d, Random(3))) as BackupCodec.Result.Ok).data
+        assertEquals(d, back)
+    }
+}

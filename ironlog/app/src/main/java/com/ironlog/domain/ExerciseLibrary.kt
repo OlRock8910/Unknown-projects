@@ -293,4 +293,15 @@ object ExerciseLibrary {
             else -> OTHER
         }
     }
+
+    // One arm or one leg at a time, so they start out logging left and right reps.
+    private val unilateralIds = setOf(
+        "db_row", "single_arm_pulldown", "meadows_row", "concentration_curl", "single_leg_press",
+        "bulgarian_split_squat", "db_lunge", "walking_lunge", "barbell_lunge", "step_up",
+        "single_leg_rdl", "cable_kickback",
+    )
+    private val unilateralName = Regex("""\b(single|one)[- ]?(arm|leg|hand|side)|unilateral|split squat|lunge|step[- ]?up""", RegexOption.IGNORE_CASE)
+
+    fun isUnilateral(e: ExerciseInfo): Boolean =
+        e.id in unilateralIds || e.custom && unilateralName.containsMatchIn(e.name)
 }

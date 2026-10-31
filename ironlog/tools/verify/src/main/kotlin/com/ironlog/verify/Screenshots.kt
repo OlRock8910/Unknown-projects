@@ -100,13 +100,12 @@ fun main() {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     var counter = 0
 
-    fun shot(name: String, data: AppData, setup: (AppState) -> Unit = {}) {
+    fun shot(name: String, data: AppData, h: Int = 892, setup: (AppState) -> Unit = {}) {
         val store = Store(File(tmp, "d${counter++}.json"), scope)
         store.replace(data)
         val app = AppState(store, FakePlatform, scope) { NOW }
         setup(app)
         val w = 412
-        val h = 892
         val density = 2f
         ImageComposeScene((w * density).toInt(), (h * density).toInt(), Density(density)) {
             IronLogApp(app)
@@ -168,6 +167,9 @@ fun main() {
     shot("22-mono-red-stats", sampleData(ThemeMode.MONO, 3)) { it.selectTab(Tab.PROGRESS); it.push(Screen.ExerciseStats("bench_press")) }
     shot("23-mono-settings", sampleData(ThemeMode.MONO, 0)) { it.push(Screen.Settings) }
     shot("24-mono-white-logger", sampleData(ThemeMode.MONO, 0)) { it.push(Screen.WorkoutView("w0")); it.push(Screen.Logger("w0", "bench_press")) }
+    shot("25-logger-sides", gym) { it.push(Screen.WorkoutView("w1")); it.push(Screen.Logger("w1", "db_row")) }
+    shot("26-mono-logger-sides", sampleData(ThemeMode.MONO, 0)) { it.push(Screen.WorkoutView("w1")); it.push(Screen.Logger("w1", "db_row")) }
+    shot("27-editor-sides", gym, h = 2000) { it.startWorkoutEditor("w1") }
     scope.cancel()
     System.exit(0)
 }

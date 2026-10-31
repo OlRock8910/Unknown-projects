@@ -95,7 +95,27 @@ data class SetEntry(
     val reps: Int = 0,
     /** The per-set note ("check form", "rest 2 min"). Carried forward until deleted. */
     val note: String? = null,
-)
+    /** Left and right counts for single-arm / single-leg moves; null for an ordinary set.
+     *  [reps] still holds one number for records and graphs (see [withSides]). */
+    val left: Int? = null,
+    val right: Int? = null,
+) {
+    val perSide: Boolean get() = left != null && right != null
+}
+
+/**
+ * A set counted per side. [SetEntry.reps] becomes the weaker side, so "60kg × 8" on a
+ * graph means 8 on both sides; if only one side was done it's that side's count.
+ */
+fun SetEntry.withSides(left: Int, right: Int): SetEntry =
+    copy(left = left, right = right, reps = if (left > 0 && right > 0) minOf(left, right) else maxOf(left, right))
+
+/** The set in the shape the exercise logs: split into left/right (both = reps) or back to one count. */
+fun SetEntry.asPerSide(on: Boolean): SetEntry = when {
+    on && !perSide -> withSides(reps, reps)
+    !on && perSide -> copy(left = null, right = null)
+    else -> this
+}
 
 @Serializable
 data class ExerciseLog(
@@ -135,6 +155,8 @@ data class Note(
 data class ExercisePrefs(
     val stepKg: Double? = null,
     val stepLb: Double? = null,
+    /** Log left and right reps separately. Null means the default for the exercise. */
+    val perSide: Boolean? = null,
 )
 
 @Serializable
@@ -176,6 +198,10 @@ fun AppData.allExercises(): List<ExerciseInfo> =
     ExerciseLibrary.all + customExercises.map {
         ExerciseInfo(it.id, it.name, it.equipment, it.muscle, custom = true)
     }
+
+/** Whether [exercise] logs left and right reps: the user's choice, else on for one-arm / one-leg moves. */
+fun AppData.isPerSide(exercise: ExerciseInfo): Boolean =
+    exercisePrefs[exercise.id]?.perSide ?: ExerciseLibrary.isUnilateral(exercise)
 
 fun AppData.workout(id: String?): Workout? = id?.let { wid -> workouts.firstOrNull { it.id == wid } }
 

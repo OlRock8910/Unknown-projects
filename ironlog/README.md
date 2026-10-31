@@ -47,7 +47,8 @@ the same key, `app/ironlog-sideload.jks`).
 - **Logging**: last time's sets are filled in. **+/−** on weight and reps. Weight moves
   in steps that suit the kit (2.5 kg barbell and dumbbell, 5 kg machine, or anything
   you set). On machines the app also learns the step from the weights you enter. Add
-  or remove sets freely, and skip any exercise. Each set has a note button (≡). Once a
+  or remove sets freely, and skip any exercise. One-arm and one-leg moves get separate
+  **L** and **R** rep counters (switch it on for any exercise with the L·R toggle). Each set has a note button (≡). Once a
   set has a note it shows as an orange dot, and the note carries over to next time
   until you delete it.
 - **Motivation**: opening an exercise pops up a challenge such as *"Last week you got

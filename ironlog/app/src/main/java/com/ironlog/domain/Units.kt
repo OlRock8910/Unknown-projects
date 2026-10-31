@@ -32,14 +32,14 @@ fun formatWeight(kg: Double, unit: WeightUnit, withUnit: Boolean = true): String
     return if (withUnit) "$n${unit.label}" else n
 }
 
-/** "60kg × 12", or "BW × 15" for an unweighted bodyweight set. */
+/** "60kg × 12", "BW × 15" for an unweighted bodyweight set, or "20kg × 10L 9R" per side. */
 fun formatSet(set: SetEntry, unit: WeightUnit, equipment: Equipment? = null): String {
     val w = when {
         set.weightKg == 0.0 && (equipment == Equipment.BODYWEIGHT || equipment == null) -> "BW"
         equipment == Equipment.BODYWEIGHT -> "BW+" + formatWeight(set.weightKg, unit)
         else -> formatWeight(set.weightKg, unit)
     }
-    return "$w × ${set.reps}"
+    return if (set.perSide) "$w × ${set.left}L ${set.right}R" else "$w × ${set.reps}"
 }
 
 /** Total weight moved, e.g. "12.4k kg". */

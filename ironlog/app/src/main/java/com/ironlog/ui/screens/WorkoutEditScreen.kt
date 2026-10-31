@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ironlog.domain.ExerciseLibrary
 import com.ironlog.domain.exercise
+import com.ironlog.domain.isPerSide
 import com.ironlog.ui.AppState
 import com.ironlog.ui.DAY_SHORT
 import com.ironlog.ui.Screen
@@ -48,6 +49,7 @@ import com.ironlog.ui.components.GlassCard
 import com.ironlog.ui.components.GlassTextField
 import com.ironlog.ui.components.IronIcons
 import com.ironlog.ui.components.Page
+import com.ironlog.ui.components.PillShape
 import com.ironlog.ui.components.SectionLabel
 import com.ironlog.ui.components.TopBar
 import com.ironlog.ui.components.VSpace
@@ -176,6 +178,20 @@ fun WorkoutEditScreen(app: AppState) {
                         Text(info.name, style = Type.body.copy(fontWeight = FontWeight.Bold), color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${info.muscle.label} · ${info.equipment.label}", style = Type.bodySmall, color = p.textMuted)
                     }
+                    // Left & right reps for this exercise (one arm or one leg at a time).
+                    val sides = data.isPerSide(info)
+                    Box(
+                        Modifier
+                            .padding(end = 2.dp)
+                            .height(30.dp)
+                            .pressable({ app.setPerSide(id, !sides) }, scaleDown = 0.88f, haptic = true)
+                            .clip(PillShape)
+                            .background(if (sides) p.accent2.copy(alpha = 0.22f) else p.field)
+                            .padding(horizontal = 9.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("L·R", style = Type.label, color = if (sides) p.accent2 else p.textFaint)
+                    }
                     SmallIcon(IronIcons.ArrowUp, enabled = i > 0) {
                         val l = app.draft.exerciseIds.toMutableList(); l.add(i - 1, l.removeAt(i)); app.draft = app.draft.copy(exerciseIds = l)
                     }
@@ -189,6 +205,10 @@ fun WorkoutEditScreen(app: AppState) {
             }
             item {
                 GlassButton("Add exercises", { app.push(Screen.Picker(null)) }, Modifier.fillMaxWidth(), icon = IronIcons.Search, style = ButtonStyle.SECONDARY)
+                if (d.exerciseIds.isNotEmpty()) {
+                    VSpace(10.dp)
+                    Text("Tap L·R to count left and right reps separately.", style = Type.bodySmall, color = p.textFaint, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
                 if (d.exerciseIds.isEmpty()) {
                     VSpace(10.dp)
                     Text("Search ${ExerciseLibrary.all.size} exercises, or make your own.", style = Type.bodySmall, color = p.textMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())

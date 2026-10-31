@@ -459,6 +459,13 @@ class AppState(
         }
     }
 
+    fun setPerSide(exerciseId: String, on: Boolean) {
+        store.update { d ->
+            val prev = d.exercisePrefs[exerciseId] ?: ExercisePrefs()
+            d.copy(exercisePrefs = d.exercisePrefs + (exerciseId to prev.copy(perSide = on)))
+        }
+    }
+
     // ---------------------------------------------------------------- notes
 
     fun saveNote(id: String?, title: String, body: String, pinned: Boolean) {
